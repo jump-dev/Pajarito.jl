@@ -75,11 +75,11 @@ end
 facts("Solver test") do
 for ip_solver in ip_solvers
 for nlp_solver in convex_nlp_solvers
-    string(typeof(nlp_solver)) == "NLoptSolver" && continue
-    string(typeof(nlp_solver)) == "MosekSolver" && continue
-    string(typeof(nlp_solver)) == "OsilSolver" && continue
-    string(typeof(ip_solver)) == "OsilSolver" && continue
-    string(typeof(ip_solver)) == "CbcSolver" && continue
+    contains(string(typeof(nlp_solver)),"NLoptSolver") && continue
+    contains(string(typeof(nlp_solver)),"MosekSolver") && continue
+    contains(string(typeof(nlp_solver)),"OsilSolver") && continue
+    contains(string(typeof(ip_solver)),"OsilSolver") && continue
+    contains(string(typeof(ip_solver)),"CbcSolver") && continue
 context("With $(typeof(ip_solver)) and $(typeof(nlp_solver))") do
 
     m = Model(solver=PajaritoSolver(verbose=0,mip_solver=ip_solver,nlp_solver=nlp_solver))

@@ -273,7 +273,7 @@ function addCuttingPlanes!(m::PajaritoModel, mip_model, separator, jac_I, jac_J,
     # EVALUATE g and jac_g AT MIP SOLUTION THAT IS INFEASIBLE
     g = zeros(m.numConstr)
     MathProgBase.eval_g(m.d, g, separator[1:m.numVar])
-    MathProgBase.eval_jac_g(m.d, jac_V, separator)
+    MathProgBase.eval_jac_g(m.d, jac_V, separator[1:m.numVar])
 
     # create rows corresponding to constraints in sparse format
 
@@ -372,7 +372,6 @@ function MathProgBase.optimize!(m::PajaritoModel)
     end
 
 
-    MathProgBase.initialize(m.d, [:Grad,:Jac,:Hess])
     jac_I, jac_J = MathProgBase.jac_structure(m.d)
     jac_V = zeros(length(jac_I))
     grad_f = zeros(m.numVar+1)
