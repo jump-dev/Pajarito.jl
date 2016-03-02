@@ -1,82 +1,128 @@
-using JuMP
-using KNITRO
-import ECOS
+#=========================================================
+ This solver implements mixed-integer conic programming
+ algorithm found in:
 
-type PajaritoDCPModel <: MathProgBase.AbstractConicModel
-    solution::Vector{Float64}
-    status
-    objval::Float64
-    iterations::Int
-    numVar::Int
-    numVar_ini::Int
-    numIntVar::Int
-    numConstr::Int
-    verbose::Int
-    mip_solver
-    dcp_solver
-    opt_tolerance
-    acceptable_opt_tolerance
-    time_limit
-    cut_switch
-    c
-    A
-    b
-    c_ini
+  Lubin, Yamangil, Bent, Vielma (2016), Extended formulations
+  in Mixed-integer Convex Programming, IPCO 2016, Liege, Belgium
+  (available online at http://arxiv.org/abs/1511.06710).
+
+ The package accepts a problem of the form:
+  
+  min  c_x^T x + c_z^T z
+  s.t. A_x x + A_z z = b
+       L <= x <= U
+       x \in Z
+       z \in K
+
+ where K = K_1 \times ... \times K_l is a product of
+ simple cones, i.e. second-order cone, exponential cone,
+ non-negative cone, free cone.
+
+ To access the solver, one can either:
+  1. Create a JuMP.jl model using a conic input format
+  2. Create a Convex.jl model using a set of disciplined
+     convex atoms defined in Convex.jl library.
+ Both ways PajaritoConicSolver must be provided as the
+ preferred solver with a corresponding mip_solver and 
+ conic_solver specified.
+=========================================================#
+
+using JuMP
+
+type PajaritoConicModel <: MathProgBase.AbstractConicModel
+    # SOLUTION DATA:
+    solution::Vector{Float64}   # Vector containing solution
+    status                      # Temination status of algorithm
+    objval::Float64             # Best found objective corresponding to solution
+    iterations::Int             # Number of outer approximation iterations if algorithm is P-OA
+
+    # SOLVER DATA:
+    verbose::Int                # Verbosity level flag
+    algorithm                   # Choice of algorithm: P-OA or P-CB
+    mip_solver                  # Choice of MILP solver
+    conic_solver                # Choice of Conic solver
+    is_conic_solver             # Indicator if subproblem solver is conic, ECOS, SCS or Mosek
+    opt_tolerance               # Relatice optimality tolerance
+    acceptable_opt_tolerance    # Acceptable optimality tolerance if separation fails
+    time_limit                  # Time limit
+    cut_switch                  # Cut level for P-OA
+    socp_disaggregator::Bool    # SOCP disaggregator for SOC constraints
+
+    # PROBLEM DATA
+    numVar::Int                 # Number of variables
+    numVar_ini::Int             # Number of initial variables
+    numIntVar::Int              # Number of integer or binary variables
+    numConstr::Int              # Number of constraints
+    c                           # Objective coefficients           
+    A                           # Affine constraint matrix
+    b                           # Affine constraint right hand side
+    c_ini                       
     A_ini
     b_ini
     constr_cones_ini
     var_cones_ini
-    mip_x
-    mip_t
-    socp_disaggragater::Bool
-    instance::AbstractString
-    l::Vector{Float64}
-    u::Vector{Float64}
-    vartype::Vector{Symbol}
-    objsense::Symbol
-    numSpecCones
-    lengthSpecCones
-    numSOCCones
-    dimSOCCones
-    pajarito_var_cones
-    pajarito_constr_cones
+    mip_x                       # Original variables for the MILP model
+    mip_t                       # SOCP disaggregator variables if socp_disaggregator is true
+    instance::AbstractString    # Path to instance
+    l::Vector{Float64}          # Variable lower bounds
+    u::Vector{Float64}          # Variable upper bounds
+    vartype::Vector{Symbol}     # Vector containing variable types, :Bin, :Cont, :Int
+    objsense::Symbol            # Sense of the objective
+    numSpecCones                # Number of special cones (i.e. SOC, Exp) in the problem
+    lengthSpecCones             # Dimension of special cones
+    numSOCCones                 # Number of SOC cones
+    dimSOCCones                 # Dimension of SOC cones
+    pajarito_var_cones          # Variable cones
+    pajarito_constr_cones       # Constraint cones
     problem_type
-    function PajaritoDCPModel(verbose,mip_solver,dcp_solver,opt_tolerance,acceptable_opt_tolerance,time_limit,cut_switch,socp_disaggragater,instance)
+
+    # CONSTRUCTOR:
+    function PajaritoConicModel(verbose,algorithm,mip_solver,conic_solver,opt_tolerance,acceptable_opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
         m = new()
         m.verbose = verbose
+        m.algorithm = algorithm
         m.mip_solver = mip_solver
-        m.dcp_solver = dcp_solver
+        m.conic_solver = conic_solver
         m.opt_tolerance = opt_tolerance
         m.acceptable_opt_tolerance = acceptable_opt_tolerance
         m.time_limit = time_limit
         m.cut_switch = cut_switch
-        m.socp_disaggragater = socp_disaggragater
+        m.socp_disaggregator = socp_disaggregator
         m.instance = instance
         return m
     end
 end
 
-
-export PajaritoDCPSolver
-immutable PajaritoDCPSolver <: MathProgBase.AbstractMathProgSolver
+export PajaritoConicSolver
+immutable PajaritoConicSolver <: MathProgBase.AbstractMathProgSolver
     verbose
+    algorithm
     mip_solver
-    dcp_solver
+    conic_solver
     opt_tolerance
     acceptable_opt_tolerance
     time_limit
     cut_switch
-    socp_disaggragater
+    socp_disaggregator
     instance
 end
-PajaritoDCPSolver(;verbose=0,mip_solver=CplexSolver(CPX_PARAM_SCRIND=0,CPX_PARAM_REDUCE=0,CPX_PARAM_EPINT=1e-8,CPX_PARAM_EPRHS=1e-8),dcp_solver=ECOS.ECOSSolver(maxit=10000),opt_tolerance=1e-5,acceptable_opt_tolerance=1e-4,time_limit=60*60*10,cut_switch=1,socp_disaggragater=false,instance="") = PajaritoDCPSolver(verbose,mip_solver,dcp_solver,opt_tolerance,acceptable_opt_tolerance,time_limit,cut_switch,socp_disaggragater,instance)
+PajaritoConicSolver(;verbose=0,algorithm="P-OA",mip_solver=nothing,conic_solver=nothing,opt_tolerance=1e-5,acceptable_opt_tolerance=1e-4,time_limit=60*60*10,cut_switch=1,socp_disaggregator=false,instance="") = PajaritoConicSolver(verbose,algorithm,mip_solver,conic_solver,opt_tolerance,acceptable_opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
 
 # BEGIN MATHPROGBASE INTERFACE
-
-MathProgBase.ConicModel(s::PajaritoDCPSolver) = PajaritoDCPModel(s.verbose, s.mip_solver, s.dcp_solver, s.opt_tolerance, s.acceptable_opt_tolerance, s.time_limit, s.cut_switch, s.socp_disaggragater, s.instance)
+MathProgBase.ConicModel(s::PajaritoConicSolver) = PajaritoConicModel(s.verbose, s.algorithm, s.mip_solver, s.conic_solver, s.opt_tolerance, s.acceptable_opt_tolerance, s.time_limit, s.cut_switch, s.socp_disaggregator, s.instance)
 
 function MathProgBase.loadproblem!(
-    m::PajaritoDCPModel, c, A, b, constr_cones, var_cones)
+    m::PajaritoConicModel, c, A, b, constr_cones, var_cones)
+
+    if m.mip_solver == nothing
+        error("MIP solver is not specified.")
+    end
+
+    if m.conic_solver == nothing
+        error("Conic solver is not specified.")
+    end
+
+    m.is_conic_solver = (string(typeof(m.conic_solver)) == "ECOS.ECOSSolver" || string(typeof(m.conic_solver)) == "SCS.SCSSolver" || string(typeof(m.conic_solver)) == "MosekSolver")
 
     m.c_ini = c
     m.A_ini = A
@@ -86,8 +132,6 @@ function MathProgBase.loadproblem!(
 
     numVar = length(c) # number of variables
     numConstr = length(b) # number of constraints
-
-    # @show numConstr, numVar
 
     # b - Ax \in K => b - Ax = s, s \in K
     pajarito_var_cones = Any[x for x in var_cones]
@@ -100,13 +144,10 @@ function MathProgBase.loadproblem!(
     for (cone, ind) in copy_constr_cones
         if cone == :SOC || cone == :ExpPrimal
             lengthSpecCones += length(ind)
-            #@show cone
-            #@show ind
             slack_vars = slack_count:(slack_count+length(ind)-1)
             append!(A_I, ind)
             append!(A_J, slack_vars)
             append!(A_V, ones(length(ind)))
-            #@show ind_new
             push!(pajarito_var_cones, (cone, slack_vars))
             push!(pajarito_constr_cones, (:Zero, ind))
             slack_count += length(ind)
@@ -114,16 +155,7 @@ function MathProgBase.loadproblem!(
             push!(pajarito_constr_cones, (cone, ind))
         end
     end
-    #@show constr_cones
-    #@show pajarito_constr_cones
     A = sparse(A_I,A_J,A_V)
-    # ADD SLACKS FOR ALL CONSTRAINTS
-    #=A = [A speye(numConstr)]
-    for (cone, ind) in copy_constr_cones
-        lengthSpecCones += length(ind)
-        push!(pajarito_var_cones, (cone, ind+numVar))
-        push!(pajarito_constr_cones, (:Zero, ind))
-    end=#
 
     m.numVar_ini = numVar
     m.numVar = size(A,2)
@@ -184,12 +216,11 @@ function MathProgBase.loadproblem!(
     m.pajarito_var_cones = pajarito_var_cones
     m.pajarito_constr_cones = pajarito_constr_cones
     m.problem_type = problem_type
-
     m.vartype = fill(:Cont,m.numVar)
 end
 
 
-function addSlackValues(m::PajaritoDCPModel, separator)
+function addSlackValues(m::PajaritoConicModel, separator)
     rhs_value = m.b_ini - m.A_ini * separator[1:m.numVar_ini]
     slack_count = 1
     separator_slack = zeros(m.lengthSpecCones)
@@ -202,7 +233,6 @@ function addSlackValues(m::PajaritoDCPModel, separator)
     end
     @assert slack_count == m.lengthSpecCones+1
     return [separator[1:m.numVar_ini];separator_slack]
-    #return [separator;rhs_value]
 end
 
 function preprocessIntegersOut(c_ini, A_ini, b_ini, mip_solution, vartype, var_cones, numVar)
@@ -239,23 +269,10 @@ function preprocessIntegersOut(c_ini, A_ini, b_ini, mip_solution, vartype, var_c
         end
         push!(new_var_cones, (cone, new_ind))
     end
-    #=@show mip_solution
-    @show full(c_new)
-    @show full(A_new)
-    @show full(b_new)
-    @show removableColumnIndicator=#
 
     c_new = c_new[!removableColumnIndicator]
     b_new = b_new - A_new[:,removableColumnIndicator]*mip_solution[removableColumnIndicator]
     A_new = A_new[:,!removableColumnIndicator]
-
-    #=@show new_variable_index_map
-    @show old_variable_index_map    
-    @show full(c_new)
-    @show full(A_new)
-    @show full(b_new)
-    @show var_cones
-    @show new_var_cones=#
 
     return c_new, A_new, b_new, new_var_cones, old_variable_index_map, new_variable_index_map
 
@@ -302,7 +319,6 @@ function removeRedundantRows(constr_cones, A_new, b_new)
         push!(new_constr_cones, (cone, new_ind))
     end
 
-
     for (cone, ind) in constr_cones
         for i in ind
             if emptyRow[i]
@@ -319,17 +335,13 @@ function removeRedundantRows(constr_cones, A_new, b_new)
         end
     end
 
-
-
     return new_constr_cones, A_new[!emptyRow,:], b_new[!emptyRow]
 end
 
-function loadInfeasibleDCPModel(m::PajaritoDCPModel, inf_dcp_model, mip_solution)
+function loadFirstPhaseConicModel(m::PajaritoConicModel, inf_dcp_model, mip_solution)
     
     # original variables; slack variables; simplification variables
     c_new = [zeros(m.numVar);ones(m.numSpecCones);zeros(m.numSpecCones)]
-
-    #@show length(c_new)
 
     (I, J, V) = findnz(m.A)
     b_new = copy(m.b)
@@ -409,13 +421,6 @@ function loadInfeasibleDCPModel(m::PajaritoDCPModel, inf_dcp_model, mip_solution
 
     (new_constr_cones, A_new, b_new) = removeRedundantRows(inf_constr_cones, A_new, b_new)
 
-    #=@show full(A_new)
-    @show b_new
-    @show c_new
-    @show m.pajarito_var_cones
-    @show inf_var_cones=#
-
-
     MathProgBase.loadproblem!(inf_dcp_model, c_new, A_new, b_new, new_constr_cones, new_var_cones)
 
 
@@ -425,7 +430,9 @@ function loadInfeasibleDCPModel(m::PajaritoDCPModel, inf_dcp_model, mip_solution
 
 end
 
-function extendMIPSolution(m::PajaritoDCPModel, mip_solution, new_variable_index_map)
+
+
+function extendMIPSolution(m::PajaritoConicModel, mip_solution, new_variable_index_map)
 
     @assert length(mip_solution) == m.numVar
 
@@ -462,8 +469,6 @@ function extendMIPSolution(m::PajaritoDCPModel, mip_solution, new_variable_index
         #   => z + s \geq y exp(x/y)
         #   => q = z + s, q \geq y exp(x/y)
         #   => q = z + s, (x,y,q) \in ExpPrimal, MIN s
-            #@show length(new_mip_solution), ind
-            #@show length(new_solution), k+m.numVar+m.numSpecCones
             new_ind = new_variable_index_map[ind]
             new_solution[k+numVar] = new_mip_solution[new_ind[2]]*exp(new_mip_solution[new_ind[1]]/new_mip_solution[new_ind[2]]) - new_mip_solution[new_ind[3]]
             new_solution[k+numVar+m.numSpecCones] = new_solution[k+numVar] + new_mip_solution[new_ind[3]]
@@ -473,85 +478,38 @@ function extendMIPSolution(m::PajaritoDCPModel, mip_solution, new_variable_index
     return new_solution
 end
 
-function loadDCPModel(m::PajaritoDCPModel, dcp_model, mip_solution)
+function loadConicModel(m::PajaritoConicModel, conic_model, mip_solution)
     
     (I, J, V) = findnz(m.A)
     c_new = copy(m.c)
     b_new = copy(m.b)
-    dcp_var_cones = copy(m.pajarito_var_cones)
-    dcp_constr_cones = copy(m.pajarito_constr_cones)
-    # FIX BINARY OR INTEGER VARIABLES TO CURRENT MIP SOLUTION
-    #=k = 1
-    for i in 1:m.numVar
-        if m.vartype[i] == :Int || m.vartype[i] == :Bin
-            push!(I, m.numConstr + k)
-            push!(J, i)
-            push!(V, 1.0)
-            push!(b_new, round(mip_solution[i]))
-            k += 1
-        end   
-    end
-    dcp_constr_cones = [dcp_constr_cones;(:Zero, (m.numConstr+1):(length(b_new)))]=#
+    conic_var_cones = copy(m.pajarito_var_cones)
+    conic_constr_cones = copy(m.pajarito_constr_cones)
 
     A_new = sparse(I,J,V)
 
 
     (c_new, A_new, b_new, new_var_cones, old_variable_index_map, new_variable_index_map) = 
-        preprocessIntegersOut(c_new, A_new, b_new, mip_solution, m.vartype, dcp_var_cones, m.numVar)
+        preprocessIntegersOut(c_new, A_new, b_new, mip_solution, m.vartype, conic_var_cones, m.numVar)
 
-    (new_constr_cones, A_new, b_new) = removeRedundantRows(dcp_constr_cones, A_new, b_new)
+    (new_constr_cones, A_new, b_new) = removeRedundantRows(conic_constr_cones, A_new, b_new)
     @assert size(A_new,1) == length(b_new)
 
-    MathProgBase.loadproblem!(dcp_model, c_new, A_new, b_new, new_constr_cones, new_var_cones)
+    MathProgBase.loadproblem!(conic_model, c_new, A_new, b_new, new_constr_cones, new_var_cones)
 
-    return old_variable_index_map
+    return old_variable_index_map, c_new, A_new
 end
 
-function loadInitialDCPModel(m::PajaritoDCPModel, dcp_model, mip_solution)
+function loadRelaxedConicModel(m::PajaritoConicModel, conic_model)
     
-    (I, J, V) = findnz(m.A_ini)
-    c_new = copy(m.c_ini)
-    b_new = copy(m.b)
-    dcp_var_cones = copy(m.var_cones_ini)
-    dcp_constr_cones = copy(m.constr_cones_ini)
-    # FIX BINARY OR INTEGER VARIABLES TO CURRENT MIP SOLUTION
-    #=k = 1
-    for i in 1:m.numVar_ini
-        if m.vartype[i] == :Int || m.vartype[i] == :Bin
-            push!(I, m.numConstr + k)
-            push!(J, i)
-            push!(V, 1.0)
-            push!(b_new, round(mip_solution[i]))
-            k += 1
-        end   
-    end
-    @assert length(b_new) - m.numConstr == m.numIntVar
-    dcp_constr_cones = [dcp_constr_cones;(:Zero, (m.numConstr+1):(length(b_new)))]
-=#
-    A_new = sparse(I,J,V)
-    #@show full(A_new)
-    #@show b_new
-    #@show dcp_constr_cones
-
-    (c_new, A_new, b_new, new_var_cones, old_variable_index_map) = 
-        preprocessIntegersOut(c_new, A_new, b_new, mip_solution[1:m.numVar_ini], m.vartype[1:m.numVar_ini], dcp_var_cones, m.numVar_ini)
- 
-
-    MathProgBase.loadproblem!(dcp_model, c_new, A_new, b_new, dcp_constr_cones, new_var_cones)
-
-    return old_variable_index_map
-end
-
-function loadRelaxedDCPModel(m::PajaritoDCPModel, dcp_model)
-    
-    MathProgBase.loadproblem!(dcp_model, m.c, m.A, m.b, m.pajarito_constr_cones, m.pajarito_var_cones)
+    MathProgBase.loadproblem!(conic_model, m.c, m.A, m.b, m.pajarito_constr_cones, m.pajarito_var_cones)
 
 end
 
 
-function loadInitialRelaxedDCPModel(m::PajaritoDCPModel, dcp_model)
+function loadInitialRelaxedConicModel(m::PajaritoConicModel, conic_model)
     
-    MathProgBase.loadproblem!(dcp_model, m.c_ini, m.A_ini, m.b_ini, m.constr_cones_ini, m.var_cones_ini)
+    MathProgBase.loadproblem!(conic_model, m.c_ini, m.A_ini, m.b_ini, m.constr_cones_ini, m.var_cones_ini)
 
 end
 
@@ -613,56 +571,11 @@ function getDExp(ind, separator)
     return (I,V)
 end
 
-function checkCuttingPlanes!(m, mip_model, separator, mip_solution)
+function addPrimalCuttingPlanes!(m, mip_model, separator, cb)
     k = 1
     for (cone, ind) in m.pajarito_var_cones
         if cone == :SOC
-            if !m.socp_disaggragater
-                f = getSOCValue(ind, separator)
-                (I,V) = getDSOC(ind, separator) 
-                new_rhs = -f
-                for i in 1:length(I)
-                    new_rhs += V[i] * separator[I[i]]
-                end 
-                #@show sum(V .* mip_solution[I]) - new_rhs
-                #@assert sum(V .* mip_solution[I]) >= new_rhs + 1e-5
-                #MathProgBase.addconstr!(mip_model, I, V, -Inf, new_rhs)
-            else
-                #=for j = 2:length(ind)
-                    # \sum{x_i^2} <= y
-                    # ADD APPROXIMATION FOR x_i^2 / y <= t_I[i]
-                    f = getSOCAggragaterValue(ind[j], ind[1], separator)
-                    (I,V) = getDSOCAggragater(ind[j], ind[1], separator)
-                    new_rhs = -f
-                    for i in 1:length(I)
-                        new_rhs += V[i] * separator[I[i]]
-                    end
-                    @addConstraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} - m.mip_t[k][j-1] <= new_rhs)              
-                end=#
-                k += 1
-            end
-        elseif cone == :ExpPrimal
-            f = getExpValue(ind, separator)
-            (I,V) = getDExp(ind, separator)
-            new_rhs = -f
-            for i in 1:length(I)
-                new_rhs += V[i] * separator[I[i]]
-            end
-            #new_rhs = (abs(new_rhs) < 1e-4 ? 0.0 : new_rhs)
-            #@show maximum(abs(V)), minimum(abs(V)), new_rhs
-            #@show sum(V .* mip_solution[I]) - new_rhs
-            #@assert sum(V .* mip_solution[I]) >= new_rhs + 1e-5
-            #MathProgBase.addconstr!(mip_model, I, V, -Inf, new_rhs)
-            
-        end
-    end
-end
-
-function addCuttingPlanes!(m, mip_model, separator)
-    k = 1
-    for (cone, ind) in m.pajarito_var_cones
-        if cone == :SOC
-            if !m.socp_disaggragater
+            if !m.socp_disaggregator
                 f = getSOCValue(ind, separator)
                 # IF ALL HAVE DIVISION BY ZERO, IT MUST BE FEASIBLE.
                 if getSOCNormValue(ind, separator) == 0.0
@@ -674,8 +587,11 @@ function addCuttingPlanes!(m, mip_model, separator)
                     new_rhs += V[i] * separator[I[i]]
                 end
                 #new_rhs = (abs(new_rhs) < 1e-9 ? 0.0 : new_rhs)
-                @addConstraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
-                #MathProgBase.addconstr!(mip_model, I, V, -Inf, new_rhs)
+                if cb != []
+                    @addLazyConstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
+                else
+                    @addConstraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
+                end
             else
                 for j = 2:length(ind)
                     # \sum{x_i^2} <= y
@@ -687,32 +603,66 @@ function addCuttingPlanes!(m, mip_model, separator)
                         new_rhs += V[i] * separator[I[i]]
                     end
                     #new_rhs = (abs(new_rhs) < 1e-9 ? 0.0 : new_rhs)
-                    @addConstraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} - m.mip_t[k][j-1] <= new_rhs)              
+                    if cb != []
+                        @addLazyConstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} - m.mip_t[k][j-1] <= new_rhs)     
+                    else
+                        @addConstraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} - m.mip_t[k][j-1] <= new_rhs)     
+                    end         
                 end
                 k += 1
             end
         elseif cone == :ExpPrimal
             f = getExpValue(ind, separator)
             (I,V) = getDExp(ind, separator)
-            #@show separator[ind], I, V
             new_rhs = -f
             for i in 1:length(I)
                 new_rhs += V[i] * separator[I[i]]
             end
             #new_rhs = (abs(new_rhs) < 1e-9 ? 0.0 : new_rhs)
-            #@show maximum(abs(V)), minimum(abs(V)), new_rhs
-            @addConstraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
-            #MathProgBase.addconstr!(mip_model, I, V, -Inf, new_rhs)
+            if cb != []
+                @addLazyConstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
+            else
+                @addConstraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
+            end
         end
     end
 end
 
-function loadMIPModel(m::PajaritoDCPModel, mip_model)
+
+function getDualSeparator(m, conic_dual, old_variable_index_map)
+    separator = zeros(m.numVar)
+    for i = 1:length(old_variable_index_map)
+        @assert m.vartype[old_variable_index_map[i]] != :Int && m.vartype[old_variable_index_map[i]] != :Bin
+        separator[old_variable_index_map[i]] = conic_dual[i]
+    end
+    return separator
+end
+
+function addDualCuttingPlanes!(m, mip_model, separator, cb)
+
+    k = 1
+    for (cone, ind) in m.pajarito_var_cones
+        if cone == :SOC || cone == :ExpPrimal
+            for i = ind
+                @assert m.vartype[i] != :Int && m.vartype[i] != :Bin
+            end
+            if cb != []
+                @addLazyConstraint(cb, sum{separator[i] * m.mip_x[i], i in ind} >= 0.0)
+            else
+                @addConstraint(mip_model, sum{separator[i] * m.mip_x[i], i in ind} >= 0.0)
+            end
+        end
+    end
+end
+
+
+
+function loadMIPModel(m::PajaritoConicModel, mip_model)
     @defVar(mip_model, m.l[i] <= x[i=1:m.numVar] <= m.u[i])
     t = Array(Vector{Variable},m.numSOCCones)
     k = 1
     for (cone, ind) in m.pajarito_var_cones
-        if m.socp_disaggragater && cone == :SOC
+        if m.socp_disaggregator && cone == :SOC
             @defVar(mip_model, 0.0 <= t[k][j=1:m.dimSOCCones[k]] <= Inf)
             @addConstraint(mip_model, sum{t[k][i], i in 1:m.dimSOCCones[k]} - x[ind[1]] <= 0.0)      
             k += 1        
@@ -737,7 +687,7 @@ function loadMIPModel(m::PajaritoDCPModel, mip_model)
     m.mip_t = t
 end
 
-function getInfeasibleDCPModelSolution(m::PajaritoDCPModel, inf_dcp_model, old_variable_index_map, mip_solution)
+function getFirstPhaseConicModelSolution(m::PajaritoConicModel, inf_dcp_model, old_variable_index_map, mip_solution)
 
 
     c_new = [zeros(m.numVar);ones(m.numSpecCones);zeros(m.numSpecCones)]
@@ -751,31 +701,39 @@ function getInfeasibleDCPModelSolution(m::PajaritoDCPModel, inf_dcp_model, old_v
     end
 
     inf_dcp_objval = dot(c_new, separator)
-    #@show inf_dcp_objval
     return separator, inf_dcp_objval
 
 end
 
-function getDCPModelSolution(m::PajaritoDCPModel, dcp_model, old_variable_index_map, mip_solution)
 
-    dcp_solution = MathProgBase.getsolution(dcp_model)
-    reduced_dcp_objval = MathProgBase.getobjval(dcp_model)
 
-    @assert length(dcp_solution) == length(old_variable_index_map)
-    @assert length(dcp_solution) == m.numVar - m.numIntVar
+function getConicModelSolution(m::PajaritoConicModel, conic_model, old_variable_index_map, mip_solution, c_sub, A_sub)
+
+    dual_vector = try 
+        MathProgBase.getdual(conic_model)
+    catch
+        fill(0.0, size(A_sub,1))
+    end   
+ 
+    conic_dual = c_sub - A_sub' * (-dual_vector)
+    conic_solution = MathProgBase.getsolution(conic_model)
+    reduced_conic_objval = MathProgBase.getobjval(conic_model)
+
+    @assert length(conic_solution) == length(old_variable_index_map)
+    @assert length(conic_solution) == m.numVar - m.numIntVar
 
     separator = mip_solution
     for i in 1:length(old_variable_index_map)
         @assert m.vartype[old_variable_index_map[i]] != :Int && m.vartype[old_variable_index_map[i]] != :Bin 
-        separator[old_variable_index_map[i]] = dcp_solution[i]
+        separator[old_variable_index_map[i]] = conic_solution[i]
     end
 
-    dcp_objval = dot(m.c, separator)
-    @assert abs(dcp_objval-reduced_dcp_objval) < 1e-4
-    return separator, dcp_objval
+    conic_objval = dot(m.c, separator)
+    @assert abs(conic_objval-reduced_conic_objval) < 1e-4
+    return separator, conic_objval, conic_dual
 end
 
-function checkFeasibility(m::PajaritoDCPModel, separator)
+function checkFeasibility(m::PajaritoConicModel, separator)
 
     val = m.b - m.A * separator[1:m.numVar]
     for (cone, ind) in m.pajarito_constr_cones
@@ -806,7 +764,7 @@ function checkFeasibility(m::PajaritoDCPModel, separator)
 
 end
 
-function MathProgBase.optimize!(m::PajaritoDCPModel)
+function MathProgBase.optimize!(m::PajaritoConicModel)
 
     # TO CLASSIFY THE PROBLEM TYPES
     #=out_file = open("output.txt", "a")
@@ -817,256 +775,242 @@ function MathProgBase.optimize!(m::PajaritoDCPModel)
     start = time()
 
     cputime_mip = 0.0
-    cputime_dcp = 0.0
+    cputime_conic = 0.0
 
     mip_model = Model(solver=m.mip_solver)
     loadMIPModel(m, mip_model)
 
-    # solve DCP model for the MIP solution
-    ini_dcp_model = MathProgBase.ConicModel(m.dcp_solver)
-    loadInitialRelaxedDCPModel(m, ini_dcp_model)
-    MathProgBase.optimize!(ini_dcp_model)
+    # solve Conic model for the MIP solution
+    ini_conic_model = MathProgBase.ConicModel(m.conic_solver)
+    loadInitialRelaxedConicModel(m, ini_conic_model)
+    MathProgBase.optimize!(ini_conic_model)
 
-
-    ini_dcp_status = MathProgBase.status(ini_dcp_model)
-    ini_dcp_objval = MathProgBase.getobjval(ini_dcp_model)
-    (m.verbose > 0) && println("INI DCP STATUS: $ini_dcp_status")
-    (m.verbose > 0) && println("INI DCP OBJVAL: $ini_dcp_objval")
-    if ini_dcp_status == :Optimal || ini_dcp_status == :Suboptimal
-        #dual_solution = MathProgBase.getconicdual(ini_dcp_model)
-        #@assert abs(ini_dcp_objval + dot(dual_solution, m.b_ini)) < 1e-4
-        #@show ini_dcp_objval, dot(dual_solution, m.b_ini)
-        separator = MathProgBase.getsolution(ini_dcp_model)
+    ini_conic_status = MathProgBase.status(ini_conic_model)
+    ini_conic_objval = MathProgBase.getobjval(ini_conic_model)
+    (m.verbose > 0) && println("INI Conic STATUS: $ini_conic_status")
+    (m.verbose > 0) && println("INI Conic OBJVAL: $ini_conic_objval")
+    if ini_conic_status == :Optimal || ini_conic_status == :Suboptimal
+        separator = MathProgBase.getsolution(ini_conic_model)
         separator = addSlackValues(m, separator)
         @assert length(separator) == m.numVar
-        addCuttingPlanes!(m, mip_model, separator)
+        addPrimalCuttingPlanes!(m, mip_model, separator, [])
     else
-        (m.verbose > 0) && println("DCP Relaxation Infeasible")
+        (m.verbose > 0) && println("Conic Relaxation Infeasible")
         m.status = :Infeasible
         return       
     end
 
-    #@show string(typeof(m.dcp_solver))
-    #@show string(typeof(m.dcp_solver.nlp_solver))
-    #@show string(typeof(ini_dcp_model.nlp_model))
-
-    if string(typeof(m.dcp_solver)) == "Pajarito.ConicNLPSolver" 
-	if string(typeof(m.dcp_solver.nlp_solver)) == "KNITRO.KnitroSolver"
-		println("RELEASE KNITRO LICESE")
-		KNITRO.freeProblem(getInternalModel(ini_dcp_model.nlp_model).inner)
-	end
+    # Release the inf_conic_model if applicable
+    if applicable(MathProgBase.freemodel!,ini_conic_model)
+        MathProgBase.freemodel!(ini_conic_model)
     end
 
-    # FOR DCP MODEL
-    # dcp_model = MathProgBase.model(m.dcp_solver)
-    # loadDCPModel(m, dcp_model, mip_solution)
-
-    # FOR INC DCP MODEL
-    # inf_dcp_model = MathProgBase.model(m.dcp_solver)
-    # loadInfeasibleDCPModel(m,inf_dcp_model, mip_solution)
-
-    #@show m.vartype
-    #@show m.pajarito_var_cones
-
+    m.status = :UserLimit
     m.objval = Inf
     iter = 0
     optimality_gap = Inf
     mip_objval = Inf
     prev_mip_solution = zeros(m.numVar)
-    while (time() - start) < m.time_limit
-	#gc()
-        # solve MIP model
+    cut_added = false
 
-	# WARMSTART MIP FROM UPPER BOUND
-	if m.objval != Inf
-                MathProgBase.setwarmstart!(getInternalModel(mip_model), m.solution)
-	end
-
-        start_mip = time()
-        mip_status = solve(mip_model)
-        cputime_mip += time() - start_mip
-        #mip_objval = Inf
-        #mip_solution = zeros(m.numVar+1)
-        if mip_status == :Infeasible || mip_status == :InfeasibleOrUnbounded
-            (m.verbose > 0) && println("MIP Infeasible")
-            m.status = :Infeasible
-            return
-        else 
-            (m.verbose > 0) && println("MIP Status: $mip_status")
+    function coniccallback(cb)
+        if cb != []
+            mip_objval = MathProgBase.cbgetobj(cb)
+            mip_solution = MathProgBase.cbgetmipsolution(cb)[1:m.numVar]
+        else
+            mip_objval = getObjectiveValue(mip_model)
+            mip_solution = getValue(m.mip_x)
         end
-        mip_objval = getObjectiveValue(mip_model)
-        mip_solution = getValue(m.mip_x)
-        @assert abs(mip_objval - dot(m.c, mip_solution)) < 1e-4
+
+        #@assert abs(mip_objval - dot(m.c, mip_solution)) < 1e-4
         (m.verbose > 1) && println("MIP Vartypes: $(m.vartype)")
         (m.verbose > 1) && println("MIP Solution: $mip_solution")
 
-        # PHASE 1 INFEASIBILITY PROBLEM
-        dcp_objval = Inf
-        inf_dcp_model = MathProgBase.ConicModel(m.dcp_solver)
-        (old_variable_index_map, mip_solution_warmstart) = loadInfeasibleDCPModel(m,inf_dcp_model, mip_solution)
-        #(string(typeof(m.dcp_solver)) != "ECOSSolver") && MathProgBase.setwarmstart!(inf_dcp_model, mip_solution_warmstart)
-        #loadInfeasibleDCPModel(m,inf_dcp_model, mip_solution)
-        start_dcp = time()
-        MathProgBase.optimize!(inf_dcp_model)
-        cputime_dcp += time() - start_dcp
+        separator = Any[]
+        # MICONE algorithm
+        # TODO: add a second phase if dual information is not available
+        if m.is_conic_solver
 
-        inf_cut_generator = true
-        if MathProgBase.status(inf_dcp_model) == :Infeasible
-            (m.verbose > 0) && println("INF DCP Infeasible")
-            m.status = :Infeasible
-            return
-        else
-            (separator, inf_dcp_objval) = getInfeasibleDCPModelSolution(m,inf_dcp_model, old_variable_index_map, mip_solution)
+            conic_model = MathProgBase.ConicModel(m.conic_solver)
+            (old_variable_index_map, c_sub, A_sub) = loadConicModel(m, conic_model, mip_solution)
 
-
-	    if string(typeof(m.dcp_solver)) == "Pajarito.ConicNLPSolver" 
-		if string(typeof(m.dcp_solver.nlp_solver)) == "KNITRO.KnitroSolver"
-			println("RELEASE KNITRO LICESE")
-			KNITRO.freeProblem(getInternalModel(inf_dcp_model.nlp_model).inner)
-		end
-	    end
-
-
-            #inf_dcp_objval = MathProgBase.getobjval(inf_dcp_model)
-            #separator = MathProgBase.getsolution(inf_dcp_model)
-            #checkFeasibility(m, separator)
-            #@show separator[1:m.numVar]
-            #dcp_objval = dot(m.c, separator[1:m.numVar])
-            if inf_dcp_objval > 1e-4
-                (m.verbose > 0) && println("INF DCP Objval: $inf_dcp_objval")
-                inf_cut_generator = true
-            else
-                #dcp_model_warmstart = MathProgBase.getsolution(inf_dcp_model)
-                #@assert all(-1e-5 .<= dcp_model_warmstart[m.numVar+1-m.numIntVar:m.numVar+m.numSpecCones-m.numIntVar] .<= 1e-5)
-                dcp_model_warmstart = Float64[]
-                for i in 1:m.numVar
-                    if m.vartype[i] != :Int && m.vartype[i] != :Bin
-                        push!(dcp_model_warmstart, separator[i])
-                    end
-                end
-
-                #@show separator
-                #@show dcp_model_warmstart
-
-                dcp_model = MathProgBase.ConicModel(m.dcp_solver)
-                old_variable_index_map = loadDCPModel(m, dcp_model, mip_solution)
-
-                #(string(typeof(m.dcp_solver)) != "ECOSSolver") && MathProgBase.setwarmstart!(dcp_model, dcp_model_warmstart[1:(m.numVar-m.numIntVar)])
-                #@show dcp_model.solution
-                start_dcp = time()
-                MathProgBase.optimize!(dcp_model)
-                cputime_dcp += time() - start_dcp
-                dcp_status = MathProgBase.status(dcp_model)
-                (m.verbose > 0) && println("DCP Status: $dcp_status from conic solver.")
-                if !(dcp_status == :Optimal || dcp_status == :Suboptimal)
-                    (m.verbose > 0) && println("ERROR: Unrecognized status $dcp_status from conic solver.")
-                    m.status = :Error
-                    return
-                end
-
-                (separator, dcp_objval) = getDCPModelSolution(m,dcp_model, old_variable_index_map, mip_solution)
-
-
-		if string(typeof(m.dcp_solver)) == "Pajarito.ConicNLPSolver" 
-		    if string(typeof(m.dcp_solver.nlp_solver)) == "KNITRO.KnitroSolver"
-			println("RELEASE KNITRO LICESE")
-			KNITRO.freeProblem(getInternalModel(dcp_model.nlp_model).inner)
-		    end
-		end
-
-                # KEEP TRACK OF BEST KNOWN INTEGER FEASIBLE SOLUTION
-                if dcp_objval < m.objval
-                    m.objval = dcp_objval
-                    m.solution = separator[1:m.numVar]
-                end 
-
-                #checkFeasibility(m, separator)
-
-                #dcp_objval = MathProgBase.getobjval(dcp_model)
-                #separator = MathProgBase.getsolution(dcp_model)
-                #separator = addSlackValues(m, separator)
-
-                #(m.verbose > 0) && println("DCP Objval: $dcp_objval")
-                inf_cut_generator = false
+            start_conic = time()
+            MathProgBase.optimize!(conic_model)
+            cputime_conic += time() - start_conic
+            conic_status = MathProgBase.status(conic_model)
+            (m.verbose > 0) && println("Conic Status: $conic_status from conic solver.")
+            if !(conic_status == :Optimal || conic_status == :Suboptimal || conic_status == :Infeasible)
+                (m.verbose > 0) && println("ERROR: Unrecognized status $conic_status from conic solver.")
+                m.status = :Error
+                return
             end
-        end
-        # solve DCP model for the MIP solution
-        #=dcp_model = MathProgBase.model(m.dcp_solver)
-        loadInitialDCPModel(m, dcp_model, mip_solution)
 
-        # optiimize the DCP problem
-        MathProgBase.optimize!(dcp_model)
-        dcp_status = MathProgBase.status(dcp_model)
-        (m.verbose > 1) && println("DCP Status: $dcp_status")
-        dcp_objval = -Inf
-        inf_cut_generator = false
-        #separator::Vector{Float64}
-        if dcp_status == :Optimal || dcp_status == :Suboptimal
-            (m.verbose > 0) && println("DCP Solved")
-            dcp_objval = MathProgBase.getobjval(dcp_model)
-            separator = MathProgBase.getsolution(dcp_model)
-            separator = addSlackValues(m, separator)
-            (m.verbose > 1) && println("DCP Solution: $separator")
-        elseif dcp_status == :Infeasible || dcp_status == :Unbounded # ecos sometimes returns unbounded when the problem is infeasible
-            inf_cut_generator = true
-            # FOR INF DCP MODEL
-            inf_dcp_model = MathProgBase.model(m.dcp_solver)
-            loadInfeasibleDCPModel(m,inf_dcp_model, mip_solution)
-            (m.verbose > 0) && println("DCP Infeasible")
+            (conic_primal, conic_objval, conic_dual) = getConicModelSolution(m,conic_model, old_variable_index_map, mip_solution, c_sub, A_sub)
+
+            # Release the conic_model if applicable
+            if applicable(MathProgBase.freemodel!,conic_model)
+                MathProgBase.freemodel!(conic_model)
+            end
+
+            # KEEP TRACK OF BEST KNOWN INTEGER FEASIBLE SOLUTION
+            if conic_objval < m.objval
+                m.objval = conic_objval
+                m.solution = conic_primal[1:m.numVar]
+            end 
+
+            # Update separator to dual solution
+            separator = getDualSeparator(m, conic_dual, old_variable_index_map)
+        # MIDCP algorithm
+        else
+
+            # PHASE 1 INFEASIBILITY PROBLEM
+            inf_dcp_model = MathProgBase.ConicModel(m.conic_solver)
+            (old_variable_index_map, mip_solution_warmstart) = loadFirstPhaseConicModel(m,inf_dcp_model, mip_solution)
+            if applicable(MathProgBase.setwarmstart!,inf_dcp_model, mip_solution_warmstart)
+                MathProgBase.setwarmstart!(inf_dcp_model, mip_solution_warmstart)
+            end
+            start_conic = time()
             MathProgBase.optimize!(inf_dcp_model)
+            cputime_conic += time() - start_conic
+
+            inf_cut_generator = true
             if MathProgBase.status(inf_dcp_model) == :Infeasible
                 (m.verbose > 0) && println("INF DCP Infeasible")
                 m.status = :Infeasible
                 return
+            else
+                (separator, inf_dcp_objval) = getFirstPhaseConicModelSolution(m,inf_dcp_model, old_variable_index_map, mip_solution)
+
+                # Release the inf_dcp_model if applicable
+                if applicable(MathProgBase.freemodel!,inf_dcp_model)
+                    MathProgBase.freemodel!(inf_dcp_model)
+                end
+
+                if inf_dcp_objval > 1e-4
+                    (m.verbose > 0) && println("INF DCP Objval: $inf_dcp_objval")
+                    inf_cut_generator = true
+                else
+                    dcp_model_warmstart = Float64[]
+                    for i in 1:m.numVar
+                        if m.vartype[i] != :Int && m.vartype[i] != :Bin
+                            push!(dcp_model_warmstart, separator[i])
+                        end
+                    end
+
+                    # PHASE 2 REDUCED PROBLEM
+                    dcp_model = MathProgBase.ConicModel(m.conic_solver)
+                    (old_variable_index_map, c_sub, A_sub) = loadConicModel(m, dcp_model, mip_solution)
+
+                    if applicable(MathProgBase.setwarmstart!,dcp_model, dcp_model_warmstart[1:(m.numVar-m.numIntVar)])
+                        MathProgBase.setwarmstart!(dcp_model, dcp_model_warmstart[1:(m.numVar-m.numIntVar)])
+                    end
+                    start_conic = time()
+                    MathProgBase.optimize!(dcp_model)
+                    cputime_conic += time() - start_conic
+                    dcp_status = MathProgBase.status(dcp_model)
+                    (m.verbose > 0) && println("DCP Status: $dcp_status from conic solver.")
+                    if !(dcp_status == :Optimal || dcp_status == :Suboptimal)
+                        (m.verbose > 0) && println("ERROR: Unrecognized status $dcp_status from conic solver.")
+                        m.status = :Error
+                        return
+                    end
+
+                    (dcp_primal, dcp_objval, dcp_dual) = getConicModelSolution(m,dcp_model, old_variable_index_map, mip_solution, c_sub, A_sub)
+
+                    # Release the dcp_model if applicable
+                    if applicable(MathProgBase.freemodel!,dcp_model)
+                        MathProgBase.freemodel!(dcp_model)
+                    end
+
+                    # KEEP TRACK OF BEST KNOWN INTEGER FEASIBLE SOLUTION
+                    if dcp_objval < m.objval
+                        m.objval = dcp_objval
+                        m.solution = dcp_primal[1:m.numVar]
+                    end 
+
+                    #(m.verbose > 0) && println("DCP Objval: $dcp_objval")
+                    inf_cut_generator = false
+                    
+                    # Update separator to primal solution
+                    separator = dcp_primal
+                end
             end
-            (m.verbose > 0) && println("INF DCP Solved")
-            separator = MathProgBase.getsolution(inf_dcp_model)
-            (m.verbose > 1) && println("INF DCP Solution: $separator")
-        else
-            println("ERROR: Unrecognized status $dcp_status from conic solver.")
-            m.status = :Error
-            return
-        end=#
+     
+        end
+
         # add supporting hyperplanes
         optimality_gap = m.objval - mip_objval 
         (m.verbose > 0) && println("Optimality Gap: $(m.objval) - $(mip_objval) = $(optimality_gap)")
-        # ITS FINE TO CHECK OPTIMALITY GAP ONLY BECAUSE IF dcp_model IS INFEASIBLE, ITS OBJ VALUE IS INF
-
-        if optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance && !(prev_mip_solution == mip_solution)
-            addCuttingPlanes!(m, mip_model, separator)
-            #checkCuttingPlanes!(m, mip_model, separator, mip_solution)
-            setValue(m.mip_x, mip_solution)
-            #(m.cut_switch > 0) && addCuttingPlanes!(m, mip_model, mip_solution)
+        # ITS FINE TO CHECK OPTIMALITY GAP ONLY BECAUSE IF conic_model IS INFEASIBLE, ITS OBJ VALUE IS INF
+        if optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance || cb != [] #&& !(prev_mip_solution == mip_solution)
+            if m.is_conic_solver
+                addDualCuttingPlanes!(m, mip_model, separator, cb)
+            else
+                addPrimalCuttingPlanes!(m, mip_model, separator, cb)
+            end
+            #setValue(m.mip_x, mip_solution)
+            cut_added = true
         else
             if optimality_gap < (abs(mip_objval) + 1e-5)*m.acceptable_opt_tolerance
                 (m.verbose > 0) && println("MINLP Solved")
                 m.status = :Optimal
-                #optimality_gap > 0.0 ? m.objval = m.objval : m.objval = mip_objval
-                #optimality_gap > 0.0 ? m.solution = m.solution : m.solution = mip_solution
                 m.iterations = iter
                 (m.verbose > 0) && println("CPUTIME: $(time() - start)")
                 (m.verbose > 0) && println("Number of OA iterations: $iter")
-                out_file = open("output.txt", "a")
-                write(out_file, "$(m.instance): $(m.status) $iter $(time() - start) $(m.objval) $(m.problem_type) $(cputime_mip) $(cputime_dcp)\n") 
-                close(out_file)
             end
-            return
+            #break
         end
-        #MathProgBase.setvarUB!(nlp_model, m.u)
-        #MathProgBase.setvarLB!(nlp_model, m.l)
-        prev_mip_solution = mip_solution
-        iter += 1
     end
-    m.status = :UserLimit
+
+    # P-CB
+    if m.algorithm == "P-CB"
+        addLazyCallback(mip_model,coniccallback)
+        m.status = solve(mip_model)
+    # P-OA
+    elseif m.algorithm == "P-OA"
+        while (time() - start) < m.time_limit
+            cut_added = false
+            # gc()
+            # WARMSTART MIP FROM UPPER BOUND
+            if m.objval != Inf
+                MathProgBase.setwarmstart!(getInternalModel(mip_model), m.solution)
+            end
+
+            start_mip = time()
+            mip_status = solve(mip_model)
+            cputime_mip += time() - start_mip
+            if mip_status == :Infeasible || mip_status == :InfeasibleOrUnbounded
+                (m.verbose > 0) && println("MIP Infeasible")
+                m.status = :Infeasible
+                return
+            else 
+                (m.verbose > 0) && println("MIP Status: $mip_status")
+            end
+            mip_solution = getValue(m.mip_x)
+ 
+            coniccallback([])
+            if cut_added == false
+                break
+            end
+
+            prev_mip_solution = mip_solution
+            iter += 1
+        end
+
+    else
+        error("Unspecified algorithm.")
+    end
+        
     out_file = open("output.txt", "a")
-    write(out_file, "$(m.instance): $(m.status) $iter $(time() - start) $(m.objval) $(m.problem_type) $(cputime_mip) $(cputime_dcp)\n") 
+    write(out_file, "$(m.instance): $(m.status) $iter $(time() - start) $(m.objval) $(m.problem_type) $(cputime_mip) $(cputime_conic)\n") 
     close(out_file)
+    println("$(m.status) $iter $(time() - start) $(m.objval) $(m.problem_type) $(cputime_mip) $(cputime_conic)") 
 
 end
 
 
-MathProgBase.setwarmstart!(m::PajaritoDCPModel, x) = (m.solution = x)
-function MathProgBase.setvartype!(m::PajaritoDCPModel, v::Vector{Symbol}) 
+MathProgBase.setwarmstart!(m::PajaritoConicModel, x) = (m.solution = x)
+function MathProgBase.setvartype!(m::PajaritoConicModel, v::Vector{Symbol}) 
     m.vartype[1:length(v)] = v
     numIntVar = 0
     for vartype in v
@@ -1079,6 +1023,6 @@ end
 #MathProgBase.setvarUB!(m::IpoptMathProgModel, v::Vector{Float64}) = (m.u = v)
 #MathProgBase.setvarLB!(m::IpoptMathProgModel, v::Vector{Float64}) = (m.l = v)
 
-MathProgBase.status(m::PajaritoDCPModel) = m.status
-MathProgBase.getobjval(m::PajaritoDCPModel) = m.objval
-MathProgBase.getsolution(m::PajaritoDCPModel) = m.solution
+MathProgBase.status(m::PajaritoConicModel) = m.status
+MathProgBase.getobjval(m::PajaritoConicModel) = m.objval
+MathProgBase.getsolution(m::PajaritoConicModel) = m.solution
