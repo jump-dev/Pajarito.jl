@@ -20,7 +20,6 @@ module Pajarito
 
 using Ipopt
 using CPLEX
-using Compat
 
 import MathProgBase
 
