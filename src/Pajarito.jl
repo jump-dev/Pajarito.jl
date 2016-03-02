@@ -25,7 +25,6 @@ import MathProgBase
 
 include("pajarito_nlp.jl")
 include("pajarito_cone_cb.jl")
-include("pajarito_feasibility.jl")
 include("conic_nlp_wrapper.jl")
 
 end # module
