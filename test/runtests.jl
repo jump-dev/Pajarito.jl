@@ -17,7 +17,7 @@ include(Pkg.dir("JuMP","test","solvers.jl"))
 
 TOL = 1e-3
 
-#include("nlptest.jl")
+include("nlptest.jl")
 include("dcptest.jl")
 include("conictest.jl")
 
