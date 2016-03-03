@@ -5,7 +5,7 @@ facts("Empty MIP solver test") do
                         x <= 10,
                         x^2 <= 9)
 
-    @fact_throws Convex.solve!(problem, PajaritoConicSolver(conic_solver=ConicNLPSolver(nlp_solver=nlp_solver))) "MIP solver is not specified."
+    @fact_throws Convex.solve!(problem, PajaritoConicSolver(conic_solver=ConicNLPWrapper(nlp_solver=nlp_solver))) "MIP solver is not specified."
 
 end
 
@@ -28,7 +28,7 @@ facts("Univariate maximization problem") do
                         x^2 <= 9)
 
     for i = 1:length(algorithms)
-        Convex.solve!(problem, PajaritoConicSolver(algorithm=algorithms[i],mip_solver=mip_solver,conic_solver=ConicNLPSolver(nlp_solver=nlp_solver)))
+        Convex.solve!(problem, PajaritoConicSolver(algorithm=algorithms[i],mip_solver=mip_solver,conic_solver=ConicNLPWrapper(nlp_solver=nlp_solver)))
         
         @fact problem.optval --> roughly(9.0)
     end
@@ -45,7 +45,7 @@ facts("Maximization problem") do
                         exp(x) <= 20)
 
     for i = 1:length(algorithms)
-        Convex.solve!(problem, PajaritoConicSolver(algorithm=algorithms[i],mip_solver=mip_solver,conic_solver=ConicNLPSolver(nlp_solver=nlp_solver)))
+        Convex.solve!(problem, PajaritoConicSolver(algorithm=algorithms[i],mip_solver=mip_solver,conic_solver=ConicNLPWrapper(nlp_solver=nlp_solver)))
         
         @fact problem.optval --> roughly(8.0)
     end
@@ -65,7 +65,7 @@ facts("Solver test") do
                        exp(y) + x <= 7)
 
     for i = 1:length(algorithms)
-        Convex.solve!(problem, PajaritoConicSolver(algorithm=algorithms[i],mip_solver=mip_solver,conic_solver=ConicNLPSolver(nlp_solver=nlp_solver))) 
+        Convex.solve!(problem, PajaritoConicSolver(algorithm=algorithms[i],mip_solver=mip_solver,conic_solver=ConicNLPWrapper(nlp_solver=nlp_solver))) 
 
         @fact problem.status --> :Optimal
         @fact Convex.evaluate(x) --> roughly(2.0)
@@ -83,7 +83,7 @@ facts("Solver test 2") do
                        exp(y^2) + x <= 7)
 
     for i = 1:length(algorithms)
-        Convex.solve!(problem, PajaritoConicSolver(algorithm=algorithms[i],mip_solver=mip_solver,conic_solver=ConicNLPSolver(nlp_solver=nlp_solver)))
+        Convex.solve!(problem, PajaritoConicSolver(algorithm=algorithms[i],mip_solver=mip_solver,conic_solver=ConicNLPWrapper(nlp_solver=nlp_solver)))
 
         @fact problem.status --> :Optimal
         @fact Convex.evaluate(x) --> roughly(6.0)

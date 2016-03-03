@@ -416,7 +416,6 @@ function MathProgBase.optimize!(m::PajaritoModel)
         new_u = m.u
         new_l = m.l
         for i in 1:m.numVar
-            @show i, m.vartype[i]
             if m.vartype[i] == :Int || m.vartype[i] == :Bin
                 new_u[i] = mip_solution[i]
                 new_l[i] = mip_solution[i]
