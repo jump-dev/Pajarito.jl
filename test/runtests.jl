@@ -1,3 +1,4 @@
+using ConicNonlinearBridge
 using JuMP
 using Pajarito
 using FactCheck

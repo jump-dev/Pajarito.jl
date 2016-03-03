@@ -18,13 +18,9 @@
 
 module Pajarito
 
-using Ipopt
-using CPLEX
-
 import MathProgBase
 
-include("pajarito_nlp.jl")
-include("pajarito_cone_cb.jl")
-include("conic_nlp_wrapper.jl")
+include("nonlinear.jl")
+include("conic.jl")
 
 end # module
