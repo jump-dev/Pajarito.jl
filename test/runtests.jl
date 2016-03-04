@@ -2,17 +2,19 @@ using ConicNonlinearBridge
 using JuMP
 using Pajarito
 using FactCheck
-using CPLEX
-using SCS
+using GLPKMathProgInterface
+using ECOS
 using Ipopt
 import Convex
 
 # Define solvers
-mip_solver = CplexSolver(CPX_PARAM_SCRIND=0,CPX_PARAM_REDUCE=0,CPX_PARAM_EPINT=1e-8,CPX_PARAM_EPRHS=1e-8)
+#mip_solver = CplexSolver(CPX_PARAM_SCRIND=0,CPX_PARAM_REDUCE=0,CPX_PARAM_EPINT=1e-8,CPX_PARAM_EPRHS=1e-8)
+mip_solver = GLPKSolverMIP()
 nlp_solver = IpoptSolver(print_level=0)
-conic_solver = SCSSolver(verbose=0)
+conic_solver = ECOSSolver(verbose=0)
 
-algorithms = ["P-OA", "P-CB"]
+algorithms = ["P-OA"]
+#algorithms = ["P-OA", "P-CB"]
 
 include(Pkg.dir("JuMP","test","solvers.jl"))
 
@@ -34,4 +36,4 @@ include("conictest.jl")
 # 7. MAXIMIZATION PROBLEM 
 # 8. MAXIMIZATION PROBLEM WITH NONLINEAR OBJECTIVE 
 
-
+FactCheck.exitstatus()

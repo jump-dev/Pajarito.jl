@@ -972,7 +972,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             cut_added = false
             # gc()
             # WARMSTART MIP FROM UPPER BOUND
-            if m.objval != Inf
+            if m.objval != Inf && applicable(MathProgBase.setwarmstart!, getInternalModel(mip_model), m.solution)
                 MathProgBase.setwarmstart!(getInternalModel(mip_model), m.solution)
             end
 
