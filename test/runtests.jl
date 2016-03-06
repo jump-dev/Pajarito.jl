@@ -8,21 +8,28 @@ using Ipopt
 import Convex
 
 # Define solvers
-#mip_solver = CplexSolver(CPX_PARAM_SCRIND=0,CPX_PARAM_REDUCE=0,CPX_PARAM_EPINT=1e-8,CPX_PARAM_EPRHS=1e-8)
 mip_solver = GLPKSolverMIP()
 nlp_solver = IpoptSolver(print_level=0)
 conic_solver = ECOSSolver(verbose=0)
-
-algorithms = ["P-OA"]
-#algorithms = ["P-OA", "P-CB"]
+dcp_solver=ConicNLPWrapper(nlp_solver=nlp_solver)
 
 include(Pkg.dir("JuMP","test","solvers.jl"))
 
 TOL = 1e-3
 
 include("nlptest.jl")
-include("dcptest.jl")
 include("conictest.jl")
+
+for i = 1:length(ip_solvers)
+    runconictests("P-OA", ip_solvers[i], dcp_solver)
+    runconictests("P-OA", ip_solvers[i], conic_solver)
+end
+
+for i = 1:length(lazy_solvers)
+    contains(string(typeof(lazy_solvers[i])),"GLPKSolverMIP") && continue
+    runconictests("P-CB", lazy_solvers[i], dcp_solver)
+    runconictests("P-CB", lazy_solvers[i], conic_solver)
+end
 
 # PAJARITO UNIT-TESTS
 # 1. CONVEX CONSTRAINT WITH LB AND UB

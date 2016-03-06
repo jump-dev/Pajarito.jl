@@ -1000,11 +1000,13 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     else
         error("Unspecified algorithm.")
     end
-        
-    out_file = open("output.txt", "a")
-    write(out_file, "$(m.instance): $(m.status) $iter $(time() - start) $(m.objval) $(m.problem_type) $(cputime_mip) $(cputime_conic)\n") 
-    close(out_file)
-    println("$(m.status) $iter $(time() - start) $(m.objval) $(m.problem_type) $(cputime_mip) $(cputime_conic)") 
+
+    if m.instance != ""        
+        out_file = open("output.txt", "a")
+        write(out_file, "$(m.instance): $(m.status) $iter $(time() - start) $(m.objval) $(m.problem_type) $(cputime_mip) $(cputime_conic)\n") 
+        close(out_file)
+    end
+    (m.verbose > 0) && println("$(m.status) $iter $(time() - start) $(m.objval) $(m.problem_type) $(cputime_mip) $(cputime_conic)") 
 
 end
 
