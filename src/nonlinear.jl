@@ -358,12 +358,12 @@ function loadMIPModel(m::PajaritoModel, mip_model)
     setCategory(x[m.numVar+1], :Cont)
     for i = 1:m.numConstr-m.numNLConstr
         if m.A_lb[i] > -Inf && m.A_ub[i] < Inf
-            @addConstraint(mip_model, m.A[i,:]*x[1:m.numVar] .>= m.A_lb[i])
-            @addConstraint(mip_model, m.A[i,:]*x[1:m.numVar] .<= m.A_ub[i])
+            @addConstraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .>= m.A_lb[i])
+            @addConstraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .<= m.A_ub[i])
         elseif m.A_lb[i] > -Inf
-            @addConstraint(mip_model, m.A[i,:]*x[1:m.numVar] .>= m.A_lb[i])
+            @addConstraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .>= m.A_lb[i])
         else
-            @addConstraint(mip_model, m.A[i,:]*x[1:m.numVar] .<= m.A_ub[i])
+            @addConstraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .<= m.A_ub[i])
         end
     end
     c_new = [m.objsense == :Max ? -m.c : m.c; m.objlinear ? 0.0 : 1.0]
