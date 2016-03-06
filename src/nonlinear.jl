@@ -16,6 +16,8 @@
 # form.
 ######################################################
 
+using JuMP
+
 # ASSUMES LINEAR OBJECTIVE
 type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     solution::Vector{Float64}
@@ -44,6 +46,7 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     constrlinear::Vector{Bool}
     objsense::Symbol
     objlinear::Bool
+    mip_x
     d
     function PajaritoModel(verbose,mip_solver,nlp_solver,opt_tolerance,time_limit,cut_switch)
         m = new()
@@ -277,7 +280,7 @@ function addCuttingPlanes!(m::PajaritoModel, mip_model, separator, jac_I, jac_J,
 
     # create rows corresponding to constraints in sparse format
 
-    varidx_new = [zeros(0) for i in 1:m.numConstr]
+    varidx_new = [zeros(Int, 0) for i in 1:m.numConstr]
     coef_new = [zeros(0) for i in 1:m.numConstr]
 
     for k in 1:length(jac_I)
@@ -310,9 +313,11 @@ function addCuttingPlanes!(m::PajaritoModel, mip_model, separator, jac_I, jac_J,
             (m.verbose > 1) && println("coef $(coef_new[i])") 
             (m.verbose > 1) && println("rhs $new_rhs") 
             if m.constrtype[i] == :(<=)
-                MathProgBase.addconstr!(mip_model, varidx_new[i], coef_new[i], -Inf, new_rhs)
+                @addConstraint(mip_model, dot(coef_new[i], m.mip_x[varidx_new[i]]) <= new_rhs)
+                #MathProgBase.addconstr!(mip_model, varidx_new[i], coef_new[i], -Inf, new_rhs)
             else
-                MathProgBase.addconstr!(mip_model, varidx_new[i], coef_new[i], new_rhs, Inf)
+                @addConstraint(mip_model, dot(coef_new[i], m.mip_x[varidx_new[i]]) >= new_rhs)
+                #MathProgBase.addconstr!(mip_model, varidx_new[i], coef_new[i], new_rhs, Inf)
             end 
         end
     end
@@ -326,7 +331,7 @@ function addCuttingPlanes!(m::PajaritoModel, mip_model, separator, jac_I, jac_J,
             grad_f = -grad_f
         end
         new_rhs = -f
-        varidx = zeros(m.numVar+1)
+        varidx = zeros(Int, m.numVar+1)
         for j = 1:m.numVar
             varidx[j] = j
             new_rhs += grad_f[j] * separator[j]
@@ -336,11 +341,46 @@ function addCuttingPlanes!(m::PajaritoModel, mip_model, separator, jac_I, jac_J,
         (m.verbose > 1) && println("varidx $(varidx)") 
         (m.verbose > 1) && println("coef $(grad_f)") 
         (m.verbose > 1) && println("rhs $new_rhs") 
-        MathProgBase.addconstr!(mip_model, varidx, grad_f, -Inf, new_rhs)
+        @addConstraint(mip_model, dot(grad_f, m.mip_x[varidx]) <= new_rhs)
+        #MathProgBase.addconstr!(mip_model, varidx, grad_f, -Inf, new_rhs)
     end
 
 
 end
+
+function loadMIPModel(m::PajaritoModel, mip_model)
+    lb = [m.l; -1e6]
+    ub = [m.u; 1e6]
+    @defVar(mip_model, lb[i] <= x[i=1:m.numVar+1] <= ub[i])
+    for i = 1:m.numVar
+        setCategory(x[i], m.vartype[i])
+    end
+    setCategory(x[m.numVar+1], :Cont)
+    for i = 1:m.numConstr-m.numNLConstr
+        if m.A_lb[i] > -Inf && m.A_ub[i] < Inf
+            @addConstraint(mip_model, m.A[i,:]*x[1:m.numVar] .>= m.A_lb[i])
+            @addConstraint(mip_model, m.A[i,:]*x[1:m.numVar] .<= m.A_ub[i])
+        elseif m.A_lb[i] > -Inf
+            @addConstraint(mip_model, m.A[i,:]*x[1:m.numVar] .>= m.A_lb[i])
+        else
+            @addConstraint(mip_model, m.A[i,:]*x[1:m.numVar] .<= m.A_ub[i])
+        end
+    end
+    c_new = [m.objsense == :Max ? -m.c : m.c; m.objlinear ? 0.0 : 1.0]
+    @setObjective(mip_model, Min, dot(c_new, x))
+
+    m.mip_x = x
+    #=
+    mip_model = MathProgBase.LinearQuadraticModel(m.mip_solver)
+    MathProgBase.loadproblem!(mip_model,
+        [m.A spzeros(size(m.A,1),1)],
+        [m.l; -1e4],
+        [m.u; Inf],
+        [(m.objsense == :Max)? -m.c : m.c; m.objlinear? 0.0 : 1.0], m.A_lb, m.A_ub, :Min)
+    MathProgBase.setvartype!(mip_model, [m.vartype; :Cont])
+    =#
+end
+
 
 function MathProgBase.optimize!(m::PajaritoModel)
 
@@ -357,13 +397,8 @@ function MathProgBase.optimize!(m::PajaritoModel)
 
     # MODIFICATION new objective t >= f(x)
     # set up cplex to solve the mixed integer linear problem
-    mip_model = MathProgBase.LinearQuadraticModel(m.mip_solver)
-    MathProgBase.loadproblem!(mip_model,
-        [m.A spzeros(size(m.A,1),1)],
-        [m.l; -1e4],
-        [m.u; Inf],
-        [(m.objsense == :Max)? -m.c : m.c; m.objlinear? 0.0 : 1.0], m.A_lb, m.A_ub, :Min)
-    MathProgBase.setvartype!(mip_model, [m.vartype; :Cont])
+    mip_model = Model(solver=m.mip_solver)
+    loadMIPModel(m, mip_model)
 
     for i in 1:m.numConstr
         if !(m.constrlinear[i]) && m.constrtype[i] == :(==)
@@ -398,8 +433,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
     iter = 0
     while (time() - start) < m.time_limit
         # solve MIP model
-        MathProgBase.optimize!(mip_model)
-        mip_status = MathProgBase.status(mip_model)
+        mip_status = solve(mip_model)
         #mip_objval = Inf
         #mip_solution = zeros(m.numVar+1)
         if mip_status == :Infeasible || mip_status == :InfeasibleOrUnbounded
@@ -409,8 +443,9 @@ function MathProgBase.optimize!(m::PajaritoModel)
         else 
             (m.verbose > 0) && println("MIP Status: $mip_status")
         end
-        mip_objval = MathProgBase.getobjval(mip_model)
-        mip_solution = MathProgBase.getsolution(mip_model)
+        mip_objval = getObjectiveValue(mip_model)
+        mip_solution = getValue(m.mip_x)
+        #MathProgBase.getsolution(getInternalModel(mip_model))
         (m.verbose > 1) && println("MIP Solution: $mip_solution")
         # solve NLP model for the MIP solution
         new_u = m.u
