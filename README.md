@@ -28,7 +28,7 @@ All solvers can have their parameters specified through their corresponding Juli
 
 ## Supported problem classes
 
-Pajarito supports mixed-integer smooth convex programming problems through [JuMP.jl](https://github.com/JuliaOpt/JuMP.jl) (this is a reimplementation of [Bonmin](https://projects.coin-or.org/Bonmin) on Julia) and mixed-integer disciplined convex programming problems through [Convex.jl](https://github.com/JuliaOpt/Convex.jl).
+Pajarito supports mixed-integer smooth convex programming problems through [JuMP.jl](https://github.com/JuliaOpt/JuMP.jl) (this functionality is similar to that of [Bonmin](https://projects.coin-or.org/Bonmin)) and mixed-integer disciplined convex programming problems through [Convex.jl](https://github.com/JuliaOpt/Convex.jl).
 
 ## Supported algorithms
 

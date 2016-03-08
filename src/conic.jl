@@ -38,7 +38,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
     # SOLVER DATA:
     verbose::Int                # Verbosity level flag
-    algorithm                   # Choice of algorithm: OA or BC
+    algorithm                   # Choice of algorithm: "OA" or "BC"
     mip_solver                  # Choice of MILP solver
     conic_solver                # Choice of Conic solver
     is_conic_solver             # Indicator if subproblem solver is conic, ECOS, SCS or Mosek
