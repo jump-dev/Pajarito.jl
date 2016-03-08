@@ -20,11 +20,11 @@ under the include directory of julia. It is recommended to install [ConicNonline
 
 Pajarito requires a mixed-integer linear programming solver and a nonlinear programming solver for src/nonlinear.jl or a conic solver for src/conic.jl. 
 
-For MILP solver, it currently supports only [CPLEX](http://www-01.ibm.com/software/commerce/optimization/cplex-optimizer/) and [GuRoBi](http://www.gurobi.com/) for the branch and cut algorithm for mixed-integer conic programming problems. Pajarito further supports [GLPK](http://www.gnu.org/software/glpk/) for polyhedral outer approximation under both src/nonlinear.jl and src/conic.jl. MILP solver can be specified through the `mip\_solver` flag.
+For MILP solver, it currently supports only [CPLEX](http://www-01.ibm.com/software/commerce/optimization/cplex-optimizer/) and [GuRoBi](http://www.gurobi.com/) for the branch and cut algorithm for mixed-integer conic programming problems. Pajarito further supports [GLPK](http://www.gnu.org/software/glpk/) for polyhedral outer approximation under both src/nonlinear.jl and src/conic.jl. MILP solver can be specified through the `mip_solver` flag.
 
-For NLP solver, Pajarito supports [Ipopt](https://projects.coin-or.org/Ipopt), [KNITRO](http://www.ziena.com/knitro.htm) through ConicNonlinearBridge. NLP solver can be specified through `nlp\_solver` flag.
+For NLP solver, Pajarito supports [Ipopt](https://projects.coin-or.org/Ipopt), [KNITRO](http://www.ziena.com/knitro.htm). NLP solver can be specified through `nlp_solver` flag.
 
-For Conic solver, Pajarito supports [SCS](https://github.com/cvxgrp/scs), [ECOS](https://github.com/ifa-ethz/ecos), and furthermore ConicNonlinearBridge for flexible choice of a supported NLP solver (Ipopt and KNITRO). Conic solver can be specified through `conic\_solver` flag.
+For Conic solver, Pajarito supports [SCS](https://github.com/cvxgrp/scs), [ECOS](https://github.com/ifa-ethz/ecos), and furthermore ConicNonlinearBridge for flexible choice of a supported NLP solver (Ipopt and KNITRO). Conic solver can be specified through `conic_solver` flag.
 
 All solvers can have their parameters specified through their corresponding Julia interfaces.
 
@@ -40,7 +40,7 @@ Pajarito supports two algorithms for the mixed-integer conic programming problem
 
 If you find Pajarito useful in your work, we kindly request that you cite the following paper:
 
-Lubin, Yamangil, Bent, Vielma (2016), Extended formulations in Mixed-integer Convex Programming, LNCS, IPCO 2016, Liege, Belgium (available online at http://arxiv.org/abs/1511.06710).
+Lubin, Yamangil, Bent, Vielma (2016), Extended formulations in Mixed-integer Convex Programming, LNCS, IPCO 2016, Liege, Belgium.
 
 A preprint of this paper is freely available on [arXiv](http://arxiv.org/abs/1511.06710).
 
