@@ -1,6 +1,6 @@
-# Pajarito (Polyhedral Approximation in Julia: Automatic Reformulations for InTeger Optimization)
+# Pajarito
 
-Pajarito is a mixed-integer convex programming solver package in [Julia](http://julialang.org/) that currently implements an out-of-the-box polyhedral outer approximation algorithm under src/nonlinear.jl and a polyhedral outer approximation and branch and cut for mixed-integer conic programming algorithm under src/conic.jl.
+Pajarito (Polyhedral Approximation in Julia: Automatic Reformulations for InTeger Optimization) is a mixed-integer convex programming solver package in [Julia](http://julialang.org/) that currently implements an out-of-the-box polyhedral outer approximation algorithm under src/nonlinear.jl and a polyhedral outer approximation and branch and cut for mixed-integer conic programming algorithm under src/conic.jl.
 
 [![Build Status](https://travis-ci.org/mlubin/Pajarito.jl.svg?branch=master)](https://travis-ci.org/mlubin/Pajarito.jl) [![codecov.io](https://codecov.io/github/mlubin/Pajarito.jl/coverage.svg?branch=master)](https://codecov.io/github/mlubin/Pajarito.jl?branch=master)
 
