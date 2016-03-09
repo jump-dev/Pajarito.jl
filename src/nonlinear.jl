@@ -1,21 +1,3 @@
-######################################################
-# This package contains the mixed-integer non-linear
-# programming (MINLP) problem solver Pajarito.jl:
-#
-#       P olyhedral
-#       A pproximation
-# (in)  J ulia :
-#       A utomatic
-#       R eformulations
-# (for) I n T eger
-#       O ptimization
-# 
-# It applies outer approximation to a series of
-# mixed-integer linear programming problems
-# that approximates the original MINLP in a polyhedral
-# form.
-######################################################
-
 using JuMP
 
 # ASSUMES LINEAR OBJECTIVE
@@ -27,12 +9,19 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     numVar::Int
     numConstr::Int
     numNLConstr::Int
-    verbose::Int
-    mip_solver
-    nlp_solver
-    opt_tolerance
-    time_limit
-    cut_switch
+
+    # SOLVER DATA:
+    verbose::Int                # Verbosity level flag
+    algorithm                   # Choice of algorithm: "OA" or "BC"
+    mip_solver                  # Choice of MILP solver
+    cont_solver                 # Choice of Conic solver
+    opt_tolerance               # Relatice optimality tolerance
+    acceptable_opt_tolerance    # Acceptable optimality tolerance if separation fails
+    time_limit                  # Time limit
+    cut_switch                  # Cut level for OA
+    socp_disaggregator::Bool    # SOCP disaggregator for SOC constraints
+    instance::AbstractString    # Path to instance
+    
     A
     A_lb
     A_ub
@@ -48,14 +37,20 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     objlinear::Bool
     mip_x
     d
-    function PajaritoModel(verbose,mip_solver,nlp_solver,opt_tolerance,time_limit,cut_switch)
+
+    # CONSTRUCTOR:
+    function PajaritoModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,acceptable_opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
         m = new()
         m.verbose = verbose
+        m.algorithm = algorithm
         m.mip_solver = mip_solver
-        m.nlp_solver = nlp_solver
+        m.cont_solver = cont_solver
         m.opt_tolerance = opt_tolerance
+        m.acceptable_opt_tolerance = acceptable_opt_tolerance
         m.time_limit = time_limit
         m.cut_switch = cut_switch
+        m.socp_disaggregator = socp_disaggregator
+        m.instance = instance
         return m
     end
 end
@@ -163,24 +158,20 @@ MathProgBase.isconstrlinear(d::InfeasibleNLPEvaluator, i::Int) = MathProgBase.is
 MathProgBase.obj_expr(d::InfeasibleNLPEvaluator) = MathProgBase.obj_expr(d.d)
 MathProgBase.constr_expr(d::InfeasibleNLPEvaluator, i::Int) = MathProgBase.constr_expr(d.d, i)
 
-
-export PajaritoSolver
-immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
-    verbose
-    mip_solver
-    nlp_solver
-    opt_tolerance
-    time_limit
-    cut_switch
-end
-PajaritoSolver(;verbose=0,mip_solver=CplexSolver(CPX_PARAM_SCRIND=0,CPX_PARAM_REDUCE=0,CPX_PARAM_EPINT=1e-8),nlp_solver=IpoptSolver(print_level=0),opt_tolerance=1e-6,time_limit=60*60,cut_switch=1) = PajaritoSolver(verbose,mip_solver,nlp_solver,opt_tolerance,time_limit,cut_switch)
-
 # BEGIN MATHPROGBASE INTERFACE
 
-MathProgBase.NonlinearModel(s::PajaritoSolver) = PajaritoModel(s.verbose, s.mip_solver, s.nlp_solver, s.opt_tolerance, s.time_limit, s.cut_switch)
+MathProgBase.NonlinearModel(s::PajaritoSolver) = PajaritoModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.acceptable_opt_tolerance, s.time_limit, s.cut_switch, s.socp_disaggregator, s.instance)
 
 function MathProgBase.loadproblem!(
     m::PajaritoModel, numVar, numConstr, l, u, lb, ub, sense, d)
+
+    if m.mip_solver == nothing
+        error("MIP solver is not specified.")
+    end
+
+    if m.cont_solver == nothing
+        error("Conic solver is not specified.")
+    end
 
     m.numVar = numVar
     m.numConstr = numConstr
@@ -411,7 +402,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
     jac_V = zeros(length(jac_I))
     grad_f = zeros(m.numVar+1)
 
-    ini_nlp_model = MathProgBase.NonlinearModel(m.nlp_solver)
+    ini_nlp_model = MathProgBase.NonlinearModel(m.cont_solver)
     MathProgBase.loadproblem!(ini_nlp_model,
     m.numVar, m.numConstr, m.l, m.u, m.lb, m.ub, m.objsense, m.d)
 
@@ -458,7 +449,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
         end
 
         # set up ipopt to solve continuous relaxation
-        nlp_model = MathProgBase.NonlinearModel(m.nlp_solver)
+        nlp_model = MathProgBase.NonlinearModel(m.cont_solver)
         MathProgBase.loadproblem!(nlp_model,
         m.numVar, m.numConstr, new_l, new_u, m.lb, m.ub, m.objsense, m.d)
 
@@ -470,7 +461,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
         u_inf = [new_u;Inf*ones(m.numNLConstr)]
 
         d_inf = InfeasibleNLPEvaluator(m.d, m.numConstr, m.numNLConstr, m.numVar, m.constrtype, m.constrlinear)
-        inf_model = MathProgBase.NonlinearModel(m.nlp_solver)
+        inf_model = MathProgBase.NonlinearModel(m.cont_solver)
         MathProgBase.loadproblem!(inf_model,
         m.numVar+m.numNLConstr, m.numConstr, l_inf, u_inf, m.lb, m.ub, :Min, d_inf) 
 

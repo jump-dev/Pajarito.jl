@@ -20,6 +20,7 @@ module Pajarito
 
 import MathProgBase
 
+include("solver.jl")
 include("nonlinear.jl")
 include("conic.jl")
 
