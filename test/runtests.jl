@@ -26,7 +26,6 @@ for i = 1:length(ip_solvers)
 end
 
 for i = 1:length(lazy_solvers)
-    contains(string(typeof(lazy_solvers[i])),"GLPKSolverMIP") && continue
     runconictests("BC", lazy_solvers[i], dcp_solver)
     runconictests("BC", lazy_solvers[i], conic_solver)
 end

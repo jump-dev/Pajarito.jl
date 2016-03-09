@@ -1,5 +1,5 @@
 facts("Convex constraint with LB and UB") do
-    m = Model(solver=PajaritoSolver(mip_solver=mip_solver,nlp_solver=nlp_solver))
+    m = Model(solver=PajaritoSolver(mip_solver=mip_solver,cont_solver=nlp_solver))
 
     @defVar(m, x >= 0, start = 1, Int)
     @defVar(m, y >= 0, start = 1)
@@ -15,7 +15,7 @@ facts("Convex constraint with LB and UB") do
 end
 
 facts("Infeasible NLP problem") do
-    m = Model(solver=PajaritoSolver(mip_solver=mip_solver,nlp_solver=nlp_solver))
+    m = Model(solver=PajaritoSolver(mip_solver=mip_solver,cont_solver=nlp_solver))
 
     @defVar(m, x >= 0, start = 1, Int)
     @defVar(m, y >= 0, start = 1)
@@ -33,7 +33,7 @@ facts("Infeasible NLP problem") do
 end
 
 facts("Infeasible MIP problem") do
-    m = Model(solver=PajaritoSolver(mip_solver=mip_solver,nlp_solver=nlp_solver))
+    m = Model(solver=PajaritoSolver(mip_solver=mip_solver,cont_solver=nlp_solver))
 
     @defVar(m, x >= 0, start = 1, Int)
     @defVar(m, y >= 0, start = 1)
@@ -61,7 +61,7 @@ for nlp_solver in convex_nlp_solvers
     contains(string(typeof(ip_solver)), "CbcSolver") && continue
 context("With $(typeof(ip_solver)) and $(typeof(nlp_solver))") do
 
-    m = Model(solver=PajaritoSolver(verbose=0,mip_solver=ip_solver,nlp_solver=nlp_solver))
+    m = Model(solver=PajaritoSolver(verbose=0,mip_solver=ip_solver,cont_solver=nlp_solver))
 
     @defVar(m, x >= 0, start = 1, Int)
     @defVar(m, y >= 0, start = 1)
@@ -82,7 +82,7 @@ end; end; end
 end
 
 facts("Optimal solution with nonlinear objective") do
-    m = Model(solver=PajaritoSolver(verbose=0,mip_solver=mip_solver,nlp_solver=nlp_solver))
+    m = Model(solver=PajaritoSolver(verbose=0,mip_solver=mip_solver,cont_solver=nlp_solver))
 
     @defVar(m, x >= 0, start = 1, Int)
     @defVar(m, y >= 0, start = 1)
@@ -103,7 +103,7 @@ end
 
 # TODO setvartype is not called if there are no integer variables in the model
 facts("No integer variables") do
-    m = Model(solver=PajaritoSolver(verbose=0,mip_solver=mip_solver,nlp_solver=nlp_solver))
+    m = Model(solver=PajaritoSolver(verbose=0,mip_solver=mip_solver,cont_solver=nlp_solver))
 
     @defVar(m, x >= 0, start = 1)
     @defVar(m, y >= 0, start = 1)
@@ -123,7 +123,7 @@ facts("No integer variables") do
 end
 
 facts("Maximization problem") do
-    m = Model(solver=PajaritoSolver(mip_solver=mip_solver,nlp_solver=nlp_solver))
+    m = Model(solver=PajaritoSolver(mip_solver=mip_solver,cont_solver=nlp_solver))
 
     @defVar(m, x >= 0, start = 1, Int)
     @defVar(m, y >= 0, start = 1)
@@ -140,7 +140,7 @@ facts("Maximization problem") do
 end
 
 facts("Maximization problem with nonlinear function") do
-    m = Model(solver=PajaritoSolver(mip_solver=mip_solver,nlp_solver=nlp_solver))
+    m = Model(solver=PajaritoSolver(mip_solver=mip_solver,cont_solver=nlp_solver))
 
     @defVar(m, x >= 0, start = 1, Int)
     @defVar(m, y >= 0, start = 1)

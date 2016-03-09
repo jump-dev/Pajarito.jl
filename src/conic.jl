@@ -22,9 +22,9 @@
   1. Create a JuMP.jl model using a conic input format
   2. Create a Convex.jl model using a set of disciplined
      convex atoms defined in Convex.jl library.
- Both ways PajaritoConicSolver must be provided as the
+ Both ways PajaritoSolver must be provided as the
  preferred solver with a corresponding mip_solver and 
- conic_solver specified.
+ cont_solver specified.
 =========================================================#
 
 using JuMP
@@ -40,13 +40,13 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     verbose::Int                # Verbosity level flag
     algorithm                   # Choice of algorithm: "OA" or "BC"
     mip_solver                  # Choice of MILP solver
-    conic_solver                # Choice of Conic solver
-    is_conic_solver             # Indicator if subproblem solver is conic, ECOS, SCS or Mosek
+    cont_solver                 # Choice of Conic solver
     opt_tolerance               # Relatice optimality tolerance
     acceptable_opt_tolerance    # Acceptable optimality tolerance if separation fails
     time_limit                  # Time limit
     cut_switch                  # Cut level for OA
     socp_disaggregator::Bool    # SOCP disaggregator for SOC constraints
+    instance::AbstractString    # Path to instance
 
     # PROBLEM DATA
     numVar::Int                 # Number of variables
@@ -63,7 +63,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     var_cones_ini
     mip_x                       # Original variables for the MILP model
     mip_t                       # SOCP disaggregator variables if socp_disaggregator is true
-    instance::AbstractString    # Path to instance
     l::Vector{Float64}          # Variable lower bounds
     u::Vector{Float64}          # Variable upper bounds
     vartype::Vector{Symbol}     # Vector containing variable types, :Bin, :Cont, :Int
@@ -75,14 +74,15 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     pajarito_var_cones          # Variable cones
     pajarito_constr_cones       # Constraint cones
     problem_type
+    is_conic_solver             # Indicator if subproblem solver is conic, ECOS, SCS or Mosek
 
     # CONSTRUCTOR:
-    function PajaritoConicModel(verbose,algorithm,mip_solver,conic_solver,opt_tolerance,acceptable_opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
+    function PajaritoConicModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,acceptable_opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
         m = new()
         m.verbose = verbose
         m.algorithm = algorithm
         m.mip_solver = mip_solver
-        m.conic_solver = conic_solver
+        m.cont_solver = cont_solver
         m.opt_tolerance = opt_tolerance
         m.acceptable_opt_tolerance = acceptable_opt_tolerance
         m.time_limit = time_limit
@@ -93,23 +93,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     end
 end
 
-export PajaritoConicSolver
-immutable PajaritoConicSolver <: MathProgBase.AbstractMathProgSolver
-    verbose
-    algorithm
-    mip_solver
-    conic_solver
-    opt_tolerance
-    acceptable_opt_tolerance
-    time_limit
-    cut_switch
-    socp_disaggregator
-    instance
-end
-PajaritoConicSolver(;verbose=0,algorithm="OA",mip_solver=nothing,conic_solver=nothing,opt_tolerance=1e-5,acceptable_opt_tolerance=1e-4,time_limit=60*60*10,cut_switch=1,socp_disaggregator=false,instance="") = PajaritoConicSolver(verbose,algorithm,mip_solver,conic_solver,opt_tolerance,acceptable_opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
-
 # BEGIN MATHPROGBASE INTERFACE
-MathProgBase.ConicModel(s::PajaritoConicSolver) = PajaritoConicModel(s.verbose, s.algorithm, s.mip_solver, s.conic_solver, s.opt_tolerance, s.acceptable_opt_tolerance, s.time_limit, s.cut_switch, s.socp_disaggregator, s.instance)
+MathProgBase.ConicModel(s::PajaritoSolver) = PajaritoConicModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.acceptable_opt_tolerance, s.time_limit, s.cut_switch, s.socp_disaggregator, s.instance)
 
 function MathProgBase.loadproblem!(
     m::PajaritoConicModel, c, A, b, constr_cones, var_cones)
@@ -118,11 +103,11 @@ function MathProgBase.loadproblem!(
         error("MIP solver is not specified.")
     end
 
-    if m.conic_solver == nothing
+    if m.cont_solver == nothing
         error("Conic solver is not specified.")
     end
 
-    m.is_conic_solver = (string(typeof(m.conic_solver)) == "ECOS.ECOSSolver" || string(typeof(m.conic_solver)) == "SCS.SCSSolver" || string(typeof(m.conic_solver)) == "MosekSolver")
+    m.is_conic_solver = (string(typeof(m.cont_solver)) == "ECOS.ECOSSolver" || string(typeof(m.cont_solver)) == "SCS.SCSSolver" || string(typeof(m.cont_solver)) == "MosekSolver")
 
     m.c_ini = c
     m.A_ini = A
@@ -781,7 +766,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     loadMIPModel(m, mip_model)
 
     # solve Conic model for the MIP solution
-    ini_conic_model = MathProgBase.ConicModel(m.conic_solver)
+    ini_conic_model = MathProgBase.ConicModel(m.cont_solver)
     loadInitialRelaxedConicModel(m, ini_conic_model)
     MathProgBase.optimize!(ini_conic_model)
 
@@ -831,7 +816,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         # TODO: add a second phase if dual information is not available
         if m.is_conic_solver
 
-            conic_model = MathProgBase.ConicModel(m.conic_solver)
+            conic_model = MathProgBase.ConicModel(m.cont_solver)
             (old_variable_index_map, c_sub, A_sub) = loadConicModel(m, conic_model, mip_solution)
 
             start_conic = time()
@@ -864,7 +849,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         else
 
             # PHASE 1 INFEASIBILITY PROBLEM
-            inf_dcp_model = MathProgBase.ConicModel(m.conic_solver)
+            inf_dcp_model = MathProgBase.ConicModel(m.cont_solver)
             (old_variable_index_map, mip_solution_warmstart) = loadFirstPhaseConicModel(m,inf_dcp_model, mip_solution)
             if applicable(MathProgBase.setwarmstart!,inf_dcp_model, mip_solution_warmstart)
                 MathProgBase.setwarmstart!(inf_dcp_model, mip_solution_warmstart)
@@ -898,7 +883,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                     end
 
                     # PHASE 2 REDUCED PROBLEM
-                    dcp_model = MathProgBase.ConicModel(m.conic_solver)
+                    dcp_model = MathProgBase.ConicModel(m.cont_solver)
                     (old_variable_index_map, c_sub, A_sub) = loadConicModel(m, dcp_model, mip_solution)
 
                     if applicable(MathProgBase.setwarmstart!,dcp_model, dcp_model_warmstart[1:(m.numVar-m.numIntVar)])

@@ -18,11 +18,11 @@ It is recommended to install [ConicNonlinearBridge.jl](https://github.com/mlubin
 
 Pajarito requires a mixed-integer linear programming solver and a nonlinear programming solver for src/nonlinear.jl or a conic solver for src/conic.jl. 
 
-For MILP solver, it currently supports only [CPLEX](http://www-01.ibm.com/software/commerce/optimization/cplex-optimizer/) and [GuRoBi](http://www.gurobi.com/) for the branch and cut algorithm for mixed-integer conic programming problems. Pajarito further supports [GLPK](http://www.gnu.org/software/glpk/) for polyhedral outer approximation under both src/nonlinear.jl and src/conic.jl. MILP solver can be specified through the `mip_solver` flag, i.e. `PajaritoConicSolver(mip_solver=CplexSolver())`.
+For MILP solver, it currently supports only [CPLEX](http://www-01.ibm.com/software/commerce/optimization/cplex-optimizer/) and [GuRoBi](http://www.gurobi.com/) for the branch and cut algorithm for mixed-integer conic programming problems. Pajarito further supports [GLPK](http://www.gnu.org/software/glpk/) for polyhedral outer approximation under both src/nonlinear.jl and src/conic.jl. MILP solver can be specified through the `mip_solver` flag, i.e. `PajaritoSolver(mip_solver=CplexSolver())`.
 
-For NLP solver, Pajarito has been tested with [Ipopt](https://projects.coin-or.org/Ipopt), [KNITRO](http://www.ziena.com/knitro.htm). NLP solver can be specified through `nlp_solver` flag, i.e. `PajaritoSolver(nlp_solver=IpoptSolver())`.
+For NLP solver, Pajarito has been tested with [Ipopt](https://projects.coin-or.org/Ipopt), [KNITRO](http://www.ziena.com/knitro.htm). NLP solver can be specified through `cont_solver` flag, i.e. `PajaritoSolver(cont_solver=IpoptSolver())`.
 
-For Conic solver, Pajarito has been tested with [SCS](https://github.com/cvxgrp/scs), [ECOS](https://github.com/ifa-ethz/ecos), and furthermore ConicNonlinearBridge for flexible choice of a supported NLP solver (Ipopt and KNITRO). Conic solver can be specified through `conic_solver` flag, i.e. `PajaritoConicSolver(conic_solver=KnitroSolver())`.
+For Conic solver, Pajarito has been tested with [SCS](https://github.com/cvxgrp/scs), [ECOS](https://github.com/ifa-ethz/ecos), and furthermore ConicNonlinearBridge for flexible choice of a supported NLP solver (Ipopt and KNITRO). Conic solver can be specified through `cont_solver` flag, i.e. `PajaritoSolver(cont_solver=KnitroSolver())`.
 
 All solvers can have their parameters specified through their corresponding Julia interfaces.
 
@@ -32,7 +32,20 @@ Pajarito supports mixed-integer smooth convex programming problems through [JuMP
 
 ## Supported algorithms
 
-Pajarito supports two algorithms for the mixed-integer conic programming problems. BC for a branch and cut algorithm and OA for polyhedral outer approximation algorithm. They can be specified as strings through the `algorithm` flag, i.e. `PajaritoConicSolver(algorithm="OA")`.
+Pajarito supports two algorithms for the mixed-integer conic programming problems. BC for a branch and cut algorithm and OA for polyhedral outer approximation algorithm. They can be specified as strings through the `algorithm` flag, i.e. `PajaritoSolver(algorithm="OA")`.
+
+## Solver options
+
+  * `verbose::Int`                : Verbosity level flag
+  * `algorithm::String`           : Choice of algorithm: "OA" or "BC"
+  * `mip_solver`                  : Choice of MILP solver
+  * `cont_solver`                 : Choice of Conic solver
+  * `opt_tolerance`               : Relatice optimality tolerance
+  * `acceptable_opt_tolerance`    : Acceptable optimality tolerance if separation fails
+  * `time_limit`                  : Time limit
+  * `cut_switch`                  : Cut level for OA
+  * `socp_disaggregator::Bool`    : SOCP disaggregator for SOC constraints
+  * `instance::AbstractString`    : Path to instance
 
 ## Citing
 
