@@ -21,14 +21,14 @@ include("nlptest.jl")
 include("conictest.jl")
 
 for i = 1:length(ip_solvers)
-    runconictests("P-OA", ip_solvers[i], dcp_solver)
-    runconictests("P-OA", ip_solvers[i], conic_solver)
+    runconictests("OA", ip_solvers[i], dcp_solver)
+    runconictests("OA", ip_solvers[i], conic_solver)
 end
 
 for i = 1:length(lazy_solvers)
     contains(string(typeof(lazy_solvers[i])),"GLPKSolverMIP") && continue
-    runconictests("P-CB", lazy_solvers[i], dcp_solver)
-    runconictests("P-CB", lazy_solvers[i], conic_solver)
+    runconictests("BC", lazy_solvers[i], dcp_solver)
+    runconictests("BC", lazy_solvers[i], conic_solver)
 end
 
 # PAJARITO UNIT-TESTS

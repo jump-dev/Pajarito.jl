@@ -34,18 +34,18 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     solution::Vector{Float64}   # Vector containing solution
     status                      # Temination status of algorithm
     objval::Float64             # Best found objective corresponding to solution
-    iterations::Int             # Number of outer approximation iterations if algorithm is P-OA
+    iterations::Int             # Number of outer approximation iterations if algorithm is OA
 
     # SOLVER DATA:
     verbose::Int                # Verbosity level flag
-    algorithm                   # Choice of algorithm: P-OA or P-CB
+    algorithm                   # Choice of algorithm: "OA" or "BC"
     mip_solver                  # Choice of MILP solver
     conic_solver                # Choice of Conic solver
     is_conic_solver             # Indicator if subproblem solver is conic, ECOS, SCS or Mosek
     opt_tolerance               # Relatice optimality tolerance
     acceptable_opt_tolerance    # Acceptable optimality tolerance if separation fails
     time_limit                  # Time limit
-    cut_switch                  # Cut level for P-OA
+    cut_switch                  # Cut level for OA
     socp_disaggregator::Bool    # SOCP disaggregator for SOC constraints
 
     # PROBLEM DATA
@@ -106,7 +106,7 @@ immutable PajaritoConicSolver <: MathProgBase.AbstractMathProgSolver
     socp_disaggregator
     instance
 end
-PajaritoConicSolver(;verbose=0,algorithm="P-OA",mip_solver=nothing,conic_solver=nothing,opt_tolerance=1e-5,acceptable_opt_tolerance=1e-4,time_limit=60*60*10,cut_switch=1,socp_disaggregator=false,instance="") = PajaritoConicSolver(verbose,algorithm,mip_solver,conic_solver,opt_tolerance,acceptable_opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
+PajaritoConicSolver(;verbose=0,algorithm="OA",mip_solver=nothing,conic_solver=nothing,opt_tolerance=1e-5,acceptable_opt_tolerance=1e-4,time_limit=60*60*10,cut_switch=1,socp_disaggregator=false,instance="") = PajaritoConicSolver(verbose,algorithm,mip_solver,conic_solver,opt_tolerance,acceptable_opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
 
 # BEGIN MATHPROGBASE INTERFACE
 MathProgBase.ConicModel(s::PajaritoConicSolver) = PajaritoConicModel(s.verbose, s.algorithm, s.mip_solver, s.conic_solver, s.opt_tolerance, s.acceptable_opt_tolerance, s.time_limit, s.cut_switch, s.socp_disaggregator, s.instance)
@@ -962,12 +962,12 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
     end
 
-    # P-CB
-    if m.algorithm == "P-CB"
+    # BC
+    if m.algorithm == "BC"
         addLazyCallback(mip_model,coniccallback)
         m.status = solve(mip_model)
-    # P-OA
-    elseif m.algorithm == "P-OA"
+    # OA
+    elseif m.algorithm == "OA"
         while (time() - start) < m.time_limit
             cut_added = false
             # gc()
