@@ -2,5 +2,7 @@ JuMP
 FactCheck
 ECOS
 GLPKMathProgInterface
+Cbc
+Clp
 Ipopt
 Convex
