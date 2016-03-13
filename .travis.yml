@@ -16,7 +16,6 @@ addons:
 # uncomment the following lines to override the default test script
 script:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-  - julia -e 'Pkg.clone("https://github.com/mlubin/ConicNonlinearBridge.jl")'
   - julia -e 'Pkg.clone(pwd()); Pkg.build("Pajarito"); Pkg.test("Pajarito"; coverage=true)'
 after_success:
   - julia -e 'cd(Pkg.dir("Pajarito")); Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
