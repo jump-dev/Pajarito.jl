@@ -12,6 +12,8 @@ mip_solver = GLPKSolverMIP()
 nlp_solver = IpoptSolver(print_level=0)
 conic_solver = ECOSSolver(verbose=0)
 dcp_solver=ConicNLPWrapper(nlp_solver=nlp_solver)
+conic_solvers = [conic_solver, dcp_solver]
+algorithms = ["OA", "BC"]
 
 include(Pkg.dir("JuMP","test","solvers.jl"))
 
@@ -20,15 +22,8 @@ TOL = 1e-3
 include("nlptest.jl")
 include("conictest.jl")
 
-for i = 1:length(ip_solvers)
-    runconictests("OA", ip_solvers[i], dcp_solver)
-    runconictests("OA", ip_solvers[i], conic_solver)
-end
-
-for i = 1:length(lazy_solvers)
-    runconictests("BC", lazy_solvers[i], dcp_solver)
-    runconictests("BC", lazy_solvers[i], conic_solver)
-end
+runconictests("OA", ip_solvers, conic_solvers)
+runconictests("BC", lazy_solvers, conic_solvers)
 
 # PAJARITO UNIT-TESTS
 # 1. CONVEX CONSTRAINT WITH LB AND UB

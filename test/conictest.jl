@@ -1,4 +1,4 @@
-function runconictests(algorithm, mip_solver, conic_solver)
+function runconictests(algorithm, mip_solvers, conic_solvers)
 
 facts("Empty MIP solver test") do
     x = Convex.Variable(1,:Int)
@@ -23,63 +23,92 @@ facts("Empty DCP solver test") do
 end
 
 facts("Univariate maximization problem") do
-    x = Convex.Variable(1,:Int)
 
-    problem = Convex.maximize( 3x,
-                        x <= 10,
-                        x^2 <= 9)
+    for mip_solver in mip_solvers
+        for conic_solver in conic_solvers
+context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
+            x = Convex.Variable(1,:Int)
 
-    Convex.solve!(problem, PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=conic_solver))
-    @fact problem.optval --> roughly(9.0, TOL)
+            problem = Convex.maximize( 3x,
+                                x <= 10,
+                                x^2 <= 9)
+            Convex.solve!(problem, PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=conic_solver))
+            @fact problem.optval --> roughly(9.0, TOL)
+end
+        end
+    end
+
 end
 
 
 facts("Maximization problem") do
-    x = Convex.Variable(1,:Int)
-    y = Convex.Variable(1, Convex.Positive())
+    for mip_solver in mip_solvers
+        for conic_solver in conic_solvers
+context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
+            x = Convex.Variable(1,:Int)
+            y = Convex.Variable(1, Convex.Positive())
 
-    problem = Convex.maximize( 3x+y,
-                        x >= 0,
-                        3x + 2y <= 10,
-                        exp(x) <= 20)
+            problem = Convex.maximize( 3x+y,
+                                x >= 0,
+                                3x + 2y <= 10,
+                                exp(x) <= 10)
 
-   Convex.solve!(problem, PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=conic_solver)) 
-   @fact problem.optval --> roughly(8.0, TOL)
+           Convex.solve!(problem, PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=conic_solver)) 
+           @fact problem.optval --> roughly(8.0, TOL)
+end
+        end
+    end
+
 end
 
 facts("Solver test") do
 
-    x = Convex.Variable(1,:Int)
-    y = Convex.Variable(1)
+    for mip_solver in mip_solvers
+        for conic_solver in conic_solvers
+context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
+            x = Convex.Variable(1,:Int)
+            y = Convex.Variable(1)
 
-    problem = Convex.minimize(-3x-y,
-                       x >= 1,
-                       y >= 0,
-                       3x + 2y <= 10,
-                       x^2 <= 5,
-                       exp(y) + x <= 7)
+            problem = Convex.minimize(-3x-y,
+                               x >= 1,
+                               y >= 0,
+                               3x + 2y <= 10,
+                               x^2 <= 5,
+                               exp(y) + x <= 7)
 
 
-    Convex.solve!(problem, PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=conic_solver)) 
+            Convex.solve!(problem, PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=conic_solver)) 
 
-    @fact problem.status --> :Optimal
-    @fact Convex.evaluate(x) --> roughly(2.0, TOL)
+            @fact problem.status --> :Optimal
+            @fact Convex.evaluate(x) --> roughly(2.0, TOL)
+end
+        end
+    end
+
 end
 
 facts("Solver test 2") do
 
-    x = Convex.Variable(1,:Int)
-    y = Convex.Variable(1, Convex.Positive())
+    for mip_solver in mip_solvers
+        for conic_solver in conic_solvers
+context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
 
-    problem = Convex.minimize(-3x-y,
-                       x >= 1,
-                       3x + 2y <= 30,
-                       exp(y^2) + x <= 7)
+            x = Convex.Variable(1,:Int)
+            y = Convex.Variable(1, Convex.Positive())
 
-    Convex.solve!(problem, PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=conic_solver))
+            problem = Convex.minimize(-3x-y,
+                               x >= 1,
+                               3x + 2y <= 30,
+                               exp(y^2) + x <= 7)
 
-    @fact problem.status --> :Optimal
-    @fact Convex.evaluate(x) --> roughly(6.0, TOL)
+            Convex.solve!(problem, PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=conic_solver))
+
+            @fact problem.status --> :Optimal
+            @fact Convex.evaluate(x) --> roughly(6.0, TOL)
+end
+        end
+    end
+
 end
 
 end
