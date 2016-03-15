@@ -22,6 +22,9 @@ TOL = 1e-3
 include("nlptest.jl")
 include("conictest.jl")
 
+runnonlineartests("OA", ip_solvers)
+runnonlineartests("BC", lazy_solvers)
+
 runconictests("OA", ip_solvers, conic_solvers)
 runconictests("BC", lazy_solvers, conic_solvers)
 
