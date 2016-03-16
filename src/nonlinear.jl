@@ -248,7 +248,7 @@ function populatelinearmatrix(m::PajaritoModel)
         push!(A_I,row); push!(A_J, jac_J[k]); push!(A_V, jac_V[k])
     end
 
-    m.A = sparse(A_I, A_J, A_V)
+    m.A = sparse(A_I, A_J, A_V, m.numConstr-m.numNLConstr, m.numVar)
 
     # g(x) might have a constant, i.e., a'x + b
     # let's find b
@@ -394,6 +394,9 @@ function MathProgBase.optimize!(m::PajaritoModel)
 
     start = time()
 
+    cputime_nlp = 0.0
+    cputime_mip = 0.0
+
     populatelinearmatrix(m)
     # solve it
     # MathProgBase.optimize!(nlp_model)
@@ -414,7 +417,6 @@ function MathProgBase.optimize!(m::PajaritoModel)
         end
     end
 
-
     jac_I, jac_J = MathProgBase.jac_structure(m.d)
     jac_V = zeros(length(jac_I))
     grad_f = zeros(m.numVar+1)
@@ -426,7 +428,10 @@ function MathProgBase.optimize!(m::PajaritoModel)
     # pass in starting point
     #MathProgBase.setwarmstart!(nlp_model, m.solution)
     MathProgBase.setwarmstart!(ini_nlp_model, m.solution[1:m.numVar])
+
+    start_nlp = time()
     MathProgBase.optimize!(ini_nlp_model)
+    cputime_nlp += time() - start_nlp
     ini_nlp_status = MathProgBase.status(ini_nlp_model)
     if ini_nlp_status == :Infeasible || ini_nlp_status == :InfeasibleOrUnbounded
         m.status = :Infeasible
@@ -435,6 +440,14 @@ function MathProgBase.optimize!(m::PajaritoModel)
         m.status = :Unbounded
         return
     end 
+
+    ini_nlp_objval = MathProgBase.getobjval(ini_nlp_model)
+
+    (m.verbose > 0) && println("\nPajarito started...\n")
+    (m.verbose > 0) && println("MINLP algorithm $(m.algorithm) is chosen.")
+    (m.verbose > 0) && println("MINLP has $(m.numVar) variables, $(m.numConstr - m.numNLConstr) linear constraints, $(m.numNLConstr) nonlinear constraints.")
+    (m.verbose > 0) && println("Initial relaxation objective = $ini_nlp_objval.\n")
+
     separator = MathProgBase.getsolution(ini_nlp_model)
     addCuttingPlanes!(m, mip_model, separator, jac_I, jac_J, jac_V, grad_f, [])
 
@@ -451,7 +464,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
             mip_solution = getValue(m.mip_x)
         end
         #MathProgBase.getsolution(getInternalModel(mip_model))
-        (m.verbose > 1) && println("MIP Solution: $mip_solution")
+        (m.verbose > 2) && println("MIP Solution: $mip_solution")
         # solve NLP model for the MIP solution
         new_u = m.u
         new_l = m.l
@@ -482,16 +495,18 @@ function MathProgBase.optimize!(m::PajaritoModel)
         #MathProgBase.setvarUB!(nlp_model, new_u)
         #MathProgBase.setvarLB!(nlp_model, new_l)
         # optiimize the NLP problem
+        start_nlp = time()
         MathProgBase.optimize!(nlp_model)
+        cputime_nlp += time() - start_nlp
         nlp_status = MathProgBase.status(nlp_model)
         nlp_objval = -Inf
         inf_cut_generator = false
         #separator::Vector{Float64}
         if nlp_status == :Optimal
-            (m.verbose > 0) && println("NLP Solved")
+            (m.verbose > 2) && println("NLP Solved")
             nlp_objval = MathProgBase.getobjval(nlp_model)
             separator = MathProgBase.getsolution(nlp_model)
-            (m.verbose > 1) && println("NLP Solution: $separator")
+            (m.verbose > 2) && println("NLP Solution: $separator")
 
             # KEEP TRACK OF BEST KNOWN INTEGER FEASIBLE SOLUTION
             #=if m.objsense == :Max && !m.objlinear
@@ -535,16 +550,18 @@ function MathProgBase.optimize!(m::PajaritoModel)
             end
 
             MathProgBase.setwarmstart!(inf_model, inf_initial_solution)
-            (m.verbose > 0) && println("NLP Infeasible")
+            (m.verbose > 2) && println("NLP Infeasible")
+            start_nlp = time()
             MathProgBase.optimize!(inf_model)
+            cputime_nlp += time() - start_nlp
             if MathProgBase.status(inf_model) == :Infeasible
-                (m.verbose > 0) && println("INF NLP Infeasible")
+                (m.verbose > 2) && println("INF NLP Infeasible")
                 m.status = :Infeasible
                 return
             end
-            (m.verbose > 0) && println("INF NLP Solved")
+            (m.verbose > 2) && println("INF NLP Solved")
             separator = MathProgBase.getsolution(inf_model)
-            (m.verbose > 1) && println("INF NLP Solution: $separator")
+            (m.verbose > 2) && println("INF NLP Solution: $separator")
         end
         # add supporting hyperplanes
         if m.objsense == :Min
@@ -552,13 +569,13 @@ function MathProgBase.optimize!(m::PajaritoModel)
         else
             optimality_gap = -nlp_objval - mip_objval
         end
-        (m.verbose > 0) && println("Optimality Gap: $(nlp_objval) - $(mip_objval) = $(optimality_gap)")
+        (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %13.2f   %15.2f   %14.2f   %13.2f\n" iter mip_objval nlp_objval optimality_gap m.objval
         if inf_cut_generator || optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance || cb != []
             addCuttingPlanes!(m, mip_model, separator, jac_I, jac_J, jac_V, grad_f, cb)
             (m.cut_switch > 0) && addCuttingPlanes!(m, mip_model, mip_solution, jac_I, jac_J, jac_V, grad_f, cb)
             cut_added = true
         else
-            (m.verbose > 0) && println("MINLP Solved")
+            (m.verbose > 1) && println("MINLP Solved")
             m.status = :Optimal
             m.objval = MathProgBase.getobjval(nlp_model)
             if m.objsense == :Max && !m.objlinear
@@ -566,7 +583,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
             end
             m.solution = MathProgBase.getsolution(nlp_model)
             m.iterations = iter
-            (m.verbose > 0) && println("Number of OA iterations: $iter")
+            (m.verbose > 1) && println("Number of OA iterations: $iter")
             return
         end
     end
@@ -576,18 +593,21 @@ function MathProgBase.optimize!(m::PajaritoModel)
         addLazyCallback(mip_model, nonlinearcallback)
         m.status = solve(mip_model)
     elseif m.algorithm == "OA"
+        (m.verbose > 0) && println("Iteration   MIP Objective   Conic Objective   Optimality Gap   Best Solution")
         while (time() - start) < m.time_limit
             cut_added = false
             # solve MIP model
+            start_mip = time()
             mip_status = solve(mip_model)
+            cputime_mip += time() - start_mip
             #mip_objval = Inf
             #mip_solution = zeros(m.numVar+1)
             if mip_status == :Infeasible || mip_status == :InfeasibleOrUnbounded
-                (m.verbose > 0) && println("MIP Infeasible")
+                (m.verbose > 1) && println("MIP Infeasible")
                 m.status = :Infeasible
                 return
             else 
-                (m.verbose > 0) && println("MIP Status: $mip_status")
+                (m.verbose > 1) && println("MIP Status: $mip_status")
             end
             mip_solution = getValue(m.mip_x)
 
@@ -604,6 +624,14 @@ function MathProgBase.optimize!(m::PajaritoModel)
     else
         error("Unspecified algorithm.")
     end
+
+    (m.verbose > 0) && println("\nPajarito finished...\n")
+    (m.verbose > 0) && println("Status = $(m.status).")
+    (m.verbose > 0) && println("Total time = $(time() - start) sec. Iterations = $iter.") 
+    (m.verbose > 0) && println("MIP total time = $(cputime_mip).")
+    (m.verbose > 0) && println("NLP total time = $(cputime_nlp).")
+    (m.verbose > 0) && (m.status == :Optimal) && println("Optimum objective = $(m.objval).\n") 
+
 end
 
 MathProgBase.setwarmstart!(m::PajaritoModel, x) = (m.solution = x)
