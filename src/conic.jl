@@ -810,7 +810,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     function coniccallback(cb)
         if cb != []
-            mip_objval = MathProgBase.cbgetobj(cb)
+            mip_objval = -Inf #MathProgBase.cbgetobj(cb)
             mip_solution = MathProgBase.cbgetmipsolution(cb)[1:m.numVar]
         else
             mip_objval = getObjectiveValue(mip_model)
