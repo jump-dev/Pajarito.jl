@@ -5,6 +5,23 @@
 
 function runnonlineartests(algorithm, mip_solvers)
 
+facts("Sparse matrix bug test") do
+    m = Model(solver=PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
+
+    @defVar(m, x >= 0, start = 1, Int)
+    @defVar(m, y >= 0, start = 1)
+
+    @setObjective(m, Min, -3x - y)
+
+    @addConstraint(m, 3x + 10 <= 20)
+
+    @addNLConstraint(m, y^2 <= 10)
+
+    @fact solve(m) --> :Optimal
+
+end
+
+
 facts("Convex constraint with LB and UB") do
     m = Model(solver=PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
 
