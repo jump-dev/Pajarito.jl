@@ -935,7 +935,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
         # add supporting hyperplanes
         optimality_gap = m.objval - mip_objval 
-        (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %13.2f   %15.2f   %14.2f   %13.2f\n" iter mip_objval dcp_objval optimality_gap m.objval
+        (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %13.5f   %15.5f   %14.5f   %13.5f\n" iter mip_objval dcp_objval optimality_gap m.objval
         # ITS FINE TO CHECK OPTIMALITY GAP ONLY BECAUSE IF conic_model IS INFEASIBLE, ITS OBJ VALUE IS INF
         if optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance || cb != [] #&& !(prev_mip_solution == mip_solution)
             if m.is_conic_solver
@@ -965,6 +965,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     elseif m.algorithm == "OA"
         (m.verbose > 0) && println("Iteration   MIP Objective   Conic Objective   Optimality Gap   Best Solution")
         while (time() - start) < m.time_limit
+            flush(STDOUT)
             cut_added = false
             # gc()
             # WARMSTART MIP FROM UPPER BOUND
