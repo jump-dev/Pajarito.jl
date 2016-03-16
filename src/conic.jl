@@ -772,22 +772,28 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     # solve Conic model for the MIP solution
     ini_conic_model = MathProgBase.ConicModel(m.cont_solver)
     loadInitialRelaxedConicModel(m, ini_conic_model)
+
+    start_conic = time()
     MathProgBase.optimize!(ini_conic_model)
+    cputime_conic += time() - start_conic
 
     ini_conic_status = MathProgBase.status(ini_conic_model)
     ini_conic_objval = MathProgBase.getobjval(ini_conic_model)
-    (m.verbose > 0) && println("INI Conic STATUS: $ini_conic_status")
-    (m.verbose > 0) && println("INI Conic OBJVAL: $ini_conic_objval")
     if ini_conic_status == :Optimal || ini_conic_status == :Suboptimal
         separator = MathProgBase.getsolution(ini_conic_model)
         separator = addSlackValues(m, separator)
         @assert length(separator) == m.numVar
         addPrimalCuttingPlanes!(m, mip_model, separator, [])
     else
-        (m.verbose > 0) && println("Conic Relaxation Infeasible")
+        (m.verbose > 1) && println("Conic Relaxation Infeasible")
         m.status = :Infeasible
         return       
     end
+
+    (m.verbose > 0) && println("\nPajarito started...\n")
+    (m.verbose > 0) && println("MICONE algorithm $(m.algorithm) is chosen.")
+    (m.verbose > 0) && println("MICONE has $(m.numVar) variables, $(m.numConstr) constraints, $(m.numSpecCones) nonlinear cones.")
+    (m.verbose > 0) && println("Initial relaxation objective = $ini_conic_objval.\n")
 
     # Release the inf_conic_model if applicable
     if applicable(MathProgBase.freemodel!,ini_conic_model)
@@ -812,8 +818,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
 
         #@assert abs(mip_objval - dot(m.c, mip_solution)) < 1e-4
-        (m.verbose > 1) && println("MIP Vartypes: $(m.vartype)")
-        (m.verbose > 1) && println("MIP Solution: $mip_solution")
+        (m.verbose > 2) && println("MIP Vartypes: $(m.vartype)")
+        (m.verbose > 2) && println("MIP Solution: $mip_solution")
 
         separator = Any[]
         # MICONE algorithm
@@ -827,9 +833,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             MathProgBase.optimize!(conic_model)
             cputime_conic += time() - start_conic
             conic_status = MathProgBase.status(conic_model)
-            (m.verbose > 0) && println("Conic Status: $conic_status from conic solver.")
+            (m.verbose > 1) && println("Conic Status: $conic_status from conic solver.")
             if !(conic_status == :Optimal || conic_status == :Suboptimal || conic_status == :Infeasible)
-                (m.verbose > 0) && println("ERROR: Unrecognized status $conic_status from conic solver.")
+                (m.verbose > 1) && println("ERROR: Unrecognized status $conic_status from conic solver.")
                 m.status = :Error
                 return
             end
@@ -864,7 +870,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
             inf_cut_generator = true
             if MathProgBase.status(inf_dcp_model) == :Infeasible
-                (m.verbose > 0) && println("INF DCP Infeasible")
+                (m.verbose > 1) && println("INF DCP Infeasible")
                 m.status = :Infeasible
                 return
             else
@@ -876,7 +882,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 end
 
                 if inf_dcp_objval > 1e-4
-                    (m.verbose > 0) && println("INF DCP Objval: $inf_dcp_objval")
+                    (m.verbose > 1) && println("INF DCP Objval: $inf_dcp_objval")
                     inf_cut_generator = true
                 else
                     dcp_model_warmstart = Float64[]
@@ -897,9 +903,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                     MathProgBase.optimize!(dcp_model)
                     cputime_conic += time() - start_conic
                     dcp_status = MathProgBase.status(dcp_model)
-                    (m.verbose > 0) && println("DCP Status: $dcp_status from conic solver.")
+                    (m.verbose > 1) && println("DCP Status: $dcp_status from conic solver.")
                     if !(dcp_status == :Optimal || dcp_status == :Suboptimal)
-                        (m.verbose > 0) && println("ERROR: Unrecognized status $dcp_status from conic solver.")
+                        (m.verbose > 1) && println("ERROR: Unrecognized status $dcp_status from conic solver.")
                         m.status = :Error
                         return
                     end
@@ -929,7 +935,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
         # add supporting hyperplanes
         optimality_gap = m.objval - mip_objval 
-        (m.verbose > 0) && println("Optimality Gap: $(m.objval) - $(mip_objval) = $(optimality_gap)")
+        (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %13.2f   %15.2f   %14.2f   %13.2f\n" iter mip_objval dcp_objval optimality_gap m.objval
         # ITS FINE TO CHECK OPTIMALITY GAP ONLY BECAUSE IF conic_model IS INFEASIBLE, ITS OBJ VALUE IS INF
         if optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance || cb != [] #&& !(prev_mip_solution == mip_solution)
             if m.is_conic_solver
@@ -941,11 +947,11 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             cut_added = true
         else
             if optimality_gap < (abs(mip_objval) + 1e-5)*m.acceptable_opt_tolerance
-                (m.verbose > 0) && println("MINLP Solved")
+                (m.verbose > 1) && println("MINLP Solved")
                 m.status = :Optimal
                 m.iterations = iter
-                (m.verbose > 0) && println("CPUTIME: $(time() - start)")
-                (m.verbose > 0) && println("Number of OA iterations: $iter")
+                (m.verbose > 1) && println("CPUTIME: $(time() - start)")
+                (m.verbose > 1) && println("Number of OA iterations: $iter")
             end
             #break
         end
@@ -957,6 +963,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         m.status = solve(mip_model)
     # OA
     elseif m.algorithm == "OA"
+        (m.verbose > 0) && println("Iteration   MIP Objective   Conic Objective   Optimality Gap   Best Solution")
         while (time() - start) < m.time_limit
             cut_added = false
             # gc()
@@ -969,14 +976,14 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             mip_status = solve(mip_model)
             cputime_mip += time() - start_mip
             if mip_status == :Infeasible || mip_status == :InfeasibleOrUnbounded
-                (m.verbose > 0) && println("MIP Infeasible")
+                (m.verbose > 1) && println("MIP Infeasible")
                 m.status = :Infeasible
                 return
             else 
-                (m.verbose > 0) && println("MIP Status: $mip_status")
+                (m.verbose > 1) && println("MIP Status: $mip_status")
             end
             mip_solution = getValue(m.mip_x)
- 
+            dcp_objval = Inf 
             coniccallback([])
             if cut_added == false
                 break
@@ -995,7 +1002,13 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         write(out_file, "$(m.instance): $(m.status) $iter $(time() - start) $(m.objval) $(m.problem_type) $(cputime_mip) $(cputime_conic)\n") 
         close(out_file)
     end
-    (m.verbose > 0) && println("$(m.status) $iter $(time() - start) $(m.objval) $(m.problem_type) $(cputime_mip) $(cputime_conic)") 
+
+    (m.verbose > 0) && println("\nPajarito finished...\n")
+    (m.verbose > 0) && println("Status = $(m.status).")
+    (m.verbose > 0) && println("Total time = $(time() - start) sec. Iterations = $iter.") 
+    (m.verbose > 0) && println("MIP total time = $(cputime_mip).")
+    (m.verbose > 0) && println("CONE total time = $(cputime_conic).")
+    (m.verbose > 0) && (m.status == :Optimal) && println("Optimum objective = $(m.objval).\n") 
 
 end
 
