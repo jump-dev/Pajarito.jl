@@ -569,7 +569,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
         else
             optimality_gap = -nlp_objval - mip_objval
         end
-        (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %13.2f   %15.2f   %14.2f   %13.2f\n" iter mip_objval nlp_objval optimality_gap m.objval
+        (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %13.5f   %15.5f   %14.5f   %13.5f\n" iter mip_objval nlp_objval optimality_gap m.objval
         if inf_cut_generator || optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance || cb != []
             addCuttingPlanes!(m, mip_model, separator, jac_I, jac_J, jac_V, grad_f, cb)
             (m.cut_switch > 0) && addCuttingPlanes!(m, mip_model, mip_solution, jac_I, jac_J, jac_V, grad_f, cb)
@@ -595,6 +595,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
     elseif m.algorithm == "OA"
         (m.verbose > 0) && println("Iteration   MIP Objective   Conic Objective   Optimality Gap   Best Solution")
         while (time() - start) < m.time_limit
+            flush(STDOUT)
             cut_added = false
             # solve MIP model
             start_mip = time()
