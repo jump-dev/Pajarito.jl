@@ -445,7 +445,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
 
     (m.verbose > 0) && println("\nPajarito started...\n")
     (m.verbose > 0) && println("MINLP algorithm $(m.algorithm) is chosen.")
-    (m.verbose > 0) && println("MINLP has $(m.numVar) variables, $(m.numConstr) constraints, $(m.numNLConstr) nonlinear constraints.")
+    (m.verbose > 0) && println("MINLP has $(m.numVar) variables, $(m.numConstr - m.numNLConstr) linear constraints, $(m.numNLConstr) nonlinear constraints.")
     (m.verbose > 0) && println("Initial relaxation objective = $ini_nlp_objval.\n")
 
     separator = MathProgBase.getsolution(ini_nlp_model)

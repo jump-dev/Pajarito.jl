@@ -792,7 +792,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     (m.verbose > 0) && println("\nPajarito started...\n")
     (m.verbose > 0) && println("MICONE algorithm $(m.algorithm) is chosen.")
-    (m.verbose > 0) && println("MICONE has $(m.numVar) variables, $(m.numConstr) constraints, $(m.numSpecCones) nonlinear cones.")
+    (m.verbose > 0) && println("MICONE has $(m.numVar) variables, $(m.numConstr) linear constraints, $(m.numSpecCones) nonlinear cones.")
     (m.verbose > 0) && println("Initial relaxation objective = $ini_conic_objval.\n")
 
     # Release the inf_conic_model if applicable
