@@ -793,7 +793,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     (m.verbose > 0) && println("\nPajarito started...\n")
     (m.verbose > 0) && println("MICONE algorithm $(m.algorithm) is chosen.")
     (m.verbose > 0) && println("MICONE has $(m.numVar) variables, $(m.numConstr) linear constraints, $(m.numSpecCones) nonlinear cones.")
-    (m.verbose > 0) && println("Initial relaxation objective = $ini_conic_objval.\n")
+    (m.verbose > 0) && @printf "Initial objective = %13.5f.\n\n" ini_conic_objval
 
     # Release the inf_conic_model if applicable
     if applicable(MathProgBase.freemodel!,ini_conic_model)
@@ -1007,11 +1007,12 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     end
 
     (m.verbose > 0) && println("\nPajarito finished...\n")
-    (m.verbose > 0) && println("Status = $(m.status).")
-    (m.verbose > 0) && println("Total time = $(time() - start) sec. Iterations = $iter.") 
-    (m.verbose > 0) && println("MIP total time = $(cputime_mip).")
-    (m.verbose > 0) && println("CONE total time = $(cputime_conic).")
-    (m.verbose > 0) && (m.status == :Optimal) && println("Optimum objective = $(m.objval).\n") 
+    (m.verbose > 0) && @printf "Status            = %13s.\n" m.status
+    (m.verbose > 0) && @printf "Total time        = %13.5f sec.\n" (time()-start)
+    (m.verbose > 0) && @printf "Iterations        = %13d.\n" iter
+    (m.verbose > 0) && @printf "MIP total time    = %13.5f sec.\n" cputime_mip
+    (m.verbose > 0) && @printf "CONE total timei  = %13.5f sec.\n" cputime_conic
+    (m.verbose > 0) && (m.status == :Optimal) && @printf "Optimum objective = %13.5f.\n\n" m.objval
 
 end
 
