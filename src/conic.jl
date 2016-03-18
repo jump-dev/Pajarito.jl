@@ -817,6 +817,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             mip_solution = getValue(m.mip_x)
         end
 
+        dcp_objval = Inf
+        conic_objval = Inf
+
         #@assert abs(mip_objval - dot(m.c, mip_solution)) < 1e-4
         (m.verbose > 2) && println("MIP Vartypes: $(m.vartype)")
         (m.verbose > 2) && println("MIP Solution: $mip_solution")
