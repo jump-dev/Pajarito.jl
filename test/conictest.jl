@@ -116,4 +116,31 @@ end
 
 end
 
+
+facts("Print test") do
+
+    for mip_solver in mip_solvers
+        for conic_solver in conic_solvers
+context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
+            x = Convex.Variable(1,:Int)
+            y = Convex.Variable(1)
+
+            problem = Convex.minimize(-3x-y,
+                               x >= 1,
+                               y >= 0,
+                               3x + 2y <= 10,
+                               x^2 <= 5,
+                               exp(y) + x <= 7)
+
+
+            Convex.solve!(problem, PajaritoSolver(verbose=1,algorithm=algorithm,mip_solver=mip_solver,cont_solver=conic_solver)) 
+
+            @fact problem.status --> :Optimal
+            @fact Convex.evaluate(x) --> roughly(2.0, TOL)
+end
+        end
+    end
+
+end
+
 end
