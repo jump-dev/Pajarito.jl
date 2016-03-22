@@ -569,7 +569,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
         else
             optimality_gap = -nlp_objval - mip_objval
         end
-        (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %13.5f   %15.5f   %14.5f   %13.5f\n" iter mip_objval nlp_objval optimality_gap m.objval
+        (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %+.7e   %+.7e   %+.7e   %+.7e\n" iter mip_objval nlp_objval optimality_gap m.objval
         if inf_cut_generator || optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance || cb != []
             addCuttingPlanes!(m, mip_model, separator, jac_I, jac_J, jac_V, grad_f, cb)
             (m.cut_switch > 0) && addCuttingPlanes!(m, mip_model, mip_solution, jac_I, jac_J, jac_V, grad_f, cb)
@@ -628,10 +628,10 @@ function MathProgBase.optimize!(m::PajaritoModel)
 
     (m.verbose > 0) && println("\nPajarito finished...\n")
     (m.verbose > 0) && @printf "Status            = %13s.\n" m.status
+    (m.verbose > 0) && (m.algorithm == "OA") && @printf "Iterations        = %13d.\n" iter
     (m.verbose > 0) && @printf "Total time        = %13.5f sec.\n" (time()-start)
-    (m.verbose > 0) && @printf "Iterations        = %13d.\n" iter
     (m.verbose > 0) && @printf "MIP total time    = %13.5f sec.\n" cputime_mip
-    (m.verbose > 0) && @printf "CONE total timei  = %13.5f sec.\n" cputime_nlp
+    (m.verbose > 0) && @printf "CONE total time   = %13.5f sec.\n" cputime_nlp
     (m.verbose > 0) && (m.status == :Optimal) && @printf "Optimum objective = %13.5f.\n\n" m.objval
 
 end
