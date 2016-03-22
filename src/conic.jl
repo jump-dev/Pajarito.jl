@@ -748,9 +748,9 @@ function getConicModelSolution(m::PajaritoConicModel, conic_model, old_variable_
     return separator, conic_objval, conic_dual
 end
 
-function checkInfeasibility(m::PajaritoConicModel, separator)
+function checkInfeasibility(m::PajaritoConicModel, solution)
 
-    #val = m.b - m.A * separator[1:m.numVar]
+    #val = m.b - m.A * solution[1:m.numVar]
 
     max_violation = -1e+5
 
@@ -758,14 +758,14 @@ function checkInfeasibility(m::PajaritoConicModel, separator)
         if cone == :SOC
             sum = 0.0
             for i in ind[2:length(ind)]
-                sum += separator[i]^2
+                sum += solution[i]^2
             end
-            viol = sqrt(sum) - separator[ind[1]]
+            viol = sqrt(sum) - solution[ind[1]]
             if viol > max_violation
                 max_violation = viol
             end
         elseif cone == :ExpPrimal
-            viol = separator[ind[2]]*exp(separator[ind[1]]/separator[ind[2]]) - separator[ind[3]]
+            viol = solution[ind[2]]*exp(solution[ind[1]]/solution[ind[2]]) - solution[ind[3]]
             if viol > max_violation
                 max_violation = viol
             end
