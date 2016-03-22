@@ -560,8 +560,13 @@ function getDExp(ind, separator)
     return (I,V)
 end
 
-function addPrimalCuttingPlanes!(m, mip_model, separator, cb)
+function addPrimalCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
     k = 1
+    max_violation = -1e+5
+    initial_query = false
+    if mip_solution == zeros(m.numVar)
+        initial_query = true
+    end
     for (cone, ind) in m.pajarito_var_cones
         if cone == :SOC
             if !m.socp_disaggregator
@@ -576,6 +581,10 @@ function addPrimalCuttingPlanes!(m, mip_model, separator, cb)
                     new_rhs += V[i] * separator[I[i]]
                 end
                 #new_rhs = (abs(new_rhs) < 1e-9 ? 0.0 : new_rhs)
+                viol = vecdot(V, mip_solution[I]) - new_rhs
+                if viol > max_violation
+                    max_violation = viol
+                end
                 if cb != []
                     @addLazyConstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
                 else
@@ -592,6 +601,10 @@ function addPrimalCuttingPlanes!(m, mip_model, separator, cb)
                         new_rhs += V[i] * separator[I[i]]
                     end
                     #new_rhs = (abs(new_rhs) < 1e-9 ? 0.0 : new_rhs)
+                    viol = vecdot(V, mip_solution[I]) - (initial_query ? 0.0 : getValue(m.mip_t[k][j-1])) - new_rhs
+                    if viol > max_violation
+                        max_violation = viol
+                    end
                     if cb != []
                         @addLazyConstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} - m.mip_t[k][j-1] <= new_rhs)     
                     else
@@ -608,6 +621,10 @@ function addPrimalCuttingPlanes!(m, mip_model, separator, cb)
                 new_rhs += V[i] * separator[I[i]]
             end
             #new_rhs = (abs(new_rhs) < 1e-9 ? 0.0 : new_rhs)
+            viol = vecdot(V, mip_solution[I]) - new_rhs
+            if viol > max_violation
+                max_violation = viol
+            end
             if cb != []
                 @addLazyConstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
             else
@@ -615,6 +632,8 @@ function addPrimalCuttingPlanes!(m, mip_model, separator, cb)
             end
         end
     end
+
+    return max_violation
 end
 
 
@@ -627,13 +646,18 @@ function getDualSeparator(m, conic_dual, old_variable_index_map)
     return separator
 end
 
-function addDualCuttingPlanes!(m, mip_model, separator, cb)
+function addDualCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
 
     k = 1
+    max_violation = -1e+5
     for (cone, ind) in m.pajarito_var_cones
         if cone == :SOC || cone == :ExpPrimal
             for i = ind
                 @assert m.vartype[i] != :Int && m.vartype[i] != :Bin
+            end
+            viol = -vecdot(separator[ind], mip_solution[ind])
+            if viol > max_violation
+                max_violation = viol
             end
             if cb != []
                 @addLazyConstraint(cb, sum{separator[i] * m.mip_x[i], i in ind} >= 0.0)
@@ -642,6 +666,8 @@ function addDualCuttingPlanes!(m, mip_model, separator, cb)
             end
         end
     end
+
+    return max_violation
 end
 
 
@@ -722,34 +748,31 @@ function getConicModelSolution(m::PajaritoConicModel, conic_model, old_variable_
     return separator, conic_objval, conic_dual
 end
 
-function checkFeasibility(m::PajaritoConicModel, separator)
+function checkInfeasibility(m::PajaritoConicModel, solution)
 
-    val = m.b - m.A * separator[1:m.numVar]
-    for (cone, ind) in m.pajarito_constr_cones
-        if cone == :Zero
-            @assert all(-1e-4 .<= val[ind] .<= 1e-4) 
-        elseif cone == :NonNeg
-            @assert all(val[ind] .>= -1e-4)
-        elseif cone == :NonPos
-            @assert all(val[ind] .<= 1e-4)
-        end
-    end
+    #val = m.b - m.A * solution[1:m.numVar]
+
+    max_violation = -1e+5
 
     for (cone, ind) in m.pajarito_var_cones
-        if cone == :NonNeg
-            @assert all(separator[ind] .>= -1e-5)
-        elseif cone == :NonPos
-            @assert all(separator[ind] .<= 1e-5)
-        elseif cone == :SOC
+        if cone == :SOC
             sum = 0.0
             for i in ind[2:length(ind)]
-                sum += separator[i]^2
+                sum += solution[i]^2
             end
-            @assert sqrt(sum) - separator[ind[1]] <= 1e-5
+            viol = sqrt(sum) - solution[ind[1]]
+            if viol > max_violation
+                max_violation = viol
+            end
         elseif cone == :ExpPrimal
-            @assert separator[ind[2]]*exp(separator[ind[1]]/separator[ind[2]]) - separator[ind[3]] <= 1e-5
+            viol = solution[ind[2]]*exp(solution[ind[1]]/solution[ind[2]]) - solution[ind[3]]
+            if viol > max_violation
+                max_violation = viol
+            end
         end
     end
+
+    return max_violation
 
 end
 
@@ -783,7 +806,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         separator = MathProgBase.getsolution(ini_conic_model)
         separator = addSlackValues(m, separator)
         @assert length(separator) == m.numVar
-        addPrimalCuttingPlanes!(m, mip_model, separator, [])
+        addPrimalCuttingPlanes!(m, mip_model, separator, [], zeros(m.numVar))
     else
         (m.verbose > 1) && println("Conic Relaxation Infeasible")
         m.status = :Infeasible
@@ -936,14 +959,15 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
 
         # add supporting hyperplanes
-        optimality_gap = m.objval - mip_objval 
-        (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %13.5f   %15.5f   %14.5f   %13.5f\n" iter mip_objval conic_objval optimality_gap m.objval
+        optimality_gap = m.objval - mip_objval
+        primal_infeasibility = checkInfeasibility(m, mip_solution)
+        OA_infeasibility = 0.0 
         # ITS FINE TO CHECK OPTIMALITY GAP ONLY BECAUSE IF conic_model IS INFEASIBLE, ITS OBJ VALUE IS INF
         if optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance || cb != [] #&& !(prev_mip_solution == mip_solution)
             if m.is_conic_solver
-                addDualCuttingPlanes!(m, mip_model, separator, cb)
+                OA_infeasibility = addDualCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
             else
-                addPrimalCuttingPlanes!(m, mip_model, separator, cb)
+                OA_infeasibility = addPrimalCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
             end
             #setValue(m.mip_x, mip_solution)
             cut_added = true
@@ -957,6 +981,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             end
             #break
         end
+        (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %+.7e   %+.7e   %+.7e   %+.7e   %+.7e   %+.7e\n" iter mip_objval conic_objval optimality_gap m.objval primal_infeasibility OA_infeasibility
     end
 
     # BC
@@ -965,7 +990,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         m.status = solve(mip_model)
     # OA
     elseif m.algorithm == "OA"
-        (m.verbose > 0) && println("Iteration   MIP Objective   Conic Objective   Optimality Gap   Best Solution")
+        (m.verbose > 0) && println("Iteration   MIP Objective   Conic Objective   Optimality Gap   Best Solution    Primal Inf.      OA Inf.")
         while (time() - start) < m.time_limit
             flush(STDOUT)
             cut_added = false
@@ -1008,10 +1033,10 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     (m.verbose > 0) && println("\nPajarito finished...\n")
     (m.verbose > 0) && @printf "Status            = %13s.\n" m.status
+    (m.verbose > 0) && (m.algorithm == "OA") && @printf "Iterations        = %13d.\n" iter
     (m.verbose > 0) && @printf "Total time        = %13.5f sec.\n" (time()-start)
-    (m.verbose > 0) && @printf "Iterations        = %13d.\n" iter
     (m.verbose > 0) && @printf "MIP total time    = %13.5f sec.\n" cputime_mip
-    (m.verbose > 0) && @printf "CONE total timei  = %13.5f sec.\n" cputime_conic
+    (m.verbose > 0) && @printf "CONE total time   = %13.5f sec.\n" cputime_conic
     (m.verbose > 0) && (m.status == :Optimal) && @printf "Optimum objective = %13.5f.\n\n" m.objval
 
 end
