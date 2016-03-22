@@ -149,7 +149,7 @@ function MathProgBase.loadproblem!(
     m.numVar_ini = numVar
     m.numVar = size(A,2)
     @assert m.numVar == numVar + lengthSpecCones
-    m.numConstr = numConstr 
+    m.numConstr = numConstr
     m.c = [c;zeros(m.numVar-numVar)]
     m.A = A
     m.b = b   
@@ -737,7 +737,7 @@ function getConicModelSolution(m::PajaritoConicModel, conic_model, old_variable_
     @assert length(conic_solution) == length(old_variable_index_map)
     @assert length(conic_solution) == m.numVar - m.numIntVar
 
-    separator = mip_solution
+    separator = copy(mip_solution)
     for i in 1:length(old_variable_index_map)
         @assert m.vartype[old_variable_index_map[i]] != :Int && m.vartype[old_variable_index_map[i]] != :Bin 
         separator[old_variable_index_map[i]] = conic_solution[i]
