@@ -23,6 +23,7 @@
 module Pajarito
 
 import MathProgBase
+using ConicNonlinearBridge
 
 include("solver.jl")
 include("nonlinear.jl")

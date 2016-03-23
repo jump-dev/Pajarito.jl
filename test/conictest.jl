@@ -5,26 +5,45 @@
 
 function runconictests(algorithm, mip_solvers, conic_solvers)
 
-facts("Empty MIP solver test") do
+facts("Default solvers test") do
     x = Convex.Variable(1,:Int)
 
     problem = Convex.maximize( 3x,
                         x <= 10,
                         x^2 <= 9)
     
-    @fact_throws Convex.solve!(problem, PajaritoSolver(cont_solver=conic_solver)) "MIP solver is not specified."
-
+    Convex.solve!(problem, PajaritoSolver())
+    @fact problem.optval --> roughly(9.0, TOL)
 end
 
-facts("Empty DCP solver test") do
-    x = Convex.Variable(1,:Int)
+facts("Default MIP solver test") do
+    for conic_solver in conic_solvers
+context("With $algorithm, $(typeof(conic_solver))") do
+        x = Convex.Variable(1,:Int)
 
-    problem = Convex.maximize( 3x,
-                        x <= 10,
-                        x^2 <= 9)
+        problem = Convex.maximize( 3x,
+                            x <= 10,
+                            x^2 <= 9)
+        
+        Convex.solve!(problem, PajaritoSolver(cont_solver=conic_solver))
+        @fact problem.optval --> roughly(9.0, TOL)
+end
+    end
+end
 
-    @fact_throws Convex.solve!(problem, PajaritoSolver(mip_solver=mip_solver)) "DCP solver is not specified."
+facts("Default DCP solver test") do
+    for mip_solver in mip_solvers
+context("With $algorithm, $(typeof(mip_solver))") do
+        x = Convex.Variable(1,:Int)
 
+        problem = Convex.maximize( 3x,
+                            x <= 10,
+                            x^2 <= 9)
+        
+        Convex.solve!(problem, PajaritoSolver(mip_solver=mip_solver))
+        @fact problem.optval --> roughly(9.0, TOL)
+end
+    end
 end
 
 facts("Univariate maximization problem") do

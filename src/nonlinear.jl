@@ -170,12 +170,8 @@ MathProgBase.NonlinearModel(s::PajaritoSolver) = PajaritoModel(s.verbose, s.algo
 function MathProgBase.loadproblem!(
     m::PajaritoModel, numVar, numConstr, l, u, lb, ub, sense, d)
 
-    if m.mip_solver == nothing
-        error("MIP solver is not specified.")
-    end
-
-    if m.cont_solver == nothing
-        error("Conic solver is not specified.")
+    if !applicable(MathProgBase.NonlinearModel, m.cont_solver)
+        error("$(m.cont_solver) is not a nonlinear solver.")
     end
 
     m.numVar = numVar
