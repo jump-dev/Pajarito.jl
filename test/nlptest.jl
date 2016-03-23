@@ -185,8 +185,32 @@ context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
     @addNLConstraint(m, x^2 <= 9)
 
     status = solve(m)
-    @fact round(getObjectiveValue(m)-2.0) --> 0.0
+    @fact round(getObjectiveValue(m)+2.0) --> 0.0
 
+end
+end
+end
+
+
+if algorithm == "OA"
+facts("Print test") do
+for mip_solver in mip_solvers
+context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
+    m = Model(solver=PajaritoSolver(verbose=1,algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
+
+    @defVar(m, x >= 0, start = 1, Int)
+    @defVar(m, y >= 0, start = 1)
+
+    @setObjective(m, Max, -x^2 - y)
+
+    @addConstraint(m, x + 2y >= 4)
+
+    @addNLConstraint(m, x^2 <= 9)
+
+    status = solve(m)
+    @fact status --> :Optimal
+
+end
 end
 end
 end
