@@ -776,6 +776,11 @@ function checkInfeasibility(m::PajaritoConicModel, solution)
 
 end
 
+function compareIntegerSolutions(m::PajaritoConicModel, sol1, sol2)
+    int_ind = filter(i->m.vartype[i] == :Int || m.vartype[i] == :Bin, 1:m.numVar)
+    return round(sol1[int_ind]) == round(sol2[int_ind])
+end
+
 function MathProgBase.optimize!(m::PajaritoConicModel)
 
     # TO CLASSIFY THE PROBLEM TYPES
@@ -963,7 +968,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         primal_infeasibility = checkInfeasibility(m, mip_solution)
         OA_infeasibility = 0.0 
         # ITS FINE TO CHECK OPTIMALITY GAP ONLY BECAUSE IF conic_model IS INFEASIBLE, ITS OBJ VALUE IS INF
-        if optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance || cb != [] #&& !(prev_mip_solution == mip_solution)
+        cycle_indicator = compareIntegerSolutions(m, prev_mip_solution, mip_solution)
+        if (optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance && !cycle_indicator) || cb != [] #&& !(prev_mip_solution == mip_solution)
             if m.is_conic_solver
                 OA_infeasibility = addDualCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
             else
@@ -975,13 +981,16 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             if optimality_gap < (abs(mip_objval) + 1e-5)*m.acceptable_opt_tolerance
                 (m.verbose > 1) && println("MINLP Solved")
                 m.status = :Optimal
-                m.iterations = iter
                 (m.verbose > 1) && println("CPUTIME: $(time() - start)")
                 (m.verbose > 1) && println("Number of OA iterations: $iter")
+            else #cycle_indicator
+                m.status = :Suboptimal
             end
+            m.iterations = iter
             #break
         end
         (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %+.7e   %+.7e   %+.7e   %+.7e   %+.7e   %+.7e\n" iter mip_objval conic_objval optimality_gap m.objval primal_infeasibility OA_infeasibility
+        (cycle_indicator) && warn("Mixed-integer cycling detected, terminating Pajarito...")
     end
 
     # BC
