@@ -494,6 +494,9 @@ function MathProgBase.optimize!(m::PajaritoModel)
     prev_mip_solution = zeros(m.numVar)
     cut_added = false
 
+    nlp_status = :Infeasible
+    nlp_solution = zeros(m.numVar)
+
     function nonlinearcallback(cb)
         if cb != []
             mip_objval = -Inf #MathProgBase.cbgetobj(cb)
@@ -544,7 +547,8 @@ function MathProgBase.optimize!(m::PajaritoModel)
         if nlp_status == :Optimal
             (m.verbose > 2) && println("NLP Solved")
             nlp_objval = MathProgBase.getobjval(nlp_model)
-            separator = MathProgBase.getsolution(nlp_model)
+            nlp_solution = MathProgBase.getsolution(nlp_model)
+            separator = copy(nlp_solution)
             (m.verbose > 2) && println("NLP Solution: $separator")
 
             # KEEP TRACK OF BEST KNOWN INTEGER FEASIBLE SOLUTION
@@ -627,8 +631,18 @@ function MathProgBase.optimize!(m::PajaritoModel)
         (cycle_indicator && m.status != :Optimal) && warn("Mixed-integer cycling detected, terminating Pajarito...")
     end
 
+    function heuristiccallback(cb)
+        if nlp_status == :Optimal
+            for i = 1:m.numVar
+                setSolutionValue!(cb, m.mip_x[i], nlp_solution[i])
+            end
+            addSolution(cb)
+        end
+    end
+
     if m.algorithm == "BC"
         addLazyCallback(mip_model, nonlinearcallback)
+        addHeuristicCallback(mip_model, heuristiccallback)
         m.status = solve(mip_model)
     elseif m.algorithm == "OA"
         (m.verbose > 0) && println("Iteration   MIP Objective   Conic Objective   Optimality Gap   Best Solution    Primal Inf.      OA Inf.")
