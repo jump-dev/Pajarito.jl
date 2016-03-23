@@ -19,6 +19,6 @@ immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     socp_disaggregator::Bool    # SOCP disaggregator for SOC constraints
     instance::AbstractString    # Path to instance
 end
-PajaritoSolver(;verbose=0,algorithm="OA",mip_solver=nothing,cont_solver=nothing,opt_tolerance=1e-5,acceptable_opt_tolerance=1e-4,time_limit=60*60*10,cut_switch=1,socp_disaggregator=false,instance="") = PajaritoSolver(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,acceptable_opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
+PajaritoSolver(;verbose=0,algorithm="OA",mip_solver=MathProgBase.defaultMIPsolver,cont_solver=MathProgBase.defaultNLPsolver,opt_tolerance=1e-5,acceptable_opt_tolerance=1e-4,time_limit=60*60*10,cut_switch=1,socp_disaggregator=false,instance="") = PajaritoSolver(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,acceptable_opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
 
 

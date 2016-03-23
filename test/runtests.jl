@@ -3,7 +3,6 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-using ConicNonlinearBridge
 using JuMP
 using Pajarito
 using FactCheck
@@ -16,8 +15,7 @@ import Convex
 mip_solver = GLPKSolverMIP()
 nlp_solver = IpoptSolver(print_level=0)
 conic_solver = ECOSSolver(verbose=0)
-dcp_solver=ConicNLPWrapper(nlp_solver=nlp_solver)
-conic_solvers = [conic_solver, dcp_solver]
+conic_solvers = [conic_solver, nlp_solver]
 algorithms = ["OA", "BC"]
 
 include(Pkg.dir("JuMP","test","solvers.jl"))

@@ -103,15 +103,11 @@ MathProgBase.ConicModel(s::PajaritoSolver) = PajaritoConicModel(s.verbose, s.alg
 function MathProgBase.loadproblem!(
     m::PajaritoConicModel, c, A, b, constr_cones, var_cones)
 
-    if m.mip_solver == nothing
-        error("MIP solver is not specified.")
-    end
+    # Check if the cont_solver is a conic solver
+    m.is_conic_solver = (applicable(MathProgBase.ConicModel, m.cont_solver) && m.cont_solver != MathProgBase.defaultNLPsolver)
 
-    if m.cont_solver == nothing
-        error("Conic solver is not specified.")
-    end
-
-    m.is_conic_solver = (string(typeof(m.cont_solver)) == "ECOS.ECOSSolver" || string(typeof(m.cont_solver)) == "SCS.SCSSolver" || string(typeof(m.cont_solver)) == "MosekSolver")
+    # Wrap nonlinear solver with ConicNonlinearBridge
+    m.cont_solver = (m.is_conic_solver ? m.cont_solver : ConicNLPWrapper(nlp_solver=m.cont_solver))
 
     m.c_ini = c
     m.A_ini = A
@@ -968,7 +964,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         primal_infeasibility = checkInfeasibility(m, mip_solution)
         OA_infeasibility = 0.0 
         # ITS FINE TO CHECK OPTIMALITY GAP ONLY BECAUSE IF conic_model IS INFEASIBLE, ITS OBJ VALUE IS INF
-        cycle_indicator = compareIntegerSolutions(m, prev_mip_solution, mip_solution)
+        cycle_indicator = (m.algorithm == "OA" ? compareIntegerSolutions(m, prev_mip_solution, mip_solution) : false)
         if (optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance && !cycle_indicator) || cb != [] #&& !(prev_mip_solution == mip_solution)
             if m.is_conic_solver
                 OA_infeasibility = addDualCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
@@ -990,7 +986,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             #break
         end
         (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %+.7e   %+.7e   %+.7e   %+.7e   %+.7e   %+.7e\n" iter mip_objval conic_objval optimality_gap m.objval primal_infeasibility OA_infeasibility
-        (cycle_indicator) && warn("Mixed-integer cycling detected, terminating Pajarito...")
+        (cycle_indicator && m.status != :Optimal) && warn("Mixed-integer cycling detected, terminating Pajarito...")
     end
 
     # BC
