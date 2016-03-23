@@ -565,9 +565,9 @@ function MathProgBase.optimize!(m::PajaritoModel)
         end
         # add supporting hyperplanes
         if m.objsense == :Min
-            optimality_gap = nlp_objval - mip_objval
+            optimality_gap = m.objval - mip_objval
         else
-            optimality_gap = -nlp_objval - mip_objval
+            optimality_gap = -m.objval - mip_objval
         end
         (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %+.7e   %+.7e   %+.7e   %+.7e\n" iter mip_objval nlp_objval optimality_gap m.objval
         if inf_cut_generator || optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance || cb != []
