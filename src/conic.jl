@@ -777,6 +777,23 @@ function compareIntegerSolutions(m::PajaritoConicModel, sol1, sol2)
     return round(sol1[int_ind]) == round(sol2[int_ind])
 end
 
+function completeSOCPDisaggregator(m::PajaritoConicModel, solution)
+
+    new_solution = copy(solution)
+    if m.socp_disaggregator
+        for (cone,ind) in m.pajarito_var_cones
+            if cone == :SOC
+                for i in ind[2:end]
+                    push!(new_solution, solution[i]^2)
+                end
+            end
+        end
+    end
+
+    return new_solution
+
+end
+
 function MathProgBase.optimize!(m::PajaritoConicModel)
 
     # TO CLASSIFY THE PROBLEM TYPES
@@ -1027,8 +1044,11 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             cut_added = false
             # gc()
             # WARMSTART MIP FROM UPPER BOUND
-            if m.objval != Inf && applicable(MathProgBase.setwarmstart!, getInternalModel(mip_model), m.solution)
-                MathProgBase.setwarmstart!(getInternalModel(mip_model), m.solution)
+            if m.objval < Inf
+                warmstart_solution = completeSOCPDisaggregator(m, m.solution) 
+                if applicable(MathProgBase.setwarmstart!, getInternalModel(mip_model), warmstart_solution)
+                    MathProgBase.setwarmstart!(getInternalModel(mip_model), warmstart_solution)
+                end
             end
 
             start_mip = time()
