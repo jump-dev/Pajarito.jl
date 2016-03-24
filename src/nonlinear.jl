@@ -399,21 +399,19 @@ end
 function checkInfeasibility(m::PajaritoModel, solution)
 
     g = zeros(m.numConstr)
-    g_val = zeros(m.numConstr)
+    g_val = -1e+5*ones(m.numConstr)
     MathProgBase.eval_g(m.d, g, solution[1:m.numVar])  
     for i = 1:m.numConstr
-        if m.constrtype[i] == :(<=)
-            g_val[i] = g[i] - m.ub[i]
-        else
-            g_val[i] = m.lb[i] - g[i]
+        if !m.constrlinear[i]
+            if m.constrtype[i] == :(<=)
+                g_val[i] = g[i] - m.ub[i]
+            else
+                g_val[i] = m.lb[i] - g[i]
+            end
         end
     end
-    f = MathProgBase.eval_f(m.d, solution[1:m.numVar])
-    f_val = (m.objsense == :Min ? f : -f) - solution[m.numVar+1]
 
-    max_g = maximum(g_val)
-
-    return maximum([max_g, f_val])
+    return maximum(g_val)
 
 end
 
@@ -644,7 +642,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
         addHeuristicCallback(mip_model, heuristiccallback)
         m.status = solve(mip_model)
     elseif m.algorithm == "OA"
-        (m.verbose > 0) && println("Iteration   MIP Objective   Conic Objective   Optimality Gap   Best Solution    Primal Inf.      OA Inf.")
+        (m.verbose > 0) && println("Iteration   MIP Objective     NLP Objective   Optimality Gap   Best Solution    Primal Inf.      OA Inf.")
         while (time() - start) < m.time_limit
             flush(STDOUT)
             cut_added = false
