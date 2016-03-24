@@ -74,7 +74,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     numSpecCones                # Number of special cones (i.e. SOC, Exp) in the problem
     lengthSpecCones             # Dimension of special cones
     numSOCCones                 # Number of SOC cones
-    dimSOCCones                 # Dimension of SOC cones
+    dimSOCCones                 # (Dimension-1) of SOC cones
     pajarito_var_cones          # Variable cones
     pajarito_constr_cones       # Constraint cones
     problem_type
