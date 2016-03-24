@@ -20,6 +20,7 @@
 # form.
 ######################################################
 
+__precompile__()
 module Pajarito
 
 import MathProgBase
