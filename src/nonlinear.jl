@@ -22,7 +22,7 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     cont_solver                 # Choice of Conic solver
     opt_tolerance               # Relatice optimality tolerance
     time_limit                  # Time limit
-    cut_switch                  # Cut level for OA
+    profile::Bool               # Performance profile switch
     socp_disaggregator::Bool    # SOCP disaggregator for SOC constraints
     instance::AbstractString    # Path to instance
     
@@ -42,8 +42,10 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     mip_x
     d
 
+    nlp_load_timer
+
     # CONSTRUCTOR:
-    function PajaritoModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
+    function PajaritoModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,socp_disaggregator,instance)
         m = new()
         m.verbose = verbose
         m.algorithm = algorithm
@@ -51,7 +53,7 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
         m.cont_solver = cont_solver
         m.opt_tolerance = opt_tolerance
         m.time_limit = time_limit
-        m.cut_switch = cut_switch
+        m.profile = profile
         m.socp_disaggregator = socp_disaggregator
         m.instance = instance
         return m
@@ -162,8 +164,7 @@ MathProgBase.obj_expr(d::InfeasibleNLPEvaluator) = MathProgBase.obj_expr(d.d)
 MathProgBase.constr_expr(d::InfeasibleNLPEvaluator, i::Int) = MathProgBase.constr_expr(d.d, i)
 
 # BEGIN MATHPROGBASE INTERFACE
-
-MathProgBase.NonlinearModel(s::PajaritoSolver) = PajaritoModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.cut_switch, s.socp_disaggregator, s.instance)
+MathProgBase.NonlinearModel(s::PajaritoSolver) = PajaritoModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.profile, s.socp_disaggregator, s.instance)
 
 function MathProgBase.loadproblem!(
     m::PajaritoModel, numVar, numConstr, l, u, lb, ub, sense, d)
@@ -431,6 +432,8 @@ function MathProgBase.optimize!(m::PajaritoModel)
     cputime_nlp = 0.0
     cputime_mip = 0.0
 
+    m.nlp_load_timer = 0.0
+
     populatelinearmatrix(m)
     # solve it
     # MathProgBase.optimize!(nlp_model)
@@ -456,8 +459,10 @@ function MathProgBase.optimize!(m::PajaritoModel)
     grad_f = zeros(m.numVar+1)
 
     ini_nlp_model = MathProgBase.NonlinearModel(m.cont_solver)
+    start_load = time()
     MathProgBase.loadproblem!(ini_nlp_model,
     m.numVar, m.numConstr, m.l, m.u, m.lb, m.ub, m.objsense, m.d)
+    m.nlp_load_timer += time() - start_load
 
     # pass in starting point
     #MathProgBase.setwarmstart!(nlp_model, m.solution)
@@ -517,8 +522,10 @@ function MathProgBase.optimize!(m::PajaritoModel)
 
         # set up ipopt to solve continuous relaxation
         nlp_model = MathProgBase.NonlinearModel(m.cont_solver)
+        start_load = time()
         MathProgBase.loadproblem!(nlp_model,
         m.numVar, m.numConstr, new_l, new_u, m.lb, m.ub, m.objsense, m.d)
+        m.nlp_load_timer += time() - start_load
 
         # pass in starting point
         #MathProgBase.setwarmstart!(nlp_model, m.solution)
@@ -529,8 +536,10 @@ function MathProgBase.optimize!(m::PajaritoModel)
 
         d_inf = InfeasibleNLPEvaluator(m.d, m.numConstr, m.numNLConstr, m.numVar, m.constrtype, m.constrlinear)
         inf_model = MathProgBase.NonlinearModel(m.cont_solver)
+        start_load = time()
         MathProgBase.loadproblem!(inf_model,
         m.numVar+m.numNLConstr, m.numConstr, l_inf, u_inf, m.lb, m.ub, :Min, d_inf) 
+        m.nlp_load_timer += time() - start_load
 
         #MathProgBase.setvarUB!(nlp_model, new_u)
         #MathProgBase.setvarLB!(nlp_model, new_l)
@@ -682,11 +691,14 @@ function MathProgBase.optimize!(m::PajaritoModel)
 
     (m.verbose > 0) && println("\nPajarito finished...\n")
     (m.verbose > 0) && @printf "Status            = %13s.\n" m.status
+    (m.verbose > 0) && (m.status == :Optimal) && @printf "Optimum objective = %13.5f.\n" m.objval
     (m.verbose > 0) && (m.algorithm == "OA") && @printf "Iterations        = %13d.\n" iter
     (m.verbose > 0) && @printf "Total time        = %13.5f sec.\n" (time()-start)
     (m.verbose > 0) && @printf "MIP total time    = %13.5f sec.\n" cputime_mip
-    (m.verbose > 0) && @printf "CONE total time   = %13.5f sec.\n" cputime_nlp
-    (m.verbose > 0) && (m.status == :Optimal) && @printf "Optimum objective = %13.5f.\n\n" m.objval
+    (m.verbose > 0) && @printf "NLP total time    = %13.5f sec.\n\n" cputime_nlp
+
+    (m.profile) && @printf "Profiler:\n"
+    (m.profile) && @printf "Subproblem load time = %13.5f sec.\n" m.nlp_load_timer
 
 end
 
