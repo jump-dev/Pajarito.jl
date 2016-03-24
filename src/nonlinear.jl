@@ -21,7 +21,6 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     mip_solver                  # Choice of MILP solver
     cont_solver                 # Choice of Conic solver
     opt_tolerance               # Relatice optimality tolerance
-    acceptable_opt_tolerance    # Acceptable optimality tolerance if separation fails
     time_limit                  # Time limit
     cut_switch                  # Cut level for OA
     socp_disaggregator::Bool    # SOCP disaggregator for SOC constraints
@@ -44,14 +43,13 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     d
 
     # CONSTRUCTOR:
-    function PajaritoModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,acceptable_opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
+    function PajaritoModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
         m = new()
         m.verbose = verbose
         m.algorithm = algorithm
         m.mip_solver = mip_solver
         m.cont_solver = cont_solver
         m.opt_tolerance = opt_tolerance
-        m.acceptable_opt_tolerance = acceptable_opt_tolerance
         m.time_limit = time_limit
         m.cut_switch = cut_switch
         m.socp_disaggregator = socp_disaggregator
@@ -165,7 +163,7 @@ MathProgBase.constr_expr(d::InfeasibleNLPEvaluator, i::Int) = MathProgBase.const
 
 # BEGIN MATHPROGBASE INTERFACE
 
-MathProgBase.NonlinearModel(s::PajaritoSolver) = PajaritoModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.acceptable_opt_tolerance, s.time_limit, s.cut_switch, s.socp_disaggregator, s.instance)
+MathProgBase.NonlinearModel(s::PajaritoSolver) = PajaritoModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.cut_switch, s.socp_disaggregator, s.instance)
 
 function MathProgBase.loadproblem!(
     m::PajaritoModel, numVar, numConstr, l, u, lb, ub, sense, d)
@@ -609,17 +607,18 @@ function MathProgBase.optimize!(m::PajaritoModel)
         end
         primal_infeasibility = checkInfeasibility(m, mip_solution)
         OA_infeasibility = 0.0
-        if inf_cut_generator || (optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance && !cycle_indicator) || cb != []
+        if (optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance && !cycle_indicator) || cb != []
             OA_infeasibility = addCuttingPlanes!(m, mip_model, separator, jac_I, jac_J, jac_V, grad_f, cb, mip_solution)
             #(m.cut_switch > 0) && addCuttingPlanes!(m, mip_model, mip_solution, jac_I, jac_J, jac_V, grad_f, cb, mip_solution)
             cut_added = true
         else
-            if optimality_gap < (abs(mip_objval) + 1e-5)*m.acceptable_opt_tolerance
+            if optimality_gap < (abs(mip_objval) + 1e-5)*m.opt_tolerance
                 (m.verbose > 1) && println("MINLP Solved")
                 m.status = :Optimal
                 m.iterations = iter
                 (m.verbose > 1) && println("Number of OA iterations: $iter")
-            else 
+            else
+                @assert cycle_indicator 
                 m.status = :Suboptimal
             end
         end

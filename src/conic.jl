@@ -46,7 +46,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     mip_solver                  # Choice of MILP solver
     cont_solver                 # Choice of Conic solver
     opt_tolerance               # Relatice optimality tolerance
-    acceptable_opt_tolerance    # Acceptable optimality tolerance if separation fails
     time_limit                  # Time limit
     cut_switch                  # Cut level for OA
     socp_disaggregator::Bool    # SOCP disaggregator for SOC constraints
@@ -81,14 +80,13 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     is_conic_solver             # Indicator if subproblem solver is conic, ECOS, SCS or Mosek
 
     # CONSTRUCTOR:
-    function PajaritoConicModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,acceptable_opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
+    function PajaritoConicModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
         m = new()
         m.verbose = verbose
         m.algorithm = algorithm
         m.mip_solver = mip_solver
         m.cont_solver = cont_solver
         m.opt_tolerance = opt_tolerance
-        m.acceptable_opt_tolerance = acceptable_opt_tolerance
         m.time_limit = time_limit
         m.cut_switch = cut_switch
         m.socp_disaggregator = socp_disaggregator
@@ -98,7 +96,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 end
 
 # BEGIN MATHPROGBASE INTERFACE
-MathProgBase.ConicModel(s::PajaritoSolver) = PajaritoConicModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.acceptable_opt_tolerance, s.time_limit, s.cut_switch, s.socp_disaggregator, s.instance)
+MathProgBase.ConicModel(s::PajaritoSolver) = PajaritoConicModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.cut_switch, s.socp_disaggregator, s.instance)
 
 function MathProgBase.loadproblem!(
     m::PajaritoConicModel, c, A, b, constr_cones, var_cones)
@@ -974,12 +972,13 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             #setValue(m.mip_x, mip_solution)
             cut_added = true
         else
-            if optimality_gap < (abs(mip_objval) + 1e-5)*m.acceptable_opt_tolerance
+            if optimality_gap < (abs(mip_objval) + 1e-5)*m.opt_tolerance
                 (m.verbose > 1) && println("MINLP Solved")
                 m.status = :Optimal
                 (m.verbose > 1) && println("CPUTIME: $(time() - start)")
                 (m.verbose > 1) && println("Number of OA iterations: $iter")
             else #cycle_indicator
+                @assert cycle_indicator
                 m.status = :Suboptimal
             end
             m.iterations = iter
