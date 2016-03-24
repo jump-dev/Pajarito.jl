@@ -775,6 +775,23 @@ function compareIntegerSolutions(m::PajaritoConicModel, sol1, sol2)
     return round(sol1[int_ind]) == round(sol2[int_ind])
 end
 
+function completeSOCPDisaggregator(m::PajaritoConicModel, solution)
+
+    new_solution = copy(solution)
+    if m.socp_disaggregator
+        for (cone,ind) in m.pajarito_var_cones
+            if cone == :SOC
+                for i in ind[2:end]
+                    push!(new_solution, solution[i]^2)
+                end
+            end
+        end
+    end
+
+    return new_solution
+
+end
+
 function MathProgBase.optimize!(m::PajaritoConicModel)
 
     # TO CLASSIFY THE PROBLEM TYPES
@@ -830,6 +847,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     prev_mip_solution = zeros(m.numVar)
     cut_added = false
 
+    conic_status = :Infeasible
+    conic_primal = zeros(m.numVar)
+    
     function coniccallback(cb)
         if cb != []
             mip_objval = -Inf #MathProgBase.cbgetobj(cb)
@@ -881,7 +901,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             separator = getDualSeparator(m, conic_dual, old_variable_index_map)
         # MIDCP algorithm
         else
-
+            conic_status = :Infeasible
             # PHASE 1 INFEASIBILITY PROBLEM
             inf_dcp_model = MathProgBase.ConicModel(m.cont_solver)
             (old_variable_index_map, mip_solution_warmstart) = loadFirstPhaseConicModel(m,inf_dcp_model, mip_solution)
@@ -926,15 +946,15 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                     start_conic = time()
                     MathProgBase.optimize!(dcp_model)
                     cputime_conic += time() - start_conic
-                    dcp_status = MathProgBase.status(dcp_model)
-                    (m.verbose > 1) && println("DCP Status: $dcp_status from conic solver.")
-                    if !(dcp_status == :Optimal || dcp_status == :Suboptimal)
-                        (m.verbose > 1) && println("ERROR: Unrecognized status $dcp_status from conic solver.")
+                    conic_status = MathProgBase.status(dcp_model)
+                    (m.verbose > 1) && println("DCP Status: $conic_status from conic solver.")
+                    if !(conic_status == :Optimal || conic_status == :Suboptimal)
+                        (m.verbose > 1) && println("ERROR: Unrecognized status $conic_status from conic solver.")
                         m.status = :Error
                         return
                     end
 
-                    (dcp_primal, conic_objval, dcp_dual) = getConicModelSolution(m,dcp_model, old_variable_index_map, mip_solution, c_sub, A_sub)
+                    (conic_primal, conic_objval, dcp_dual) = getConicModelSolution(m,dcp_model, old_variable_index_map, mip_solution, c_sub, A_sub)
 
                     # Release the dcp_model if applicable
                     if applicable(MathProgBase.freemodel!,dcp_model)
@@ -944,14 +964,14 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                     # KEEP TRACK OF BEST KNOWN INTEGER FEASIBLE SOLUTION
                     if conic_objval < m.objval
                         m.objval = conic_objval
-                        m.solution = dcp_primal[1:m.numVar]
+                        m.solution = conic_primal[1:m.numVar]
                     end 
 
                     #(m.verbose > 0) && println("DCP Objval: $conic_objval")
                     inf_cut_generator = false
                     
                     # Update separator to primal solution
-                    separator = dcp_primal
+                    separator = conic_primal
                 end
             end
      
@@ -988,9 +1008,32 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         (cycle_indicator && m.status != :Optimal) && warn("Mixed-integer cycling detected, terminating Pajarito...")
     end
 
+    function heuristiccallback(cb)
+        if conic_status == :Optimal
+            for i = 1:m.numVar
+                setSolutionValue!(cb, m.mip_x[i], conic_primal[i])
+            end
+            if m.socp_disaggregator
+                k = 1
+                for (cone,ind) in m.pajarito_var_cones
+                    if cone == :SOC
+                        j = 1
+                        for i in ind[2:end]
+                            setSolutionValue!(cb, m.mip_t[k][j], conic_primal[i]^2)
+                            j += 1
+                        end
+                        k += 1
+                    end
+                end
+            end
+            addSolution(cb)
+        end
+    end
+
     # BC
     if m.algorithm == "BC"
         addLazyCallback(mip_model,coniccallback)
+        addHeuristicCallback(mip_model, heuristiccallback)
         m.status = solve(mip_model)
     # OA
     elseif m.algorithm == "OA"
@@ -1000,8 +1043,11 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             cut_added = false
             # gc()
             # WARMSTART MIP FROM UPPER BOUND
-            if m.objval != Inf && applicable(MathProgBase.setwarmstart!, getInternalModel(mip_model), m.solution)
-                MathProgBase.setwarmstart!(getInternalModel(mip_model), m.solution)
+            if m.objval < Inf
+                warmstart_solution = completeSOCPDisaggregator(m, m.solution) 
+                if applicable(MathProgBase.setwarmstart!, getInternalModel(mip_model), warmstart_solution)
+                    MathProgBase.setwarmstart!(getInternalModel(mip_model), warmstart_solution)
+                end
             end
 
             start_mip = time()
