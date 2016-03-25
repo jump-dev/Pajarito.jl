@@ -87,6 +87,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # CONSTRUCTOR:
     function PajaritoConicModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,disaggregate_soc,instance)
         m = new()
+        m.solution = Float64[]
         m.verbose = verbose
         m.algorithm = algorithm
         m.mip_solver = mip_solver
@@ -1096,13 +1097,13 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             cut_added = false
             # gc()
             # WARMSTART MIP FROM UPPER BOUND
-            if m.objval < Inf
+            if !any(isnan,m.solution) && !isempty(m.solution)
                 warmstart_solution = completeSOCPDisaggregator(m, m.solution) 
                 if applicable(MathProgBase.setwarmstart!, getInternalModel(mip_model), warmstart_solution)
                     MathProgBase.setwarmstart!(getInternalModel(mip_model), warmstart_solution)
                 end
             end
-
+            # solve MIP model
             start_mip = time()
             mip_status = solve(mip_model)
             cputime_mip += time() - start_mip
