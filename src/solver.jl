@@ -14,10 +14,10 @@ immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     cont_solver                 # Choice of Conic solver
     opt_tolerance               # Relatice optimality tolerance
     time_limit                  # Time limit
-    cut_switch                  # Cut level for OA
+    profile::Bool               # Performance profile switch
     socp_disaggregator::Bool    # SOCP disaggregator for SOC constraints
     instance::AbstractString    # Path to instance
 end
-PajaritoSolver(;verbose=0,algorithm="OA",mip_solver=MathProgBase.defaultMIPsolver,cont_solver=MathProgBase.defaultNLPsolver,opt_tolerance=1e-5,time_limit=60*60*10,cut_switch=1,socp_disaggregator=false,instance="") = PajaritoSolver(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
+PajaritoSolver(;verbose=0,algorithm="OA",mip_solver=MathProgBase.defaultMIPsolver,cont_solver=MathProgBase.defaultNLPsolver,opt_tolerance=1e-5,time_limit=60*60*10,profile=false,socp_disaggregator=false,instance="") = PajaritoSolver(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,socp_disaggregator,instance)
 
 

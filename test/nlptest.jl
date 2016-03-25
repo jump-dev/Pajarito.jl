@@ -196,7 +196,7 @@ if algorithm == "OA"
 facts("Print test") do
 for mip_solver in mip_solvers
 context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-    m = Model(solver=PajaritoSolver(verbose=1,algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
+    m = Model(solver=PajaritoSolver(verbose=1,profile=true,algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
 
     @defVar(m, x >= 0, start = 1, Int)
     @defVar(m, y >= 0, start = 1)

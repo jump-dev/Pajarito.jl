@@ -47,7 +47,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cont_solver                 # Choice of Conic solver
     opt_tolerance               # Relatice optimality tolerance
     time_limit                  # Time limit
-    cut_switch                  # Cut level for OA
+    profile::Bool               # Performance profile switch
     socp_disaggregator::Bool    # SOCP disaggregator for SOC constraints
     instance::AbstractString    # Path to instance
 
@@ -79,8 +79,13 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     problem_type
     is_conic_solver             # Indicator if subproblem solver is conic, ECOS, SCS or Mosek
 
+    # TIMERS FOR PROFILING
+    remove_timer
+    prep_timer
+    nlp_load_timer
+
     # CONSTRUCTOR:
-    function PajaritoConicModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,cut_switch,socp_disaggregator,instance)
+    function PajaritoConicModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,socp_disaggregator,instance)
         m = new()
         m.verbose = verbose
         m.algorithm = algorithm
@@ -88,7 +93,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.cont_solver = cont_solver
         m.opt_tolerance = opt_tolerance
         m.time_limit = time_limit
-        m.cut_switch = cut_switch
+        m.profile = profile
         m.socp_disaggregator = socp_disaggregator
         m.instance = instance
         return m
@@ -96,7 +101,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 end
 
 # BEGIN MATHPROGBASE INTERFACE
-MathProgBase.ConicModel(s::PajaritoSolver) = PajaritoConicModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.cut_switch, s.socp_disaggregator, s.instance)
+MathProgBase.ConicModel(s::PajaritoSolver) = PajaritoConicModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.profile, s.socp_disaggregator, s.instance)
 
 function MathProgBase.loadproblem!(
     m::PajaritoConicModel, c, A, b, constr_cones, var_cones)
@@ -218,7 +223,9 @@ function addSlackValues(m::PajaritoConicModel, separator)
     return [separator[1:m.numVar_ini];separator_slack]
 end
 
-function preprocessIntegersOut(c_ini, A_ini, b_ini, mip_solution, vartype, var_cones, numVar)
+function preprocessIntegersOut(m, c_ini, A_ini, b_ini, mip_solution, vartype, var_cones, numVar)
+
+    start = time()
 
     c_new = copy(c_ini)
     A_new = copy(A_ini)
@@ -226,14 +233,14 @@ function preprocessIntegersOut(c_ini, A_ini, b_ini, mip_solution, vartype, var_c
 
     k = 1
     removableColumnIndicator = [false for i in 1:numVar]
-    new_variable_index_map = [-1 for i in 1:numVar]
-    old_variable_index_map = Any[]
+    new_variable_index_map = -ones(Int, numVar)
+    old_variable_index_map = zeros(Int, numVar - m.numIntVar)
     for i in 1:numVar
         if vartype[i] == :Int || vartype[i] == :Bin
             removableColumnIndicator[i] = true
         else
             new_variable_index_map[i] = k
-            push!(old_variable_index_map, i)
+            old_variable_index_map[k] = i
             k += 1
         end   
     end
@@ -257,20 +264,26 @@ function preprocessIntegersOut(c_ini, A_ini, b_ini, mip_solution, vartype, var_c
     b_new = b_new - A_new[:,removableColumnIndicator]*mip_solution[removableColumnIndicator]
     A_new = A_new[:,!removableColumnIndicator]
 
+    m.prep_timer += time() - start
+
     return c_new, A_new, b_new, new_var_cones, old_variable_index_map, new_variable_index_map
 
 end
 
-function removeRedundantRows(constr_cones, A_new, b_new)
+function removeRedundantRows(m,constr_cones, A_new, b_new)
+
+    start = time()
 
     @assert size(A_new, 1) == length(b_new)
     (numConstr,numVar) = size(A_new)
     emptyRow = [false for i in 1:numConstr]
+    numFullRows = 0
     for i = 1:numConstr
         emptyRowInd = true
         for j = 1:numVar
             if abs(A_new[i,j]) >= 1e-5
                 emptyRowInd = false
+                numFullRows += 1
                 break
             end
         end
@@ -278,12 +291,12 @@ function removeRedundantRows(constr_cones, A_new, b_new)
     end
 
     k = 1
-    new_constraint_index_map = [-1 for i in 1:numConstr]
-    old_constraint_index_map = Any[]
+    new_constraint_index_map = -ones(Int,numConstr)
+    old_constraint_index_map = zeros(Int, numFullRows)
     for i in 1:numConstr
         if !emptyRow[i]
             new_constraint_index_map[i] = k
-            push!(old_constraint_index_map, i)
+            old_constraint_index_map[k] = i
             k += 1
         end   
     end
@@ -317,6 +330,8 @@ function removeRedundantRows(constr_cones, A_new, b_new)
             end
         end
     end
+
+    m.remove_timer += time() - start
 
     return new_constr_cones, A_new[!emptyRow,:], b_new[!emptyRow]
 end
@@ -400,12 +415,13 @@ function loadFirstPhaseConicModel(m::PajaritoConicModel, inf_dcp_model, mip_solu
     infNumVar = m.numVar + 2*m.numSpecCones
 
     (c_new, A_new, b_new, new_var_cones, old_variable_index_map, new_variable_index_map) = 
-        preprocessIntegersOut(c_new, A_new, b_new, extended_mip_solution, vartype, inf_var_cones, infNumVar)
+        preprocessIntegersOut(m, c_new, A_new, b_new, extended_mip_solution, vartype, inf_var_cones, infNumVar)
 
-    (new_constr_cones, A_new, b_new) = removeRedundantRows(inf_constr_cones, A_new, b_new)
+    (new_constr_cones, A_new, b_new) = removeRedundantRows(m, inf_constr_cones, A_new, b_new)
 
+    start = time()
     MathProgBase.loadproblem!(inf_dcp_model, c_new, A_new, b_new, new_constr_cones, new_var_cones)
-
+    m.nlp_load_timer += time() - start
 
     mip_solution_warmstart = extendMIPSolution(m, mip_solution, new_variable_index_map)
 
@@ -473,26 +489,32 @@ function loadConicModel(m::PajaritoConicModel, conic_model, mip_solution)
 
 
     (c_new, A_new, b_new, new_var_cones, old_variable_index_map, new_variable_index_map) = 
-        preprocessIntegersOut(c_new, A_new, b_new, mip_solution, m.vartype, conic_var_cones, m.numVar)
+        preprocessIntegersOut(m, c_new, A_new, b_new, mip_solution, m.vartype, conic_var_cones, m.numVar)
 
-    (new_constr_cones, A_new, b_new) = removeRedundantRows(conic_constr_cones, A_new, b_new)
+    (new_constr_cones, A_new, b_new) = removeRedundantRows(m, conic_constr_cones, A_new, b_new)
     @assert size(A_new,1) == length(b_new)
 
+    start = time()
     MathProgBase.loadproblem!(conic_model, c_new, A_new, b_new, new_constr_cones, new_var_cones)
+    m.nlp_load_timer += time() - start
 
     return old_variable_index_map, c_new, A_new
 end
 
 function loadRelaxedConicModel(m::PajaritoConicModel, conic_model)
-    
+   
+    start = time() 
     MathProgBase.loadproblem!(conic_model, m.c, m.A, m.b, m.pajarito_constr_cones, m.pajarito_var_cones)
+    m.nlp_load_timer += time() - start
 
 end
 
 
 function loadInitialRelaxedConicModel(m::PajaritoConicModel, conic_model)
-    
+   
+    start = time() 
     MathProgBase.loadproblem!(conic_model, m.c_ini, m.A_ini, m.b_ini, m.constr_cones_ini, m.var_cones_ini)
+    m.nlp_load_timer += time() - start
 
 end
 
@@ -804,6 +826,11 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     cputime_mip = 0.0
     cputime_conic = 0.0
+    cputime_load = 0.0
+
+    m.prep_timer = 0.0
+    m.remove_timer = 0.0
+    m.nlp_load_timer = 0.0
 
     mip_model = Model(solver=m.mip_solver)
     loadMIPModel(m, mip_model)
@@ -871,7 +898,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         if m.is_conic_solver
 
             conic_model = MathProgBase.ConicModel(m.cont_solver)
+            start_load = time()
             (old_variable_index_map, c_sub, A_sub) = loadConicModel(m, conic_model, mip_solution)
+            cputime_load += time() - start_load
 
             start_conic = time()
             MathProgBase.optimize!(conic_model)
@@ -904,7 +933,10 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             conic_status = :Infeasible
             # PHASE 1 INFEASIBILITY PROBLEM
             inf_dcp_model = MathProgBase.ConicModel(m.cont_solver)
+            start_load = time()
             (old_variable_index_map, mip_solution_warmstart) = loadFirstPhaseConicModel(m,inf_dcp_model, mip_solution)
+            cputime_load += time() - start_load
+
             if applicable(MathProgBase.setwarmstart!,inf_dcp_model, mip_solution_warmstart)
                 MathProgBase.setwarmstart!(inf_dcp_model, mip_solution_warmstart)
             end
@@ -938,7 +970,10 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
                     # PHASE 2 REDUCED PROBLEM
                     dcp_model = MathProgBase.ConicModel(m.cont_solver)
+
+                    start_load = time()
                     (old_variable_index_map, c_sub, A_sub) = loadConicModel(m, dcp_model, mip_solution)
+                    cputime_load += time() - start_load
 
                     if applicable(MathProgBase.setwarmstart!,dcp_model, dcp_model_warmstart[1:(m.numVar-m.numIntVar)])
                         MathProgBase.setwarmstart!(dcp_model, dcp_model_warmstart[1:(m.numVar-m.numIntVar)])
@@ -1083,11 +1118,18 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     (m.verbose > 0) && println("\nPajarito finished...\n")
     (m.verbose > 0) && @printf "Status            = %13s.\n" m.status
+    (m.verbose > 0) && (m.status == :Optimal) && @printf "Optimum objective = %13.5f.\n" m.objval
     (m.verbose > 0) && (m.algorithm == "OA") && @printf "Iterations        = %13d.\n" iter
     (m.verbose > 0) && @printf "Total time        = %13.5f sec.\n" (time()-start)
     (m.verbose > 0) && @printf "MIP total time    = %13.5f sec.\n" cputime_mip
-    (m.verbose > 0) && @printf "CONE total time   = %13.5f sec.\n" cputime_conic
-    (m.verbose > 0) && (m.status == :Optimal) && @printf "Optimum objective = %13.5f.\n\n" m.objval
+    (m.verbose > 0) && @printf "CONE total time   = %13.5f sec.\n\n" cputime_conic
+    
+    (m.profile) && @printf "Profiler:\n"
+    (m.profile) && @printf "Preparing Conic subproblem   = %13.5f sec.\n" cputime_load
+    (m.profile) && @printf " - Preprocess out integers   = %13.5f sec.\n" m.prep_timer
+    (m.profile) && @printf " - Redundant row elimination = %13.5f sec.\n\n" m.remove_timer
+    (m.profile) && @printf " - Subproblem load time      = %13.5f sec.\n" m.nlp_load_timer
+
 
 end
 
