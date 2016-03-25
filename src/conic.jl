@@ -36,7 +36,7 @@ using JuMP
 type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # SOLUTION DATA:
     solution::Vector{Float64}   # Vector containing solution
-    status                      # Temination status of algorithm
+    status                      # Termination status of algorithm
     objval::Float64             # Best found objective corresponding to solution
     iterations::Int             # Number of outer approximation iterations if algorithm is OA
 
@@ -45,10 +45,10 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     algorithm                   # Choice of algorithm: "OA" or "BC"
     mip_solver                  # Choice of MILP solver
     cont_solver                 # Choice of Conic solver
-    opt_tolerance               # Relatice optimality tolerance
+    opt_tolerance               # Relative optimality tolerance
     time_limit                  # Time limit
     profile::Bool               # Performance profile switch
-    disaggregate_soc::Symbol    # SOCP disaggregator for SOC constraints
+    disaggregate_soc::Symbol    # Disaggregate SOC constraints following Vielma et al.
     instance::AbstractString    # Path to instance
 
     # PROBLEM DATA
@@ -77,7 +77,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     pajarito_var_cones          # Variable cones
     pajarito_constr_cones       # Constraint cones
     problem_type
-    is_conic_solver             # Indicator if subproblem solver is conic, ECOS, SCS or Mosek
+    is_conic_solver             # Indicator if subproblem solver is true conic solver
 
     # TIMERS FOR PROFILING
     remove_timer

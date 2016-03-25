@@ -20,7 +20,7 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     algorithm                   # Choice of algorithm: "OA" or "BC"
     mip_solver                  # Choice of MILP solver
     cont_solver                 # Choice of Conic solver
-    opt_tolerance               # Relatice optimality tolerance
+    opt_tolerance               # Relative optimality tolerance
     time_limit                  # Time limit
     profile::Bool               # Performance profile switch
     disaggregate_soc::Symbol    # SOCP disaggregator for SOC constraints
@@ -541,7 +541,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
 
         #MathProgBase.setvarUB!(nlp_model, new_u)
         #MathProgBase.setvarLB!(nlp_model, new_l)
-        # optiimize the NLP problem
+        # optimize the NLP problem
         start_nlp = time()
         MathProgBase.optimize!(nlp_model)
         cputime_nlp += time() - start_nlp
