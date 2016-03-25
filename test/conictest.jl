@@ -46,6 +46,24 @@ end
     end
 end
 
+facts("Infeasible Conic problem") do
+
+    for mip_solver in mip_solvers
+        for conic_solver in conic_solvers
+context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
+            x = Convex.Variable(1,:Int)
+
+            problem = Convex.maximize( 3x,
+                                x >= 4,
+                                x^2 <= 9)
+            Convex.solve!(problem, PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=conic_solver))
+            @fact problem.status --> :Infeasible
+end
+        end
+    end
+
+end
+
 facts("Univariate maximization problem") do
 
     for mip_solver in mip_solvers
