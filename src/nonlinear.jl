@@ -5,7 +5,6 @@
 
 using JuMP
 
-# ASSUMES LINEAR OBJECTIVE
 type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     solution::Vector{Float64}
     status
@@ -469,25 +468,34 @@ function MathProgBase.optimize!(m::PajaritoModel)
     start_nlp = time()
     MathProgBase.optimize!(ini_nlp_model)
     cputime_nlp += time() - start_nlp
-    ini_nlp_status = MathProgBase.status(ini_nlp_model)
-    if ini_nlp_status == :Infeasible || ini_nlp_status == :InfeasibleOrUnbounded
-        m.status = :Infeasible
-        return
-    elseif ini_nlp_status == :Unbounded
-        m.status = :Unbounded
-        return
-    end 
 
+    ini_nlp_status = MathProgBase.status(ini_nlp_model)
+    if ini_nlp_status == :Optimal || ini_nlp_status == :Suboptimal
+        separator = MathProgBase.getsolution(ini_nlp_model)
+        addCuttingPlanes!(m, mip_model, separator, jac_I, jac_J, jac_V, grad_f, [], zeros(m.numVar+1))
+    elseif ini_nlp_status == :Infeasible
+        warn("Initial NLP Relaxation Infeasible.")
+        m.status = :Infeasible
+        m.solution = fill(NaN, m.numVar)
+        return     
+    # TODO Figure out the conditions for this to hold!  
+    elseif ini_nlp_status == :Unbounded
+        warn("Initial NLP Relaxation Unbounded.")
+        m.status = :InfeasibleOrUnbounded
+        m.solution = fill(NaN, m.numVar)
+        return
+    else 
+        warn("NLP Solver Failure.")
+        m.status = :Error
+        m.solution = fill(NaN, m.numVar)
+        return
+    end
     ini_nlp_objval = MathProgBase.getobjval(ini_nlp_model)
 
     (m.verbose > 0) && println("\nPajarito started...\n")
     (m.verbose > 0) && println("MINLP algorithm $(m.algorithm) is chosen.")
     (m.verbose > 0) && println("MINLP has $(m.numVar) variables, $(m.numConstr - m.numNLConstr) linear constraints, $(m.numNLConstr) nonlinear constraints.")
     (m.verbose > 0) && @printf "Initial objective = %13.5f.\n\n" ini_nlp_objval
-
-    separator = MathProgBase.getsolution(ini_nlp_model)
-    addCuttingPlanes!(m, mip_model, separator, jac_I, jac_J, jac_V, grad_f, [], zeros(m.numVar+1))
-
 
     m.status = :UserLimit
     m.objval = Inf
@@ -547,7 +555,6 @@ function MathProgBase.optimize!(m::PajaritoModel)
         cputime_nlp += time() - start_nlp
         nlp_status = MathProgBase.status(nlp_model)
         nlp_objval = -Inf
-        inf_cut_generator = false
         #separator::Vector{Float64}
         if nlp_status == :Optimal
             (m.verbose > 2) && println("NLP Solved")
@@ -570,7 +577,6 @@ function MathProgBase.optimize!(m::PajaritoModel)
             end
 
         else
-            inf_cut_generator = true
             # Create the warm start solution for inf model
             inf_initial_solution = zeros(m.numVar + m.numNLConstr);
             inf_initial_solution[1:m.numVar] = mip_solution[1:m.numVar] 
@@ -600,9 +606,11 @@ function MathProgBase.optimize!(m::PajaritoModel)
             start_nlp = time()
             MathProgBase.optimize!(inf_model)
             cputime_nlp += time() - start_nlp
-            if MathProgBase.status(inf_model) == :Infeasible
-                (m.verbose > 2) && println("INF NLP Infeasible")
-                m.status = :Infeasible
+            inf_model_status = MathProgBase.status(inf_model)
+            if inf_model_status != :Optimal && inf_model_stauts != :Suboptimal
+                warn("NLP Solver Failure.")
+                m.status = :Error
+                m.solution = fill(NaN, m.numVar)
                 return
             end
             (m.verbose > 2) && println("INF NLP Solved")
@@ -664,6 +672,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
             if mip_status == :Infeasible || mip_status == :InfeasibleOrUnbounded
                 (m.verbose > 1) && println("MIP Infeasible")
                 m.status = :Infeasible
+                m.solution = fill(NaN, m.numVar)
                 return
             else 
                 (m.verbose > 1) && println("MIP Status: $mip_status")

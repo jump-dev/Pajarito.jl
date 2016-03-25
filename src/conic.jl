@@ -847,17 +847,29 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     cputime_conic += time() - start_conic
 
     ini_conic_status = MathProgBase.status(ini_conic_model)
-    ini_conic_objval = MathProgBase.getobjval(ini_conic_model)
     if ini_conic_status == :Optimal || ini_conic_status == :Suboptimal
         separator = MathProgBase.getsolution(ini_conic_model)
         separator = addSlackValues(m, separator)
         @assert length(separator) == m.numVar
         addPrimalCuttingPlanes!(m, mip_model, separator, [], zeros(m.numVar))
-    else
-        (m.verbose > 1) && println("Conic Relaxation Infeasible")
+    elseif ini_conic_status == :Infeasible
+        warn("Initial Conic Relaxation Infeasible.")
         m.status = :Infeasible
-        return       
+        m.solution = fill(NaN, m.numVar)
+        return    
+    # TODO Figure out the details for this condition to hold!   
+    elseif ini_conic_status == :Unbounded
+        warn("Initial Conic Relaxation Unbounded.")
+        m.status = :InfeasibleOrUnbounded
+        m.solution = fill(NaN, m.numVar)
+        return
+    else 
+        warn("Conic Solver Failure.")
+        m.status = :Error
+        m.solution = fill(NaN, m.numVar)
+        return
     end
+    ini_conic_objval = MathProgBase.getobjval(ini_conic_model)
 
     (m.verbose > 0) && println("\nPajarito started...\n")
     (m.verbose > 0) && println("MICONE algorithm $(m.algorithm) is chosen.")
@@ -917,6 +929,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             if !(conic_status == :Optimal || conic_status == :Suboptimal || conic_status == :Infeasible)
                 (m.verbose > 1) && println("ERROR: Unrecognized status $conic_status from conic solver.")
                 m.status = :Error
+                m.solution = fill(NaN, m.numVar)
                 return
             end
 
@@ -951,10 +964,11 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             MathProgBase.optimize!(inf_dcp_model)
             cputime_conic += time() - start_conic
 
-            inf_cut_generator = true
-            if MathProgBase.status(inf_dcp_model) == :Infeasible
-                (m.verbose > 1) && println("INF DCP Infeasible")
-                m.status = :Infeasible
+            inf_dcp_status = MathProgBase.status(inf_dcp_model)
+            if inf_dcp_status != :Optimal && inf_dcp_status != :Suboptimal
+                warn("Conic Solver Failure.")
+                m.status = :Error
+                m.solution = fill(NaN, m.numVar)
                 return
             else
                 (separator, inf_conic_objval) = getFirstPhaseConicModelSolution(m,inf_dcp_model, old_variable_index_map, mip_solution)
@@ -966,7 +980,6 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
                 if inf_conic_objval > 1e-4
                     (m.verbose > 1) && println("INF DCP Objval: $inf_conic_objval")
-                    inf_cut_generator = true
                 else
                     dcp_model_warmstart = Float64[]
                     for i in 1:m.numVar
@@ -993,6 +1006,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                     if !(conic_status == :Optimal || conic_status == :Suboptimal)
                         (m.verbose > 1) && println("ERROR: Unrecognized status $conic_status from conic solver.")
                         m.status = :Error
+                        m.solution = fill(NaN, m.numVar)
                         return
                     end
 
@@ -1008,9 +1022,6 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                         m.objval = conic_objval
                         m.solution = conic_primal[1:m.numVar]
                     end 
-
-                    #(m.verbose > 0) && println("DCP Objval: $conic_objval")
-                    inf_cut_generator = false
                     
                     # Update separator to primal solution
                     separator = conic_primal
@@ -1098,6 +1109,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             if mip_status == :Infeasible || mip_status == :InfeasibleOrUnbounded
                 (m.verbose > 1) && println("MIP Infeasible")
                 m.status = :Infeasible
+                m.solution = fill(NaN, m.numVar)
                 return
             else 
                 (m.verbose > 1) && println("MIP Status: $mip_status")
