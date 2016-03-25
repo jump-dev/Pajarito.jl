@@ -38,7 +38,7 @@ All solvers can have their parameters specified through their corresponding Juli
 
 ## Supported algorithms
 
-Pajarito supports two algorithms: BC for a branch and cut algorithm and OA for polyhedral outer approximation algorithm. They can be specified as strings through the `algorithm` flag, i.e. `PajaritoSolver(algorithm="OA")`. When using branch and cut, the mixed-integer linear subproblem solver must support callbacks.
+Pajarito supports two algorithms: BC for a branch and cut algorithm and OA for a polyhedral outer approximation algorithm. They can be specified as strings through the `algorithm` flag, i.e. `PajaritoSolver(algorithm="OA")`. When using branch and cut, the mixed-integer linear subproblem solver must support callbacks.
 
 ## Pajarito solver options
 
