@@ -111,7 +111,7 @@ end
 
 end
 
-facts("SOCP disaggregator test") do
+facts("Turn off SOC disaggregator test") do
 
     for mip_solver in mip_solvers
         for conic_solver in conic_solvers
@@ -127,7 +127,7 @@ context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
                                exp(y) + x <= 7)
 
 
-            Convex.solve!(problem, PajaritoSolver(algorithm=algorithm,socp_disaggregator=true,mip_solver=mip_solver,cont_solver=conic_solver)) 
+            Convex.solve!(problem, PajaritoSolver(algorithm=algorithm,disaggregate_soc=false,mip_solver=mip_solver,cont_solver=conic_solver)) 
 
             @fact problem.status --> :Optimal
             @fact Convex.evaluate(x) --> roughly(2.0, TOL)

@@ -48,7 +48,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     opt_tolerance               # Relatice optimality tolerance
     time_limit                  # Time limit
     profile::Bool               # Performance profile switch
-    socp_disaggregator::Bool    # SOCP disaggregator for SOC constraints
+    disaggregate_soc::Symbol    # SOCP disaggregator for SOC constraints
     instance::AbstractString    # Path to instance
 
     # PROBLEM DATA
@@ -65,7 +65,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     constr_cones_ini
     var_cones_ini
     mip_x                       # Original variables for the MILP model
-    mip_t                       # SOCP disaggregator variables if socp_disaggregator is true
+    mip_t                       # SOCP disaggregator variables if disaggregate_soc is true
     l::Vector{Float64}          # Variable lower bounds
     u::Vector{Float64}          # Variable upper bounds
     vartype::Vector{Symbol}     # Vector containing variable types, :Bin, :Cont, :Int
@@ -85,7 +85,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     nlp_load_timer
 
     # CONSTRUCTOR:
-    function PajaritoConicModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,socp_disaggregator,instance)
+    function PajaritoConicModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,disaggregate_soc,instance)
         m = new()
         m.verbose = verbose
         m.algorithm = algorithm
@@ -94,20 +94,23 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.opt_tolerance = opt_tolerance
         m.time_limit = time_limit
         m.profile = profile
-        m.socp_disaggregator = socp_disaggregator
+        m.disaggregate_soc = disaggregate_soc
         m.instance = instance
         return m
     end
 end
 
 # BEGIN MATHPROGBASE INTERFACE
-MathProgBase.ConicModel(s::PajaritoSolver) = PajaritoConicModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.profile, s.socp_disaggregator, s.instance)
+MathProgBase.ConicModel(s::PajaritoSolver) = PajaritoConicModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.profile, s.disaggregate_soc, s.instance)
 
 function MathProgBase.loadproblem!(
     m::PajaritoConicModel, c, A, b, constr_cones, var_cones)
 
     # Check if the cont_solver is a conic solver
     m.is_conic_solver = (applicable(MathProgBase.ConicModel, m.cont_solver) && m.cont_solver != MathProgBase.defaultNLPsolver)
+
+    # Keep default soc disaggregate only if conic solver
+    m.disaggregate_soc = (m.is_conic_solver && m.disaggregate_soc == :default) ? Symbol("true") : Symbol("false")
 
     # Wrap nonlinear solver with ConicNonlinearBridge
     m.cont_solver = (m.is_conic_solver ? m.cont_solver : ConicNLPWrapper(nlp_solver=m.cont_solver))
@@ -585,7 +588,7 @@ function addPrimalCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
     end
     for (cone, ind) in m.pajarito_var_cones
         if cone == :SOC
-            if !m.socp_disaggregator
+            if m.disaggregate_soc != :true
                 f = getSOCValue(ind, separator)
                 # IF ALL HAVE DIVISION BY ZERO, IT MUST BE FEASIBLE.
                 if getSOCNormValue(ind, separator) == 0.0
@@ -693,7 +696,7 @@ function loadMIPModel(m::PajaritoConicModel, mip_model)
     t = Array(Vector{Variable},m.numSOCCones)
     k = 1
     for (cone, ind) in m.pajarito_var_cones
-        if m.socp_disaggregator && cone == :SOC
+        if m.disaggregate_soc == :true && cone == :SOC
             @defVar(mip_model, 0.0 <= t[k][j=1:m.dimSOCCones[k]] <= Inf)
             @addConstraint(mip_model, sum{t[k][i], i in 1:m.dimSOCCones[k]} - x[ind[1]] <= 0.0)      
             k += 1        
@@ -800,7 +803,7 @@ end
 function completeSOCPDisaggregator(m::PajaritoConicModel, solution)
 
     new_solution = copy(solution)
-    if m.socp_disaggregator
+    if m.disaggregate_soc == :true
         for (cone,ind) in m.pajarito_var_cones
             if cone == :SOC
                 for i in ind[2:end]
@@ -885,6 +888,10 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             mip_objval = getObjectiveValue(mip_model)
             mip_solution = getValue(m.mip_x)
         end
+
+        # TODO Enable this after extensive testing!
+        # int_ind = filter(i->m.vartype[i] == :Int || m.vartype[i] == :Bin, 1:m.numVar)
+        # mip_solution[int_ind] = round(mip_solution[int_ind])        
 
         conic_objval = Inf
 
@@ -1048,7 +1055,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             for i = 1:m.numVar
                 setSolutionValue!(cb, m.mip_x[i], conic_primal[i])
             end
-            if m.socp_disaggregator
+            if m.disaggregate_soc == :true
                 k = 1
                 for (cone,ind) in m.pajarito_var_cones
                     if cone == :SOC

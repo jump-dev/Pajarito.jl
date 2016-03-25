@@ -15,9 +15,13 @@ immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     opt_tolerance               # Relatice optimality tolerance
     time_limit                  # Time limit
     profile::Bool               # Performance profile switch
-    socp_disaggregator::Bool    # SOCP disaggregator for SOC constraints
+    disaggregate_soc::Symbol    # SOCP disaggregator for SOC constraints
     instance::AbstractString    # Path to instance
 end
-PajaritoSolver(;verbose=0,algorithm="OA",mip_solver=MathProgBase.defaultMIPsolver,cont_solver=MathProgBase.defaultNLPsolver,opt_tolerance=1e-5,time_limit=60*60*10,profile=false,socp_disaggregator=false,instance="") = PajaritoSolver(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,socp_disaggregator,instance)
+
+function PajaritoSolver(;verbose=0,algorithm="OA",mip_solver=MathProgBase.defaultMIPsolver,cont_solver=MathProgBase.defaultNLPsolver,opt_tolerance=1e-5,time_limit=60*60*10,profile=false,disaggregate_soc=:default,instance="")
+    disaggregate_soc_ind = Symbol(string(disaggregate_soc))
+    PajaritoSolver(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,disaggregate_soc_ind,instance)
+end
 
 

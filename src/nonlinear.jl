@@ -23,7 +23,7 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     opt_tolerance               # Relatice optimality tolerance
     time_limit                  # Time limit
     profile::Bool               # Performance profile switch
-    socp_disaggregator::Bool    # SOCP disaggregator for SOC constraints
+    disaggregate_soc::Symbol    # SOCP disaggregator for SOC constraints
     instance::AbstractString    # Path to instance
     
     A
@@ -45,7 +45,7 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     nlp_load_timer
 
     # CONSTRUCTOR:
-    function PajaritoModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,socp_disaggregator,instance)
+    function PajaritoModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,disaggregate_soc,instance)
         m = new()
         m.verbose = verbose
         m.algorithm = algorithm
@@ -54,7 +54,7 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
         m.opt_tolerance = opt_tolerance
         m.time_limit = time_limit
         m.profile = profile
-        m.socp_disaggregator = socp_disaggregator
+        m.disaggregate_soc = disaggregate_soc
         m.instance = instance
         return m
     end
@@ -164,7 +164,7 @@ MathProgBase.obj_expr(d::InfeasibleNLPEvaluator) = MathProgBase.obj_expr(d.d)
 MathProgBase.constr_expr(d::InfeasibleNLPEvaluator, i::Int) = MathProgBase.constr_expr(d.d, i)
 
 # BEGIN MATHPROGBASE INTERFACE
-MathProgBase.NonlinearModel(s::PajaritoSolver) = PajaritoModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.profile, s.socp_disaggregator, s.instance)
+MathProgBase.NonlinearModel(s::PajaritoSolver) = PajaritoModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.profile, s.disaggregate_soc, s.instance)
 
 function MathProgBase.loadproblem!(
     m::PajaritoModel, numVar, numConstr, l, u, lb, ub, sense, d)
