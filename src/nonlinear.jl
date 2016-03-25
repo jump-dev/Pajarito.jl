@@ -22,7 +22,6 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     opt_tolerance               # Relative optimality tolerance
     time_limit                  # Time limit
     profile::Bool               # Performance profile switch
-    disaggregate_soc::Symbol    # SOCP disaggregator for SOC constraints
     instance::AbstractString    # Path to instance
     
     A
@@ -44,8 +43,9 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     nlp_load_timer
 
     # CONSTRUCTOR:
-    function PajaritoModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,disaggregate_soc,instance)
+    function PajaritoModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,instance)
         m = new()
+        m.solution = Float64[]
         m.verbose = verbose
         m.algorithm = algorithm
         m.mip_solver = mip_solver
@@ -53,7 +53,6 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
         m.opt_tolerance = opt_tolerance
         m.time_limit = time_limit
         m.profile = profile
-        m.disaggregate_soc = disaggregate_soc
         m.instance = instance
         return m
     end
@@ -163,7 +162,7 @@ MathProgBase.obj_expr(d::InfeasibleNLPEvaluator) = MathProgBase.obj_expr(d.d)
 MathProgBase.constr_expr(d::InfeasibleNLPEvaluator, i::Int) = MathProgBase.constr_expr(d.d, i)
 
 # BEGIN MATHPROGBASE INTERFACE
-MathProgBase.NonlinearModel(s::PajaritoSolver) = PajaritoModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.profile, s.disaggregate_soc, s.instance)
+MathProgBase.NonlinearModel(s::PajaritoSolver) = PajaritoModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.profile, s.instance)
 
 function MathProgBase.loadproblem!(
     m::PajaritoModel, numVar, numConstr, l, u, lb, ub, sense, d)
@@ -663,6 +662,13 @@ function MathProgBase.optimize!(m::PajaritoModel)
         while (time() - start) < m.time_limit
             flush(STDOUT)
             cut_added = false
+            # WARMSTART MIP FROM UPPER BOUND
+            if !any(isnan,m.solution) && !isempty(m.solution)
+                if applicable(MathProgBase.setwarmstart!, getInternalModel(mip_model), m.solution)
+                    # Extend solution with the objective variable
+                    MathProgBase.setwarmstart!(getInternalModel(mip_model), [m.solution, m.objval])
+                end
+            end
             # solve MIP model
             start_mip = time()
             mip_status = solve(mip_model)
