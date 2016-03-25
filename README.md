@@ -6,10 +6,10 @@ Pajarito (**P**olyhedral **A**pproximation in **J**ulia: **A**utomatic **R**efor
 
 ## Installation
 
-Pajarito can be installed through Julia:
+Pajarito can be installed through the Julia package manager:
 
 ```
-julia> Pkg.clone("https://github.com/mlubin/Pajarito.jl.git")
+julia> Pkg.add("Pajarito")
 ```
 
 ## Should I use Pajarito?
