@@ -886,7 +886,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     m.objval = Inf
     iter = 0
     optimality_gap = Inf
-    mip_objval = Inf
+    mip_objval = -Inf
     prev_mip_solution = zeros(m.numVar)
     cut_added = false
 
@@ -1058,7 +1058,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             m.iterations = iter
             #break
         end
-        (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %+.7e   %+.7e   %+.7e   %+.7e   %+.7e   %+.7e\n" iter mip_objval conic_objval optimality_gap m.objval primal_infeasibility OA_infeasibility
+        (m.verbose > 0) && (m.algorithm == "OA") && OAprintLevel(iter, mip_objval, conic_objval, optimality_gap, m.objval, primal_infeasibility, OA_infeasibility)
         (cycle_indicator && m.status != :Optimal) && warn("Mixed-integer cycling detected, terminating Pajarito...")
     end
 

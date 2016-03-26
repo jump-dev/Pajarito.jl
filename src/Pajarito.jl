@@ -27,6 +27,7 @@ import MathProgBase
 using ConicNonlinearBridge
 
 include("solver.jl")
+include("common_functions.jl")
 include("nonlinear.jl")
 include("conic.jl")
 
