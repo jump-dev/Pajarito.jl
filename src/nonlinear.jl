@@ -666,7 +666,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
             if !any(isnan,m.solution) && !isempty(m.solution)
                 if applicable(MathProgBase.setwarmstart!, getInternalModel(mip_model), m.solution)
                     # Extend solution with the objective variable
-                    MathProgBase.setwarmstart!(getInternalModel(mip_model), [m.solution, m.objval])
+                    MathProgBase.setwarmstart!(getInternalModel(mip_model), [m.solution; m.objval])
                 end
             end
             # solve MIP model
