@@ -553,7 +553,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
         MathProgBase.optimize!(nlp_model)
         cputime_nlp += time() - start_nlp
         nlp_status = MathProgBase.status(nlp_model)
-        nlp_objval = -Inf
+        nlp_objval = (m.objsense == :Max ? -Inf : Inf)
         #separator::Vector{Float64}
         if nlp_status == :Optimal
             (m.verbose > 2) && println("NLP Solved")
@@ -640,7 +640,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
                 m.status = :Suboptimal
             end
         end
-        (m.verbose > 0) && (m.algorithm == "OA") && @printf "%9d   %+.7e   %+.7e   %+.7e   %+.7e   %+.7e   %+.7e\n" iter mip_objval nlp_objval optimality_gap m.objval primal_infeasibility OA_infeasibility
+        (m.verbose > 0) && (m.algorithm == "OA") && OAprintLevel(iter, mip_objval, nlp_objval, optimality_gap, m.objval, primal_infeasibility, OA_infeasibility)
         (cycle_indicator && m.status != :Optimal) && warn("Mixed-integer cycling detected, terminating Pajarito...")
     end
 
