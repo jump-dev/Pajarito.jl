@@ -193,6 +193,7 @@ function MathProgBase.loadproblem!(
             m.constrtype[i] = :(<=)
         end
     end
+    m.solution = fill(NaN, m.numVar)
 end
 
 function populatelinearmatrix(m::PajaritoModel)
@@ -475,18 +476,15 @@ function MathProgBase.optimize!(m::PajaritoModel)
     elseif ini_nlp_status == :Infeasible
         warn("Initial NLP Relaxation Infeasible.")
         m.status = :Infeasible
-        m.solution = fill(NaN, m.numVar)
         return     
     # TODO Figure out the conditions for this to hold!  
     elseif ini_nlp_status == :Unbounded
         warn("Initial NLP Relaxation Unbounded.")
         m.status = :InfeasibleOrUnbounded
-        m.solution = fill(NaN, m.numVar)
         return
     else 
         warn("NLP Solver Failure.")
         m.status = :Error
-        m.solution = fill(NaN, m.numVar)
         return
     end
     ini_nlp_objval = MathProgBase.getobjval(ini_nlp_model)
@@ -609,7 +607,6 @@ function MathProgBase.optimize!(m::PajaritoModel)
             if inf_model_status != :Optimal && inf_model_stauts != :Suboptimal
                 warn("NLP Solver Failure.")
                 m.status = :Error
-                m.solution = fill(NaN, m.numVar)
                 return
             end
             (m.verbose > 2) && println("INF NLP Solved")
@@ -678,7 +675,6 @@ function MathProgBase.optimize!(m::PajaritoModel)
             if mip_status == :Infeasible || mip_status == :InfeasibleOrUnbounded
                 (m.verbose > 1) && println("MIP Infeasible")
                 m.status = :Infeasible
-                m.solution = fill(NaN, m.numVar)
                 return
             else 
                 (m.verbose > 1) && println("MIP Status: $mip_status")

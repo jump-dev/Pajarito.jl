@@ -15,21 +15,36 @@ import Convex
 mip_solver = GLPKSolverMIP()
 nlp_solver = IpoptSolver(print_level=0)
 conic_solver = ECOSSolver(verbose=0)
-conic_solvers = [conic_solver, nlp_solver]
+myconic_solvers = [conic_solver, nlp_solver]
 algorithms = ["OA", "BC"]
 
 include(Pkg.dir("JuMP","test","solvers.jl"))
+
+# TODO remove the following 
+myip_solvers = Any[]
+for i = 1:length(ip_solvers)
+    contains(string(typeof(ip_solvers[i])), "MosekSolver") && continue 
+    push!(myip_solvers, ip_solvers[i])
+end
 
 TOL = 1e-3
 
 include("nlptest.jl")
 include("conictest.jl")
+include("sdptest.jl")
 
-runnonlineartests("OA", ip_solvers)
+runnonlineartests("OA", myip_solvers)
 runnonlineartests("BC", lazy_solvers)
 
-runconictests("OA", ip_solvers, conic_solvers)
-runconictests("BC", lazy_solvers, conic_solvers)
+runconictests("OA", myip_solvers, myconic_solvers)
+runconictests("BC", lazy_solvers, myconic_solvers)
+
+for i = 1:length(sdp_solvers)
+    if contains(string(typeof(sdp_solvers[i])), "MosekSolver") 
+        runsdptests("OA", myip_solvers, sdp_solvers[i])
+        runsdptests("BC", lazy_solvers, sdp_solvers[i])
+    end
+end
 
 # PAJARITO UNIT-TESTS
 # 1. CONVEX CONSTRAINT WITH LB AND UB
