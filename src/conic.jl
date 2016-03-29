@@ -51,6 +51,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     disaggregate_soc::Symbol    # Disaggregate SOC constraints following Vielma et al.
     instance::AbstractString    # Path to instance
     enable_sdp::Bool            # Indicator for enabling sdp support
+    force_primal_cuts::Bool     # Enforces primal cutting planes under conic solver
 
     # PROBLEM DATA
     numVar::Int                 # Number of variables
@@ -86,7 +87,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     nlp_load_timer
 
     # CONSTRUCTOR:
-    function PajaritoConicModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,disaggregate_soc,instance,enable_sdp)
+    function PajaritoConicModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,disaggregate_soc,instance,enable_sdp,force_primal_cuts)
         m = new()
         m.verbose = verbose
         m.algorithm = algorithm
@@ -98,12 +99,13 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.disaggregate_soc = disaggregate_soc
         m.instance = instance
         m.enable_sdp = enable_sdp
+        m.force_primal_cuts = force_primal_cuts
         return m
     end
 end
 
 # BEGIN MATHPROGBASE INTERFACE
-MathProgBase.ConicModel(s::PajaritoSolver) = PajaritoConicModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.profile, s.disaggregate_soc, s.instance, s.enable_sdp)
+MathProgBase.ConicModel(s::PajaritoSolver) = PajaritoConicModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.profile, s.disaggregate_soc, s.instance, s.enable_sdp, s.force_primal_cuts)
 
 function MathProgBase.loadproblem!(
     m::PajaritoConicModel, c, A, b, constr_cones, var_cones)
@@ -866,10 +868,10 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     # solve Conic model for the MIP solution
     ini_conic_model = MathProgBase.ConicModel(m.cont_solver)
-    if !m.is_conic_solver
-        loadInitialRelaxedConicModel(m, ini_conic_model)
-    else
+    if m.is_conic_solver && !m.force_primal_cuts
         loadRelaxedConicModel(m, ini_conic_model)
+    else
+        loadInitialRelaxedConicModel(m, ini_conic_model)
     end
 
     start_conic = time()
@@ -878,16 +880,16 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     ini_conic_status = MathProgBase.status(ini_conic_model)
     if ini_conic_status == :Optimal || ini_conic_status == :Suboptimal
+        # Add dual cutting planes if the solver is conic
+        if m.is_conic_solver && !m.force_primal_cuts
+            (conic_solution, conic_objval, conic_dual) = getInitialConicModelSolution(m,ini_conic_model)
+            addDualCuttingPlanes!(m, mip_model, conic_dual, [], zeros(m.numVar)) 
         # Add primal cutting planes if the solver is not conic
-        if !m.is_conic_solver
+        else
             separator = MathProgBase.getsolution(ini_conic_model)
             separator = addSlackValues(m, separator)
             @assert length(separator) == m.numVar
             addPrimalCuttingPlanes!(m, mip_model, separator, [], zeros(m.numVar))
-        # Add dual cutting planes if the solver is conic
-        else
-            (conic_solution, conic_objval, conic_dual) = getInitialConicModelSolution(m,ini_conic_model)
-            addDualCuttingPlanes!(m, mip_model, conic_dual, [], zeros(m.numVar))
         end
     elseif ini_conic_status == :Infeasible
         warn("Initial Conic Relaxation Infeasible.")
@@ -948,7 +950,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         separator = Any[]
         # MICONE algorithm
         # TODO: add a second phase if dual information is not available
-        if m.is_conic_solver
+        if m.is_conic_solver && !m.force_primal_cuts
 
             conic_model = MathProgBase.ConicModel(m.cont_solver)
             start_load = time()
@@ -1078,7 +1080,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         # ITS FINE TO CHECK OPTIMALITY GAP ONLY BECAUSE IF conic_model IS INFEASIBLE, ITS OBJ VALUE IS INF
         cycle_indicator = (m.algorithm == "OA" ? compareIntegerSolutions(m, prev_mip_solution, mip_solution) : false)
         if (optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance && !cycle_indicator) || cb != [] #&& !(prev_mip_solution == mip_solution)
-            if m.is_conic_solver
+            if m.is_conic_solver && !m.force_primal_cuts
                 OA_infeasibility = addDualCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
             else
                 OA_infeasibility = addPrimalCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
