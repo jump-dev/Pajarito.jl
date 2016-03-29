@@ -18,11 +18,12 @@ immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     disaggregate_soc::Symbol    # SOCP disaggregator for SOC constraints
     instance::AbstractString    # Path to instance
     enable_sdp::Bool            # Indicator for enabling sdp support
+    force_primal_cuts::Bool     # Enforces primal cutting planes under conic solver
 end
 
-function PajaritoSolver(;verbose=0,algorithm="OA",mip_solver=MathProgBase.defaultMIPsolver,cont_solver=MathProgBase.defaultNLPsolver,opt_tolerance=1e-5,time_limit=60*60*10,profile=false,disaggregate_soc=:default,instance="",enable_sdp=false)
+function PajaritoSolver(;verbose=0,algorithm="OA",mip_solver=MathProgBase.defaultMIPsolver,cont_solver=MathProgBase.defaultNLPsolver,opt_tolerance=1e-5,time_limit=60*60*10,profile=false,disaggregate_soc=:default,instance="",enable_sdp=false,force_primal_cuts=false)
     disaggregate_soc_ind = Symbol(string(disaggregate_soc))
-    PajaritoSolver(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,disaggregate_soc_ind,instance,enable_sdp)
+    PajaritoSolver(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,disaggregate_soc_ind,instance,enable_sdp,force_primal_cuts)
 end
 
 
