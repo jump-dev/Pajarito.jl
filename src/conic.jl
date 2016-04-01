@@ -729,11 +729,16 @@ function loadMIPModel(m::PajaritoConicModel, mip_model)
             error("unrecognized cone $cone")
         end
     end
+    numIntVar = 0
     for i in 1:m.numVar
         setCategory(x[i], m.vartype[i])
+        if m.vartype[i] == :Int || m.vartype[i] == :Bin
+            numIntVar += 1
+        end
     end
     m.mip_x = x
     m.mip_t = t
+    m.numIntVar = numIntVar
 end
 
 function getFirstPhaseConicModelSolution(m::PajaritoConicModel, inf_dcp_model, old_variable_index_map, mip_solution)
@@ -880,6 +885,12 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     ini_conic_status = MathProgBase.status(ini_conic_model)
     if ini_conic_status == :Optimal || ini_conic_status == :Suboptimal
+        if m.numIntVar == 0
+            m.solution = MathProgBase.getsolution(ini_conic_model)
+            m.objval = MathProgBase.getobjval(ini_conic_model)
+            m.status = ini_conic_status
+            return
+        end
         # Add dual cutting planes if the solver is conic
         if m.is_conic_solver && !m.force_primal_cuts
             (conic_solution, conic_objval, conic_dual) = getInitialConicModelSolution(m,ini_conic_model)
@@ -1196,16 +1207,7 @@ end
 
 
 MathProgBase.setwarmstart!(m::PajaritoConicModel, x) = (m.solution = x)
-function MathProgBase.setvartype!(m::PajaritoConicModel, v::Vector{Symbol}) 
-    m.vartype[1:length(v)] = v
-    numIntVar = 0
-    for vartype in v
-        if vartype == :Int || vartype == :Bin
-            numIntVar += 1
-        end
-    end
-    m.numIntVar = numIntVar
-end
+MathProgBase.setvartype!(m::PajaritoConicModel, v::Vector{Symbol}) = (m.vartype[1:length(v)] = v)
 #MathProgBase.setvarUB!(m::IpoptMathProgModel, v::Vector{Float64}) = (m.u = v)
 #MathProgBase.setvarLB!(m::IpoptMathProgModel, v::Vector{Float64}) = (m.l = v)
 
