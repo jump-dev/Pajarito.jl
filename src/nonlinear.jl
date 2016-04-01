@@ -11,6 +11,7 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     objval::Float64
     iterations::Int
     numVar::Int
+    numIntVar::Int              # Number of integer or binary variables
     numConstr::Int
     numNLConstr::Int
 
@@ -367,8 +368,12 @@ function loadMIPModel(m::PajaritoModel, mip_model)
     lb = [m.l; -1e6]
     ub = [m.u; 1e6]
     @defVar(mip_model, lb[i] <= x[i=1:m.numVar+1] <= ub[i])
+    numIntVar = 0
     for i = 1:m.numVar
         setCategory(x[i], m.vartype[i])
+        if m.vartype[i] == :Int || m.vartype[i] == :Bin
+            numIntVar += 1
+        end
     end
     setCategory(x[m.numVar+1], :Cont)
     for i = 1:m.numConstr-m.numNLConstr
@@ -385,6 +390,7 @@ function loadMIPModel(m::PajaritoModel, mip_model)
     @setObjective(mip_model, Min, dot(c_new, x))
 
     m.mip_x = x
+    m.numIntVar = numIntVar
     #=
     mip_model = MathProgBase.LinearQuadraticModel(m.mip_solver)
     MathProgBase.loadproblem!(mip_model,
@@ -471,6 +477,12 @@ function MathProgBase.optimize!(m::PajaritoModel)
 
     ini_nlp_status = MathProgBase.status(ini_nlp_model)
     if ini_nlp_status == :Optimal || ini_nlp_status == :Suboptimal
+        if m.numIntVar == 0
+            m.solution = MathProgBase.getsolution(ini_nlp_model)
+            m.objval = MathProgBase.getobjval(ini_nlp_model)
+            m.status = ini_nlp_status
+            return
+        end
         separator = MathProgBase.getsolution(ini_nlp_model)
         addCuttingPlanes!(m, mip_model, separator, jac_I, jac_J, jac_V, grad_f, [], zeros(m.numVar+1))
     elseif ini_nlp_status == :Infeasible

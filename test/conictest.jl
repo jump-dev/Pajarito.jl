@@ -82,6 +82,25 @@ end
 
 end
 
+facts("Continuous problem") do
+    for mip_solver in mip_solvers
+        for conic_solver in conic_solvers
+context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
+            x = Convex.Variable(1)
+            y = Convex.Variable(1, Convex.Positive())
+
+            problem = Convex.maximize( 3x+y,
+                                x >= 0,
+                                3x + 2y <= 10,
+                                exp(x) <= 10)
+
+           Convex.solve!(problem, PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=conic_solver)) 
+           @fact x.value --> roughly(log(10.0), TOL)
+end
+        end
+    end
+
+end
 
 facts("Maximization problem") do
     for mip_solver in mip_solvers
