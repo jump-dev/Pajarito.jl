@@ -19,11 +19,12 @@ immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     instance::AbstractString    # Path to instance
     enable_sdp::Bool            # Indicator for enabling sdp support
     force_primal_cuts::Bool     # Enforces primal cutting planes under conic solver
+    dual_cut_zero_tol::Float64  # Tolerance to check if a conic_dual is zero or not
 end
 
-function PajaritoSolver(;verbose=0,algorithm="OA",mip_solver=MathProgBase.defaultMIPsolver,cont_solver=MathProgBase.defaultNLPsolver,opt_tolerance=1e-5,time_limit=60*60*10,profile=false,disaggregate_soc=:default,instance="",enable_sdp=false,force_primal_cuts=false)
+function PajaritoSolver(;verbose=0,algorithm="OA",mip_solver=MathProgBase.defaultMIPsolver,cont_solver=MathProgBase.defaultNLPsolver,opt_tolerance=1e-5,time_limit=60*60*10,profile=false,disaggregate_soc=:default,instance="",enable_sdp=false,force_primal_cuts=false,dual_cut_zero_tol=0.0)
     disaggregate_soc_ind = Symbol(string(disaggregate_soc))
-    PajaritoSolver(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,disaggregate_soc_ind,instance,enable_sdp,force_primal_cuts)
+    PajaritoSolver(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,disaggregate_soc_ind,instance,enable_sdp,force_primal_cuts,dual_cut_zero_tol)
 end
 
 
