@@ -52,6 +52,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     instance::AbstractString    # Path to instance
     enable_sdp::Bool            # Indicator for enabling sdp support
     force_primal_cuts::Bool     # Enforces primal cutting planes under conic solver
+    dual_cut_zero_tol::Float64  # Tolerance to check if a conic_dual is zero or not
 
     # PROBLEM DATA
     numVar::Int                 # Number of variables
@@ -87,7 +88,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     nlp_load_timer
 
     # CONSTRUCTOR:
-    function PajaritoConicModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,disaggregate_soc,instance,enable_sdp,force_primal_cuts)
+    function PajaritoConicModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,disaggregate_soc,instance,enable_sdp,force_primal_cuts,dual_cut_zero_tol)
         m = new()
         m.verbose = verbose
         m.algorithm = algorithm
@@ -100,12 +101,13 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.instance = instance
         m.enable_sdp = enable_sdp
         m.force_primal_cuts = force_primal_cuts
+        m.dual_cut_zero_tol = dual_cut_zero_tol
         return m
     end
 end
 
 # BEGIN MATHPROGBASE INTERFACE
-MathProgBase.ConicModel(s::PajaritoSolver) = PajaritoConicModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.profile, s.disaggregate_soc, s.instance, s.enable_sdp, s.force_primal_cuts)
+MathProgBase.ConicModel(s::PajaritoSolver) = PajaritoConicModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.profile, s.disaggregate_soc, s.instance, s.enable_sdp, s.force_primal_cuts, s.dual_cut_zero_tol)
 
 function MathProgBase.loadproblem!(
     m::PajaritoConicModel, c, A, b, constr_cones, var_cones)
@@ -681,6 +683,12 @@ function getDualSeparator(m, conic_dual, old_variable_index_map)
 end
 
 function addDualCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
+
+    for i in 1:length(separator)
+        if abs(separator[i]) < m.dual_cut_zero_tol
+            separator[i] = 0.0
+        end
+    end
 
     k = 1
     max_violation = -1e+5
