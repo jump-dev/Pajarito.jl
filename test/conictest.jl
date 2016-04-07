@@ -2,6 +2,7 @@
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
+using Mosek
 
 function runconictests(algorithm, mip_solvers, conic_solvers)
 
@@ -78,6 +79,36 @@ context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
             @fact problem.optval --> roughly(9.0, TOL)
 end
         end
+    end
+
+end
+
+facts("Rotated second-order cone problem") do
+
+    for mip_solver in mip_solvers
+context("With $algorithm, $(typeof(mip_solver))") do
+        problem = MathProgBase.ConicModel(PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=MosekSolver(LOG=0)))
+        c = [-3.0; 0.0; 0.0;0.0]
+        A = zeros(4,4)
+        A[1,1] = 1.0
+        A[2,2] = 1.0
+        A[3,3] = 1.0
+        A[4,1] = 1.0
+        A[4,4] = -1.0
+        b = [10.0; 3.0/2.0; 3.0; 0.0]
+        constr_cones = Any[]
+        push!(constr_cones, (:NonNeg, [1;2;3]))
+        push!(constr_cones, (:Zero, [4]))
+        var_cones = Any[]
+        push!(var_cones, (:SOCRotated, [2;3;1]))
+        push!(var_cones, (:Free, [4]))
+        vartypes = [:Cont; :Cont; :Cont; :Int]
+        MathProgBase.loadproblem!(problem, c, A, b, constr_cones, var_cones)
+        MathProgBase.setvartype!(problem, vartypes) 
+
+        MathProgBase.optimize!(problem)
+        @fact MathProgBase.getobjval(problem) --> roughly(-9.0, TOL)
+end
     end
 
 end

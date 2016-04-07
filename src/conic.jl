@@ -1307,6 +1307,8 @@ MathProgBase.setvartype!(m::PajaritoConicModel, v::Vector{Symbol}) = (m.vartype[
 #MathProgBase.setvarUB!(m::IpoptMathProgModel, v::Vector{Float64}) = (m.u = v)
 #MathProgBase.setvarLB!(m::IpoptMathProgModel, v::Vector{Float64}) = (m.l = v)
 
+MathProgBase.numconstr(m::PajaritoConicModel) = m.numConstr
+MathProgBase.numvar(m::PajaritoConicModel) = m.numVar
 MathProgBase.status(m::PajaritoConicModel) = m.status
 MathProgBase.getobjval(m::PajaritoConicModel) = m.objval
 MathProgBase.getsolution(m::PajaritoConicModel) = m.solution
