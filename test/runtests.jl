@@ -43,6 +43,8 @@ for i = 1:length(sdp_solvers)
     if contains(string(typeof(sdp_solvers[i])), "MosekSolver") 
         runsdptests("OA", myip_solvers, sdp_solvers[i])
         runsdptests("BC", lazy_solvers, sdp_solvers[i])
+        runSOCRotatedtests("OA", myip_solvers, sdp_solvers[i])
+        runSOCRotatedtests("BC", lazy_solvers, sdp_solvers[i])
     end
 end
 
