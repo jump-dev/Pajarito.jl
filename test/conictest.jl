@@ -227,3 +227,37 @@ end
 end
 
 end
+
+function runSOCRotatedtests(algorithm, mip_solvers, conic_solver)
+
+facts("Rotated second-order cone problem") do
+
+    for mip_solver in mip_solvers
+context("With $algorithm, $(typeof(mip_solver))") do
+        problem = MathProgBase.ConicModel(PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=conic_solver))
+        c = [-3.0; 0.0; 0.0;0.0]
+        A = zeros(4,4)
+        A[1,1] = 1.0
+        A[2,2] = 1.0
+        A[3,3] = 1.0
+        A[4,1] = 1.0
+        A[4,4] = -1.0
+        b = [10.0; 3.0/2.0; 3.0; 0.0]
+        constr_cones = Any[]
+        push!(constr_cones, (:NonNeg, [1;2;3]))
+        push!(constr_cones, (:Zero, [4]))
+        var_cones = Any[]
+        push!(var_cones, (:SOCRotated, [2;3;1]))
+        push!(var_cones, (:Free, [4]))
+        vartypes = [:Cont; :Cont; :Cont; :Int]
+        MathProgBase.loadproblem!(problem, c, A, b, constr_cones, var_cones)
+        MathProgBase.setvartype!(problem, vartypes) 
+
+        MathProgBase.optimize!(problem)
+        @fact MathProgBase.getobjval(problem) --> roughly(-9.0, TOL)
+end
+    end
+
+end
+
+end

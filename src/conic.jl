@@ -142,7 +142,7 @@ function MathProgBase.loadproblem!(
         if cone == :SDP && !m.enable_sdp
             error("MISDP feature is currently experimental, turn it on by using ""enable_sdp=true"" at your own risk!")
         end
-        if cone == :SOC || cone == :ExpPrimal || cone == :SDP
+        if cone == :SOC || cone == :SOCRotated || cone == :ExpPrimal || cone == :SDP
             lengthSpecCones += length(ind)
             slack_vars = slack_count:(slack_count+length(ind)-1)
             append!(A_I, ind)
@@ -186,12 +186,15 @@ function MathProgBase.loadproblem!(
         elseif cone == :NonPos
             u[ind] = 0.0
         end
-        if cone == :SOC || cone == :ExpPrimal || cone == :SDP
+        if cone == :SOC || cone == :SOCRotated || cone == :ExpPrimal || cone == :SDP
             if cone == :SOC
                 soc_indicator = true
                 l[ind[1]] = 0.0
                 numSOCCones += 1
                 push!(dimSOCCones,length(ind)-1)
+            elseif cone == :SOCRotated
+                l[ind[1]] = 0.0
+                l[ind[2]] = 0.0
             else
                 exp_indicator = true
                 l[ind[end]] = 0.0
@@ -229,7 +232,7 @@ function addSlackValues(m::PajaritoConicModel, separator)
     slack_count = 1
     separator_slack = zeros(m.lengthSpecCones)
     for (cone, ind) in m.constr_cones_ini
-        if cone == :SOC || cone == :ExpPrimal || cone == :SDP
+        if cone == :SOC || cone == :SOCRotated || cone == :ExpPrimal || cone == :SDP
             slack_vars = slack_count:(slack_count+length(ind)-1)
             separator_slack[slack_vars] = rhs_value[ind]
             slack_count += length(ind)
@@ -266,7 +269,7 @@ function preprocessIntegersOut(m, c_ini, A_ini, b_ini, mip_solution, vartype, va
         for i in ind
             # THIS ASSUMES INTEGER VARIABLES DO NOT APPEAR IN
             # SPEC CONES
-            if (cone == :SOC || cone == :ExpPrimal || cone == :SDP) && (vartype[i] == :Int || vartype[i] == :Bin)
+            if (cone == :SOC || cone == :SOCRotated || cone == :ExpPrimal || cone == :SDP) && (vartype[i] == :Int || vartype[i] == :Bin)
                 error("Integer variable x[$i] inside $cone cone")
             end
             if new_variable_index_map[i] != -1
@@ -325,7 +328,7 @@ function removeRedundantRows(m,constr_cones, A_new, b_new)
     for (cone, ind) in constr_cones
         new_ind = Int[]
         for i in ind
-            if (cone == :SOC || cone == :ExpPrimal || cone == :SDP) && (emptyRow[i])
+            if (cone == :SOC || cone == :SOCRotated || cone == :ExpPrimal || cone == :SDP) && (emptyRow[i])
                 error("Empty row $i inside $cone cone")
             end
             if new_constraint_index_map[i] != -1
@@ -388,7 +391,27 @@ function loadFirstPhaseConicModel(m::PajaritoConicModel, inf_dcp_model, mip_solu
             push!(b_new, 0.0)
             push!(inf_var_cones, (:SOC, [k + m.numVar + m.numSpecCones; ind[2:end]]))
             push!(inf_var_cones, (:NonNeg, [ind0; k+m.numVar]))
-            k += 1        
+            k += 1       
+        # ADD ROTATED SOC RELAXATION
+        # (y, z, x) \in SOC => 2yz \geq || x ||^2
+        #   => 2y + 2s \geq || x ||^2/z
+        #   => q = y + s, 2qz \geq || x ||^2
+        #   => q = y + s, (q, z, x) \in ROTATED SOC, MIN s
+        elseif cone == :SOCRotated
+            ind0 = ind[1]
+            push!(I, k + m.numConstr)
+            push!(J, ind0)
+            push!(V, 1.0)
+            push!(I, k + m.numConstr)
+            push!(J, k + m.numVar)
+            push!(V, 1.0)
+            push!(I, k + m.numConstr)
+            push!(J, k + m.numVar + m.numSpecCones)
+            push!(V, -1.0)
+            push!(b_new, 0.0)
+            push!(inf_var_cones, (:SOCRotated, [k + m.numVar + m.numSpecCones; ind[2:end]]))
+            push!(inf_var_cones, (:NonNeg, [ind0; k+m.numVar]))
+            k += 1     
         # ADD EXP RELAXATION
         # {(x,y,z)∈ ℝ 3:y>0,ye^(x/y) ≤ z}
         #   => z + s \geq y exp(x/y)
@@ -481,7 +504,22 @@ function extendMIPSolution(m::PajaritoConicModel, mip_solution, new_variable_ind
             end
             new_solution[k+numVar] = sqrt(sum) - new_mip_solution[new_ind[1]]       
             new_solution[k+numVar+m.numSpecCones] = new_solution[k+numVar] + new_mip_solution[new_ind[1]]    
-            k += 1   
+            k += 1
+        elseif cone == :SOCRotated
+        # ADD ROTATED SOC RELAXATION
+        # (y, z, x) \in SOC => 2yz \geq || x ||^2
+        #   => 2y + 2s \geq || x ||^2/z
+        #   => q = y + s, 2qz \geq || x ||^2
+        #   => q = y + s, (q, z, x) \in ROTATED SOC, MIN s
+        # TODO FOLLOWING MUST BE TRIPLE VERIFIED
+            new_ind = new_variable_index_map[ind]
+            sum = 0.0
+            for i in new_ind[3:length(new_ind)]
+                sum += new_mip_solution[i]^2
+            end
+            new_solution[k+numVar+m.numSpecCones] = sum / (2.0 * new_mip_solution[new_ind[2]])       
+            new_solution[k+numVar] = new_solution[k+numVar+m.numSpecCones] - new_mip_solution[new_ind[1]]    
+            k += 1
         elseif cone == :ExpPrimal
         # ADD EXP RELAXATION
         # {(x,y,z)∈ ℝ 3:y>0,ye^(x/y) ≤ z}
@@ -549,6 +587,11 @@ function getSOCValue(ind, separator)
     return sum
 end
 
+function getSOCRotatedValue(ind, separator) 
+    sum = vecnorm(separator[ind[3:end]], 2)^2 - 2.0*separator[ind[1]]*separator[ind[2]]
+    return sum
+end
+
 function getSOCAggragaterValue(ind_x, ind_y, separator)
     sum = separator[ind_x]^2/separator[ind_y]
     return sum
@@ -572,6 +615,20 @@ function getDSOC(ind, separator)
     return (I,V)
 end
 
+function getDSOCRotated(ind, separator)
+    I = Int[]
+    V = Float64[]
+    push!(I, ind[1])
+    push!(V,-(2.0))
+    sum = vecnorm(separator[ind[2:end]], 2)^2
+    push!(I, ind[2])
+    push!(J, -(sum)/separator[ind[2]]^2)
+    for i in ind[3:end]
+        push!(I, i)
+        push!(V,2.0*separator[i]/separator[ind[2]])
+    end
+    return (I,V)
+end
 
 function getDSOCAggragater(ind_x, ind_y, separator)
     I = Int[]
@@ -649,6 +706,28 @@ function addPrimalCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
                 end
                 k += 1
             end
+        elseif cone == :SOC
+            f = getSOCRotatedValue(ind, separator)
+            # IF ALL HAVE DIVISION BY ZERO, IT MUST BE FEASIBLE.
+            if separator[ind[2]] == 0.0
+                continue
+            end 
+            (I,V) = getDSOCRotated(ind, separator)
+            new_rhs = -f
+            for i in 1:length(I)
+                new_rhs += V[i] * separator[I[i]]
+            end
+            #new_rhs = (abs(new_rhs) < 1e-9 ? 0.0 : new_rhs)
+            viol = vecdot(V, mip_solution[I]) - new_rhs
+            if viol > max_violation
+                max_violation = viol
+            end
+            if cb != []
+                @addLazyConstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
+            else
+                @addConstraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
+            end
+
         elseif cone == :ExpPrimal
             f = getExpValue(ind, separator)
             (I,V) = getDExp(ind, separator)
@@ -693,7 +772,7 @@ function addDualCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
     k = 1
     max_violation = -1e+5
     for (cone, ind) in m.pajarito_var_cones
-        if cone == :SOC || cone == :ExpPrimal || cone == :SDP
+        if cone == :SOC || cone == :SOCRotated || cone == :ExpPrimal || cone == :SDP
             for i = ind
                 @assert m.vartype[i] != :Int && m.vartype[i] != :Bin
             end
@@ -821,6 +900,15 @@ function checkInfeasibility(m::PajaritoConicModel, solution)
                 sum += solution[i]^2
             end
             viol = sqrt(sum) - solution[ind[1]]
+            if viol > max_violation
+                max_violation = viol
+            end
+        elseif cone == :SOCRotated
+            sum = 0.0
+            for i in ind[3:length(ind)]
+                sum += solution[i]^2
+            end
+            viol = sum - 2.0 * solution[ind[1]] * solution[ind[2]]
             if viol > max_violation
                 max_violation = viol
             end
@@ -1219,6 +1307,8 @@ MathProgBase.setvartype!(m::PajaritoConicModel, v::Vector{Symbol}) = (m.vartype[
 #MathProgBase.setvarUB!(m::IpoptMathProgModel, v::Vector{Float64}) = (m.u = v)
 #MathProgBase.setvarLB!(m::IpoptMathProgModel, v::Vector{Float64}) = (m.l = v)
 
+MathProgBase.numconstr(m::PajaritoConicModel) = m.numConstr
+MathProgBase.numvar(m::PajaritoConicModel) = m.numVar
 MathProgBase.status(m::PajaritoConicModel) = m.status
 MathProgBase.getobjval(m::PajaritoConicModel) = m.objval
 MathProgBase.getsolution(m::PajaritoConicModel) = m.solution
