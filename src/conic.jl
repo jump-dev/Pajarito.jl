@@ -11,7 +11,7 @@
   (available online at http://arxiv.org/abs/1511.06710).
 
  The package accepts a problem of the form:
-  
+
   min  c_x^T x + c_z^T z
   s.t. A_x x + A_z z = b
        L <= x <= U
@@ -27,7 +27,7 @@
   2. Create a Convex.jl model using a set of disciplined
      convex atoms defined in Convex.jl library.
  Both ways PajaritoSolver must be provided as the
- preferred solver with a corresponding mip_solver and 
+ preferred solver with a corresponding mip_solver and
  cont_solver specified.
 =========================================================#
 
@@ -59,10 +59,10 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     numVar_ini::Int             # Number of initial variables
     numIntVar::Int              # Number of integer or binary variables
     numConstr::Int              # Number of constraints
-    c                           # Objective coefficients           
+    c                           # Objective coefficients
     A                           # Affine constraint matrix
     b                           # Affine constraint right hand side
-    c_ini                       
+    c_ini
     A_ini
     b_ini
     constr_cones_ini
@@ -163,7 +163,7 @@ function MathProgBase.loadproblem!(
     m.numConstr = numConstr
     m.c = [c;zeros(m.numVar-numVar)]
     m.A = A
-    m.b = b   
+    m.b = b
     # figure out variable bounds for MIP
     l = -Inf*ones(m.numVar)
     u = Inf*ones(m.numVar)
@@ -258,7 +258,7 @@ function preprocessIntegersOut(m, c_ini, A_ini, b_ini, mip_solution, vartype, va
             new_variable_index_map[i] = k
             old_variable_index_map[k] = i
             k += 1
-        end   
+        end
     end
     new_var_cones = Any[]
     for (cone, ind) in var_cones
@@ -318,7 +318,7 @@ function removeRedundantRows(m,constr_cones, A_new, b_new)
             new_constraint_index_map[i] = k
             old_constraint_index_map[k] = i
             k += 1
-        end   
+        end
     end
 
     new_constr_cones = Any[]
@@ -357,7 +357,7 @@ function removeRedundantRows(m,constr_cones, A_new, b_new)
 end
 
 function loadFirstPhaseConicModel(m::PajaritoConicModel, inf_dcp_model, mip_solution)
-    
+
     # original variables; slack variables; simplification variables
     c_new = [zeros(m.numVar);ones(m.numSpecCones);zeros(m.numSpecCones)]
 
@@ -388,7 +388,7 @@ function loadFirstPhaseConicModel(m::PajaritoConicModel, inf_dcp_model, mip_solu
             push!(b_new, 0.0)
             push!(inf_var_cones, (:SOC, [k + m.numVar + m.numSpecCones; ind[2:end]]))
             push!(inf_var_cones, (:NonNeg, [ind0; k+m.numVar]))
-            k += 1        
+            k += 1
         # ADD EXP RELAXATION
         # {(x,y,z)∈ ℝ 3:y>0,ye^(x/y) ≤ z}
         #   => z + s \geq y exp(x/y)
@@ -408,7 +408,7 @@ function loadFirstPhaseConicModel(m::PajaritoConicModel, inf_dcp_model, mip_solu
             push!(b_new, 0.0)
             push!(inf_var_cones, (:ExpPrimal, [ind[1];ind[2];k + m.numVar + m.numSpecCones]))
             push!(inf_var_cones, (:NonNeg, [ind0; k+m.numVar]))
-            k += 1 
+            k += 1
         else
             push!(inf_var_cones, (cone,ind))
         end
@@ -434,7 +434,7 @@ function loadFirstPhaseConicModel(m::PajaritoConicModel, inf_dcp_model, mip_solu
     vartype = [m.vartype;[:Cont for i in 1:2*m.numSpecCones]]
     infNumVar = m.numVar + 2*m.numSpecCones
 
-    (c_new, A_new, b_new, new_var_cones, old_variable_index_map, new_variable_index_map) = 
+    (c_new, A_new, b_new, new_var_cones, old_variable_index_map, new_variable_index_map) =
         preprocessIntegersOut(m, c_new, A_new, b_new, extended_mip_solution, vartype, inf_var_cones, infNumVar)
 
     (new_constr_cones, A_new, b_new) = removeRedundantRows(m, inf_constr_cones, A_new, b_new)
@@ -463,7 +463,7 @@ function extendMIPSolution(m::PajaritoConicModel, mip_solution, new_variable_ind
             new_mip_solution[k] = mip_solution[i]
             k += 1
         end
-    end 
+    end
 
     k = 1
     new_solution = [new_mip_solution;zeros(2*m.numSpecCones)]
@@ -479,9 +479,9 @@ function extendMIPSolution(m::PajaritoConicModel, mip_solution, new_variable_ind
             for i in new_ind[2:length(new_ind)]
                 sum += new_mip_solution[i]^2
             end
-            new_solution[k+numVar] = sqrt(sum) - new_mip_solution[new_ind[1]]       
-            new_solution[k+numVar+m.numSpecCones] = new_solution[k+numVar] + new_mip_solution[new_ind[1]]    
-            k += 1   
+            new_solution[k+numVar] = sqrt(sum) - new_mip_solution[new_ind[1]]
+            new_solution[k+numVar+m.numSpecCones] = new_solution[k+numVar] + new_mip_solution[new_ind[1]]
+            k += 1
         elseif cone == :ExpPrimal
         # ADD EXP RELAXATION
         # {(x,y,z)∈ ℝ 3:y>0,ye^(x/y) ≤ z}
@@ -491,14 +491,14 @@ function extendMIPSolution(m::PajaritoConicModel, mip_solution, new_variable_ind
             new_ind = new_variable_index_map[ind]
             new_solution[k+numVar] = new_mip_solution[new_ind[2]]*exp(new_mip_solution[new_ind[1]]/new_mip_solution[new_ind[2]]) - new_mip_solution[new_ind[3]]
             new_solution[k+numVar+m.numSpecCones] = new_solution[k+numVar] + new_mip_solution[new_ind[3]]
-            k += 1  
+            k += 1
         end
     end
     return new_solution
 end
 
 function loadConicModel(m::PajaritoConicModel, conic_model, mip_solution)
-    
+
     (I, J, V) = findnz(m.A)
     c_new = copy(m.c)
     b_new = copy(m.b)
@@ -508,7 +508,7 @@ function loadConicModel(m::PajaritoConicModel, conic_model, mip_solution)
     A_new = sparse(I,J,V, m.numConstr, m.numVar)
 
 
-    (c_new, A_new, b_new, new_var_cones, old_variable_index_map, new_variable_index_map) = 
+    (c_new, A_new, b_new, new_var_cones, old_variable_index_map, new_variable_index_map) =
         preprocessIntegersOut(m, c_new, A_new, b_new, mip_solution, m.vartype, conic_var_cones, m.numVar)
 
     (new_constr_cones, A_new, b_new) = removeRedundantRows(m, conic_constr_cones, A_new, b_new)
@@ -522,8 +522,8 @@ function loadConicModel(m::PajaritoConicModel, conic_model, mip_solution)
 end
 
 function loadRelaxedConicModel(m::PajaritoConicModel, conic_model)
-   
-    start = time() 
+
+    start = time()
     MathProgBase.loadproblem!(conic_model, m.c, m.A, m.b, m.pajarito_constr_cones, m.pajarito_var_cones)
     m.nlp_load_timer += time() - start
 
@@ -531,20 +531,20 @@ end
 
 
 function loadInitialRelaxedConicModel(m::PajaritoConicModel, conic_model)
-   
-    start = time() 
+
+    start = time()
     MathProgBase.loadproblem!(conic_model, m.c_ini, m.A_ini, m.b_ini, m.constr_cones_ini, m.var_cones_ini)
     m.nlp_load_timer += time() - start
 
 end
 
 
-function getSOCNormValue(ind, separator) 
+function getSOCNormValue(ind, separator)
     sum = vecnorm(separator[ind[2:end]], 2)
     return sum
 end
 
-function getSOCValue(ind, separator) 
+function getSOCValue(ind, separator)
     sum = vecnorm(separator[ind[2:end]], 2) - separator[ind[1]]
     return sum
 end
@@ -610,7 +610,7 @@ function addPrimalCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
                 # IF ALL HAVE DIVISION BY ZERO, IT MUST BE FEASIBLE.
                 if getSOCNormValue(ind, separator) == 0.0
                     continue
-                end 
+                end
                 (I,V) = getDSOC(ind, separator)
                 new_rhs = -f
                 for i in 1:length(I)
@@ -642,10 +642,10 @@ function addPrimalCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
                         max_violation = viol
                     end
                     if cb != []
-                        @addLazyConstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} - m.mip_t[k][j-1] <= new_rhs)     
+                        @addLazyConstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} - m.mip_t[k][j-1] <= new_rhs)
                     else
-                        @addConstraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} - m.mip_t[k][j-1] <= new_rhs)     
-                    end         
+                        @addConstraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} - m.mip_t[k][j-1] <= new_rhs)
+                    end
                 end
                 k += 1
             end
@@ -690,21 +690,37 @@ function addDualCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
         end
     end
 
-    k = 1
     max_violation = -1e+5
     for (cone, ind) in m.pajarito_var_cones
         if cone == :SOC || cone == :ExpPrimal || cone == :SDP
-            for i = ind
+            for i in ind
                 @assert m.vartype[i] != :Int && m.vartype[i] != :Bin
             end
-            viol = -vecdot(separator[ind], mip_solution[ind])
+
+            if cone == :SDP
+                #use svec scaling
+                row = 1
+                col = 1
+                for k in 1:length(ind)
+                    if row != col
+                        separator[ind[k]] *= 2
+                        col += 1
+                    else
+                        row += 1
+                        col = 1
+                    end
+                end
+            end
+
+            viol = -dot(separator[ind], mip_solution[ind])
             if viol > max_violation
                 max_violation = viol
             end
+
             if cb != []
-                @addLazyConstraint(cb, sum{separator[i] * m.mip_x[i], i in ind} >= 0.0)
+                @addLazyConstraint(cb, dot(separator[ind], m.mip_x[ind]) >= 0.0)
             else
-                @addConstraint(mip_model, sum{separator[i] * m.mip_x[i], i in ind} >= 0.0)
+                @addConstraint(mip_model, dot(separator[ind], m.mip_x[ind]) >= 0.0)
             end
         end
     end
@@ -721,8 +737,8 @@ function loadMIPModel(m::PajaritoConicModel, mip_model)
     for (cone, ind) in m.pajarito_var_cones
         if m.disaggregate_soc == :true && cone == :SOC
             @defVar(mip_model, 0.0 <= t[k][j=1:m.dimSOCCones[k]] <= Inf)
-            @addConstraint(mip_model, sum{t[k][i], i in 1:m.dimSOCCones[k]} - x[ind[1]] <= 0.0)      
-            k += 1        
+            @addConstraint(mip_model, sum{t[k][i], i in 1:m.dimSOCCones[k]} - x[ind[1]] <= 0.0)
+            k += 1
         end
     end
     @setObjective(mip_model, :Min, dot(m.c,x))
@@ -769,12 +785,12 @@ end
 
 function getInitialConicModelSolution(m::PajaritoConicModel, conic_model)
 
-    dual_vector = try 
+    dual_vector = try
         MathProgBase.getdual(conic_model)
     catch
         fill(0.0, size(m.A,1))
-    end   
- 
+    end
+
     conic_dual = m.c - m.A' * (-dual_vector)
     conic_solution = MathProgBase.getsolution(conic_model)
 
@@ -784,12 +800,12 @@ end
 
 function getConicModelSolution(m::PajaritoConicModel, conic_model, old_variable_index_map, mip_solution, c_sub, A_sub)
 
-    dual_vector = try 
+    dual_vector = try
         MathProgBase.getdual(conic_model)
     catch
         fill(0.0, size(A_sub,1))
-    end   
- 
+    end
+
     conic_dual = c_sub - A_sub' * (-dual_vector)
     conic_solution = MathProgBase.getsolution(conic_model)
     reduced_conic_objval = MathProgBase.getobjval(conic_model)
@@ -799,7 +815,7 @@ function getConicModelSolution(m::PajaritoConicModel, conic_model, old_variable_
 
     separator = copy(mip_solution)
     for i in 1:length(old_variable_index_map)
-        @assert m.vartype[old_variable_index_map[i]] != :Int && m.vartype[old_variable_index_map[i]] != :Bin 
+        @assert m.vartype[old_variable_index_map[i]] != :Int && m.vartype[old_variable_index_map[i]] != :Bin
         separator[old_variable_index_map[i]] = conic_solution[i]
     end
 
@@ -862,7 +878,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     # TO CLASSIFY THE PROBLEM TYPES
     #=out_file = open("output.txt", "a")
-    write(out_file, "$(m.instance) $(m.problem_type)\n") 
+    write(out_file, "$(m.instance) $(m.problem_type)\n")
     close(out_file)
     return=#
 
@@ -902,7 +918,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         # Add dual cutting planes if the solver is conic
         if m.is_conic_solver && !m.force_primal_cuts
             (conic_solution, conic_objval, conic_dual) = getInitialConicModelSolution(m,ini_conic_model)
-            addDualCuttingPlanes!(m, mip_model, conic_dual, [], zeros(m.numVar)) 
+            addDualCuttingPlanes!(m, mip_model, conic_dual, [], zeros(m.numVar))
         # Add primal cutting planes if the solver is not conic
         else
             separator = MathProgBase.getsolution(ini_conic_model)
@@ -913,13 +929,13 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     elseif ini_conic_status == :Infeasible
         warn("Initial Conic Relaxation Infeasible.")
         m.status = :Infeasible
-        return    
-    # TODO Figure out the details for this condition to hold!   
+        return
+    # TODO Figure out the details for this condition to hold!
     elseif ini_conic_status == :Unbounded
         warn("Initial Conic Relaxation Unbounded.")
         m.status = :InfeasibleOrUnbounded
         return
-    else 
+    else
         warn("Conic Solver Failure.")
         m.status = :Error
         return
@@ -946,7 +962,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     conic_status = :Infeasible
     conic_primal = zeros(m.numVar)
-    
+
     function coniccallback(cb)
         if cb != []
             mip_objval = -Inf #MathProgBase.cbgetobj(cb)
@@ -958,7 +974,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
         # TODO Enable this after extensive testing!
         #int_ind = filter(i->m.vartype[i] == :Int || m.vartype[i] == :Bin, 1:m.numVar)
-        #mip_solution[int_ind] = round(mip_solution[int_ind])        
+        #mip_solution[int_ind] = round(mip_solution[int_ind])
 
         conic_objval = Inf
 
@@ -1009,7 +1025,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             if conic_objval < m.objval
                 m.objval = conic_objval
                 m.solution = conic_primal[1:m.numVar]
-            end 
+            end
 
             # Update separator to dual solution
             separator = getDualSeparator(m, conic_dual, old_variable_index_map)
@@ -1083,19 +1099,19 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                     if conic_objval < m.objval
                         m.objval = conic_objval
                         m.solution = conic_primal[1:m.numVar]
-                    end 
-                    
+                    end
+
                     # Update separator to primal solution
                     separator = conic_primal
                 end
             end
-     
+
         end
 
         # add supporting hyperplanes
         optimality_gap = m.objval - mip_objval
         primal_infeasibility = checkInfeasibility(m, mip_solution)
-        OA_infeasibility = 0.0 
+        OA_infeasibility = 0.0
         # ITS FINE TO CHECK OPTIMALITY GAP ONLY BECAUSE IF conic_model IS INFEASIBLE, ITS OBJ VALUE IS INF
         cycle_indicator = (m.algorithm == "OA" ? compareIntegerSolutions(m, prev_mip_solution, mip_solution) : false)
         if (optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance && !cycle_indicator) || cb != [] #&& !(prev_mip_solution == mip_solution)
@@ -1159,7 +1175,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             # gc()
             # WARMSTART MIP FROM UPPER BOUND
             if !any(isnan,m.solution) && !isempty(m.solution)
-                warmstart_solution = completeSOCPDisaggregator(m, m.solution) 
+                warmstart_solution = completeSOCPDisaggregator(m, m.solution)
                 if applicable(MathProgBase.setwarmstart!, getInternalModel(mip_model), warmstart_solution)
                     MathProgBase.setwarmstart!(getInternalModel(mip_model), warmstart_solution)
                 end
@@ -1172,7 +1188,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 (m.verbose > 1) && println("MIP Infeasible")
                 m.status = :Infeasible
                 return
-            else 
+            else
                 (m.verbose > 1) && println("MIP Status: $mip_status")
             end
             mip_solution = getValue(m.mip_x)
@@ -1190,9 +1206,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         error("Unspecified algorithm.")
     end
 
-    if m.instance != ""        
+    if m.instance != ""
         out_file = open("output.txt", "a")
-        write(out_file, "$(m.instance): $(m.status) $iter $(time() - start) $(m.objval) $(m.problem_type) $(cputime_mip) $(cputime_conic)\n") 
+        write(out_file, "$(m.instance): $(m.status) $iter $(time() - start) $(m.objval) $(m.problem_type) $(cputime_mip) $(cputime_conic)\n")
         close(out_file)
     end
 
@@ -1203,7 +1219,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     (m.verbose > 0) && @printf "Total time        = %13.5f sec.\n" (time()-start)
     (m.verbose > 0) && @printf "MIP total time    = %13.5f sec.\n" cputime_mip
     (m.verbose > 0) && @printf "CONE total time   = %13.5f sec.\n\n" cputime_conic
-    
+
     (m.profile) && @printf "Profiler:\n"
     (m.profile) && @printf "Preparing Conic subproblem   = %13.5f sec.\n" cputime_load
     (m.profile) && @printf " - Preprocess out integers   = %13.5f sec.\n" m.prep_timer
