@@ -769,12 +769,24 @@ function addDualCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
         end
     end
 
-    k = 1
     max_violation = -1e+5
     for (cone, ind) in m.pajarito_var_cones
         if cone == :SOC || cone == :SOCRotated || cone == :ExpPrimal || cone == :SDP
-            for i = ind
+            for i in ind
                 @assert m.vartype[i] != :Int && m.vartype[i] != :Bin
+            end
+            if cone == :SDP
+                # the separator is a vector of the lower triangular entries, so to get a dual cut in the full n x n space, have to count the above-diagonal entries too. so just multiply the non-diagonal entries in separator by 2
+                n = round(Int, sqrt(1/4 + 2*length(ind)) - 1/2)
+                k = 1
+                for j in 1:n
+                    for i in j:n
+                        if j != i
+                            separator[ind[k]] *= 2
+                        end
+                        k += 1
+                    end
+                end
             end
             viol = -vecdot(separator[ind], mip_solution[ind])
             if viol > max_violation
