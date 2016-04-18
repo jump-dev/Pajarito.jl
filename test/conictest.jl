@@ -148,6 +148,32 @@ end
 
 end
 
+facts("Turn on SOC disaggregator test") do
+
+    for mip_solver in mip_solvers
+        for conic_solver in conic_solvers
+context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
+            x = Convex.Variable(1,:Int)
+            y = Convex.Variable(1)
+
+            problem = Convex.minimize(-3x-y,
+                               x >= 1,
+                               y >= 0,
+                               3x + 2y <= 10,
+                               x^2 + y^2 <= 5)
+
+
+            Convex.solve!(problem, PajaritoSolver(disaggregate_soc=true,algorithm=algorithm,mip_solver=mip_solver,cont_solver=conic_solver)) 
+
+            @fact problem.status --> :Optimal
+            @fact Convex.evaluate(x) --> roughly(2.0, TOL)
+            @fact Convex.evaluate(y) --> roughly(1.0, TOL)
+end
+        end
+    end
+
+end
+
 facts("Turn off SOC disaggregator test") do
 
     for mip_solver in mip_solvers

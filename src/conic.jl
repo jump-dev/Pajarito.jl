@@ -48,7 +48,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     opt_tolerance               # Relative optimality tolerance
     time_limit                  # Time limit
     profile::Bool               # Performance profile switch
-    disaggregate_soc::Symbol    # Disaggregate SOC constraints following Vielma et al.
+    disaggregate_soc::DisaggSOC # Disaggregate SOC constraints following Vielma et al.
     instance::AbstractString    # Path to instance
     enable_sdp::Bool            # Indicator for enabling sdp support
     force_primal_cuts::Bool     # Enforces primal cutting planes under conic solver
@@ -116,7 +116,7 @@ function MathProgBase.loadproblem!(
     m.is_conic_solver = (applicable(MathProgBase.ConicModel, m.cont_solver) && m.cont_solver != MathProgBase.defaultNLPsolver)
 
     # Keep default soc disaggregate only if conic solver
-    m.disaggregate_soc = (m.is_conic_solver && m.disaggregate_soc == :default) ? Symbol("true") : Symbol("false")
+    m.disaggregate_soc = (m.disaggregate_soc == _disagg_soc_default ? (m.is_conic_solver ? _disagg_soc_on : _disagg_soc_off) : m.disaggregate_soc)
 
     # Wrap nonlinear solver with ConicNonlinearBridge
     m.cont_solver = (m.is_conic_solver ? m.cont_solver : ConicNLPWrapper(nlp_solver=m.cont_solver))
@@ -662,7 +662,7 @@ function addPrimalCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
     end
     for (cone, ind) in m.pajarito_var_cones
         if cone == :SOC
-            if m.disaggregate_soc != :true
+            if m.disaggregate_soc != _disagg_soc_on
                 f = getSOCValue(ind, separator)
                 # IF ALL HAVE DIVISION BY ZERO, IT MUST BE FEASIBLE.
                 if getSOCNormValue(ind, separator) == 0.0
@@ -798,7 +798,7 @@ function loadMIPModel(m::PajaritoConicModel, mip_model)
     t = Array(Vector{Variable},m.numSOCCones)
     k = 1
     for (cone, ind) in m.pajarito_var_cones
-        if m.disaggregate_soc == :true && cone == :SOC
+        if m.disaggregate_soc == _disagg_soc_on && cone == :SOC
             @defVar(mip_model, 0.0 <= t[k][j=1:m.dimSOCCones[k]] <= Inf)
             @addConstraint(mip_model, sum{t[k][i], i in 1:m.dimSOCCones[k]} - x[ind[1]] <= 0.0)      
             k += 1        
@@ -932,7 +932,7 @@ end
 function completeSOCPDisaggregator(m::PajaritoConicModel, solution)
 
     new_solution = copy(solution)
-    if m.disaggregate_soc == :true
+    if m.disaggregate_soc == _disagg_soc_on
         for (cone,ind) in m.pajarito_var_cones
             if cone == :SOC
                 for i in ind[2:end]
@@ -1216,7 +1216,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             for i = 1:m.numVar
                 setSolutionValue!(cb, m.mip_x[i], conic_primal[i])
             end
-            if m.disaggregate_soc == :true
+            if m.disaggregate_soc == _disagg_soc_on
                 k = 1
                 for (cone,ind) in m.pajarito_var_cones
                     if cone == :SOC
