@@ -31,7 +31,7 @@ TOL = 1e-3
 
 include("nlptest.jl")
 include("conictest.jl")
-include("sdptest.jl")
+#include("sdptest.jl")
 
 runnonlineartests("OA", myip_solvers)
 runnonlineartests("BC", lazy_solvers)
@@ -41,8 +41,8 @@ runconictests("BC", lazy_solvers, myconic_solvers)
 
 for i = 1:length(sdp_solvers)
     if contains(string(typeof(sdp_solvers[i])), "MosekSolver") 
-        runsdptests("OA", myip_solvers, sdp_solvers[i])
-        runsdptests("BC", lazy_solvers, sdp_solvers[i])
+        #runsdptests("OA", myip_solvers, sdp_solvers[i])
+        #runsdptests("BC", lazy_solvers, sdp_solvers[i])
         runSOCRotatedtests("OA", myip_solvers, sdp_solvers[i])
         runSOCRotatedtests("BC", lazy_solvers, sdp_solvers[i])
     end

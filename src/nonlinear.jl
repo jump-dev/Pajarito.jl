@@ -306,9 +306,9 @@ function addCuttingPlanes!(m::PajaritoModel, mip_model, separator, jac_I, jac_J,
             (m.verbose > 1) && println("rhs $new_rhs") 
             if m.constrtype[i] == :(<=)
                 if cb != []
-                    @addLazyConstraint(cb, dot(coef_new[i], m.mip_x[varidx_new[i]]) <= new_rhs)
+                    @lazyconstraint(cb, dot(coef_new[i], m.mip_x[varidx_new[i]]) <= new_rhs)
                 else
-                    @addConstraint(mip_model, dot(coef_new[i], m.mip_x[varidx_new[i]]) <= new_rhs)
+                    @constraint(mip_model, dot(coef_new[i], m.mip_x[varidx_new[i]]) <= new_rhs)
                 end
                 viol = vecdot(coef_new[i], mip_solution[varidx_new[i]]) - new_rhs
                 if viol > max_violation
@@ -317,9 +317,9 @@ function addCuttingPlanes!(m::PajaritoModel, mip_model, separator, jac_I, jac_J,
                 #MathProgBase.addconstr!(mip_model, varidx_new[i], coef_new[i], -Inf, new_rhs)
             else
                 if cb != []
-                    @addLazyConstraint(cb, dot(coef_new[i], m.mip_x[varidx_new[i]]) >= new_rhs)
+                    @lazyconstraint(cb, dot(coef_new[i], m.mip_x[varidx_new[i]]) >= new_rhs)
                 else
-                    @addConstraint(mip_model, dot(coef_new[i], m.mip_x[varidx_new[i]]) >= new_rhs)
+                    @constraint(mip_model, dot(coef_new[i], m.mip_x[varidx_new[i]]) >= new_rhs)
                 end
                 viol = new_rhs - vecdot(coef_new[i], mip_solution[varidx_new[i]])
                 if viol > max_violation
@@ -350,9 +350,9 @@ function addCuttingPlanes!(m::PajaritoModel, mip_model, separator, jac_I, jac_J,
         (m.verbose > 1) && println("coef $(grad_f)") 
         (m.verbose > 1) && println("rhs $new_rhs") 
         if cb != []
-            @addLazyConstraint(cb, dot(grad_f, m.mip_x[varidx]) <= new_rhs)
+            @lazyconstraint(cb, dot(grad_f, m.mip_x[varidx]) <= new_rhs)
         else
-            @addConstraint(mip_model, dot(grad_f, m.mip_x[varidx]) <= new_rhs)
+            @constraint(mip_model, dot(grad_f, m.mip_x[varidx]) <= new_rhs)
         end
         viol = vecdot(grad_f, mip_solution[varidx]) - new_rhs
         if viol > max_violation
@@ -367,27 +367,27 @@ end
 function loadMIPModel(m::PajaritoModel, mip_model)
     lb = [m.l; -1e6]
     ub = [m.u; 1e6]
-    @defVar(mip_model, lb[i] <= x[i=1:m.numVar+1] <= ub[i])
+    @variable(mip_model, lb[i] <= x[i=1:m.numVar+1] <= ub[i])
     numIntVar = 0
     for i = 1:m.numVar
-        setCategory(x[i], m.vartype[i])
+        setcategory(x[i], m.vartype[i])
         if m.vartype[i] == :Int || m.vartype[i] == :Bin
             numIntVar += 1
         end
     end
-    setCategory(x[m.numVar+1], :Cont)
+    setcategory(x[m.numVar+1], :Cont)
     for i = 1:m.numConstr-m.numNLConstr
         if m.A_lb[i] > -Inf && m.A_ub[i] < Inf
-            @addConstraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .>= m.A_lb[i])
-            @addConstraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .<= m.A_ub[i])
+            @constraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .>= m.A_lb[i])
+            @constraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .<= m.A_ub[i])
         elseif m.A_lb[i] > -Inf
-            @addConstraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .>= m.A_lb[i])
+            @constraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .>= m.A_lb[i])
         else
-            @addConstraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .<= m.A_ub[i])
+            @constraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .<= m.A_ub[i])
         end
     end
     c_new = [m.objsense == :Max ? -m.c : m.c; m.objlinear ? 0.0 : 1.0]
-    @setObjective(mip_model, Min, dot(c_new, x))
+    @objective(mip_model, Min, dot(c_new, x))
 
     m.mip_x = x
     m.numIntVar = numIntVar
@@ -520,10 +520,10 @@ function MathProgBase.optimize!(m::PajaritoModel)
             mip_objval = -Inf #MathProgBase.cbgetobj(cb)
             mip_solution = MathProgBase.cbgetmipsolution(cb)[1:m.numVar+1]
         else
-            mip_objval = getObjectiveValue(mip_model)
-            mip_solution = getValue(m.mip_x)
+            mip_objval = getobjectivevalue(mip_model)
+            mip_solution = getvalue(m.mip_x)
         end
-        #MathProgBase.getsolution(getInternalModel(mip_model))
+        #MathProgBase.getsolution(internalmodel(mip_model))
         (m.verbose > 2) && println("MIP Solution: $mip_solution")
         # solve NLP model for the MIP solution
         new_u = m.u
@@ -656,15 +656,15 @@ function MathProgBase.optimize!(m::PajaritoModel)
     function heuristiccallback(cb)
         if nlp_status == :Optimal
             for i = 1:m.numVar
-                setSolutionValue!(cb, m.mip_x[i], nlp_solution[i])
+                setsolutionvalue(cb, m.mip_x[i], nlp_solution[i])
             end
-            addSolution(cb)
+            addsolution(cb)
         end
     end
 
     if m.algorithm == "BC"
-        addLazyCallback(mip_model, nonlinearcallback)
-        addHeuristicCallback(mip_model, heuristiccallback)
+        addlazycallback(mip_model, nonlinearcallback)
+        addheuristiccallback(mip_model, heuristiccallback)
         m.status = solve(mip_model)
     elseif m.algorithm == "OA"
         (m.verbose > 0) && println("Iteration   MIP Objective     NLP Objective   Optimality Gap   Best Solution    Primal Inf.      OA Inf.")
@@ -673,9 +673,9 @@ function MathProgBase.optimize!(m::PajaritoModel)
             cut_added = false
             # WARMSTART MIP FROM UPPER BOUND
             if !any(isnan,m.solution) && !isempty(m.solution)
-                if applicable(MathProgBase.setwarmstart!, getInternalModel(mip_model), m.solution)
+                if applicable(MathProgBase.setwarmstart!, internalmodel(mip_model), m.solution)
                     # Extend solution with the objective variable
-                    MathProgBase.setwarmstart!(getInternalModel(mip_model), [m.solution; m.objval])
+                    MathProgBase.setwarmstart!(internalmodel(mip_model), [m.solution; m.objval])
                 end
             end
             # solve MIP model
@@ -691,7 +691,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
             else 
                 (m.verbose > 1) && println("MIP Status: $mip_status")
             end
-            mip_solution = getValue(m.mip_x)
+            mip_solution = getvalue(m.mip_x)
 
             nonlinearcallback([])
 
