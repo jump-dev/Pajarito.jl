@@ -8,14 +8,14 @@ function runnonlineartests(algorithm, mip_solvers)
 facts("Sparse matrix bug test") do
     m = Model(solver=PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
 
-    @defVar(m, x >= 0, start = 1, Int)
-    @defVar(m, y >= 0, start = 1)
+    @variable(m, x >= 0, start = 1, Int)
+    @variable(m, y >= 0, start = 1)
 
-    @setObjective(m, Min, -3x - y)
+    @objective(m, Min, -3x - y)
 
-    @addConstraint(m, 3x + 10 <= 20)
+    @constraint(m, 3x + 10 <= 20)
 
-    @addNLConstraint(m, y^2 <= 10)
+    @NLconstraint(m, y^2 <= 10)
 
     @fact solve(m) --> :Optimal
 
@@ -25,14 +25,14 @@ end
 facts("Convex constraint with LB and UB") do
     m = Model(solver=PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
 
-    @defVar(m, x >= 0, start = 1, Int)
-    @defVar(m, y >= 0, start = 1)
+    @variable(m, x >= 0, start = 1, Int)
+    @variable(m, y >= 0, start = 1)
 
-    @setObjective(m, Min, -3x - y)
+    @objective(m, Min, -3x - y)
 
-    @addConstraint(m, 3x + 2y + 10 <= 20)
+    @constraint(m, 3x + 2y + 10 <= 20)
 
-    @addNLConstraint(m, 8 <= x^2 <= 10)
+    @NLconstraint(m, 8 <= x^2 <= 10)
 
     @fact_throws ErrorException solve(m)
 
@@ -41,15 +41,15 @@ end
 facts("Infeasible NLP problem") do
     m = Model(solver=PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
 
-    @defVar(m, x >= 0, start = 1, Int)
-    @defVar(m, y >= 0, start = 1)
+    @variable(m, x >= 0, start = 1, Int)
+    @variable(m, y >= 0, start = 1)
 
-    @setObjective(m, Min, -3x - y)
+    @objective(m, Min, -3x - y)
 
-    @addConstraint(m, 3x + 2y + 10 <= 20)
+    @constraint(m, 3x + 2y + 10 <= 20)
 
-    @addNLConstraint(m, x^2 >= 9)
-    @addNLConstraint(m, exp(y) + x <= 2)
+    @NLconstraint(m, x^2 >= 9)
+    @NLconstraint(m, exp(y) + x <= 2)
 
     status = solve(m)
 
@@ -59,16 +59,16 @@ end
 facts("Infeasible MIP problem") do
     m = Model(solver=PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
 
-    @defVar(m, x >= 0, start = 1, Int)
-    @defVar(m, y >= 0, start = 1)
+    @variable(m, x >= 0, start = 1, Int)
+    @variable(m, y >= 0, start = 1)
 
-    @setObjective(m, Min, -3x - y)
+    @objective(m, Min, -3x - y)
 
-    @addConstraint(m, 3x + 2y + 10 <= 20)
-    @addConstraint(m, 6x + 5y >= 30)
+    @constraint(m, 3x + 2y + 10 <= 20)
+    @constraint(m, 6x + 5y >= 30)
 
-    @addNLConstraint(m, x^2 >= 8)
-    @addNLConstraint(m, exp(y) + x <= 7)
+    @NLconstraint(m, x^2 >= 8)
+    @NLconstraint(m, exp(y) + x <= 7)
 
     status = solve(m)
 
@@ -81,21 +81,21 @@ context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
 
     m = Model(solver=PajaritoSolver(algorithm=algorithm,verbose=0,mip_solver=mip_solver,cont_solver=nlp_solver))
 
-    @defVar(m, x >= 0, start = 1, Int)
-    @defVar(m, y >= 0, start = 1)
+    @variable(m, x >= 0, start = 1, Int)
+    @variable(m, y >= 0, start = 1)
 
-    @setObjective(m, Min, -3x - y)
+    @objective(m, Min, -3x - y)
 
-    @addConstraint(m, 3x + 2y + 10 <= 20)
-    @addConstraint(m, x >= 1)
+    @constraint(m, 3x + 2y + 10 <= 20)
+    @constraint(m, x >= 1)
 
-    @addNLConstraint(m, x^2 <= 5)
-    @addNLConstraint(m, exp(y) + x <= 7)
+    @NLconstraint(m, x^2 <= 5)
+    @NLconstraint(m, exp(y) + x <= 7)
 
     status = solve(m)
 
     @fact status --> :Optimal
-    @fact getValue(x) --> 2.0
+    @fact getvalue(x) --> 2.0
 end
 end
 end
@@ -105,21 +105,21 @@ for mip_solver in mip_solvers
 context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
     m = Model(solver=PajaritoSolver(algorithm=algorithm,verbose=0,mip_solver=mip_solver,cont_solver=nlp_solver))
 
-    @defVar(m, x >= 0, start = 1, Int)
-    @defVar(m, y >= 0, start = 1)
+    @variable(m, x >= 0, start = 1, Int)
+    @variable(m, y >= 0, start = 1)
 
-    @setNLObjective(m, Min, -3x - y)
+    @NLobjective(m, Min, -3x - y)
 
-    @addConstraint(m, 3x + 2y + 10 <= 20)
-    @addConstraint(m, x >= 1)
+    @constraint(m, 3x + 2y + 10 <= 20)
+    @constraint(m, x >= 1)
 
-    @addNLConstraint(m, x^2 <= 5)
-    @addNLConstraint(m, exp(y) + x <= 7)
+    @NLconstraint(m, x^2 <= 5)
+    @NLconstraint(m, exp(y) + x <= 7)
 
     status = solve(m)
 
     @fact status --> :Optimal
-    @fact getValue(x) --> 2.0
+    @fact getvalue(x) --> 2.0
 end
 end
 end
@@ -130,16 +130,16 @@ for mip_solver in mip_solvers
 context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
     m = Model(solver=PajaritoSolver(algorithm=algorithm,verbose=0,mip_solver=mip_solver,cont_solver=nlp_solver))
 
-    @defVar(m, x >= 0, start = 1)
-    @defVar(m, y >= 0, start = 1)
+    @variable(m, x >= 0, start = 1)
+    @variable(m, y >= 0, start = 1)
 
-    @setNLObjective(m, Min, -3x - y)
+    @NLobjective(m, Min, -3x - y)
 
-    @addConstraint(m, 3x + 2y + 10 <= 20)
-    @addConstraint(m, x >= 1)
+    @constraint(m, 3x + 2y + 10 <= 20)
+    @constraint(m, x >= 1)
 
-    @addNLConstraint(m, x^2 <= 5)
-    @addNLConstraint(m, exp(y) + x <= 7)
+    @NLconstraint(m, x^2 <= 5)
+    @NLconstraint(m, exp(y) + x <= 7)
 
     status = solve(m)
 
@@ -154,17 +154,17 @@ for mip_solver in mip_solvers
 context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
     m = Model(solver=PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
 
-    @defVar(m, x >= 0, start = 1, Int)
-    @defVar(m, y >= 0, start = 1)
+    @variable(m, x >= 0, start = 1, Int)
+    @variable(m, y >= 0, start = 1)
 
-    @setObjective(m, Max, 3x + y)
+    @objective(m, Max, 3x + y)
 
-    @addConstraint(m, 3x + 2y + 10 <= 20)
+    @constraint(m, 3x + 2y + 10 <= 20)
 
-    @addNLConstraint(m, x^2 <= 9)
+    @NLconstraint(m, x^2 <= 9)
 
     status = solve(m)
-    @fact round(getObjectiveValue(m)-9.5) --> 0.0
+    @fact round(getobjectivevalue(m)-9.5) --> 0.0
 
 end
 end
@@ -175,17 +175,17 @@ for mip_solver in mip_solvers
 context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
     m = Model(solver=PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
 
-    @defVar(m, x >= 0, start = 1, Int)
-    @defVar(m, y >= 0, start = 1)
+    @variable(m, x >= 0, start = 1, Int)
+    @variable(m, y >= 0, start = 1)
 
-    @setObjective(m, Max, -x^2 - y)
+    @objective(m, Max, -x^2 - y)
 
-    @addConstraint(m, x + 2y >= 4)
+    @constraint(m, x + 2y >= 4)
 
-    @addNLConstraint(m, x^2 <= 9)
+    @NLconstraint(m, x^2 <= 9)
 
     status = solve(m)
-    @fact round(getObjectiveValue(m)+2.0) --> 0.0
+    @fact round(getobjectivevalue(m)+2.0) --> 0.0
 
 end
 end
@@ -198,14 +198,14 @@ for mip_solver in mip_solvers
 context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
     m = Model(solver=PajaritoSolver(verbose=1,profile=true,algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
 
-    @defVar(m, x >= 0, start = 1, Int)
-    @defVar(m, y >= 0, start = 1)
+    @variable(m, x >= 0, start = 1, Int)
+    @variable(m, y >= 0, start = 1)
 
-    @setObjective(m, Max, -x^2 - y)
+    @objective(m, Max, -x^2 - y)
 
-    @addConstraint(m, x + 2y >= 4)
+    @constraint(m, x + 2y >= 4)
 
-    @addNLConstraint(m, x^2 <= 9)
+    @NLconstraint(m, x^2 <= 9)
 
     status = solve(m)
     @fact status --> :Optimal

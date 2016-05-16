@@ -139,8 +139,8 @@ function MathProgBase.loadproblem!(
     A_I, A_J, A_V = findnz(A)
     slack_count = numVar+1
     for (cone, ind) in copy_constr_cones
-        if cone == :SDP && !m.enable_sdp
-            error("MISDP feature is currently experimental, turn it on by using ""enable_sdp=true"" at your own risk!")
+        if cone == :SDP
+            error("SDP constraints are not supported")
         end
         if cone == :SOC || cone == :SOCRotated || cone == :ExpPrimal || cone == :SDP
             lengthSpecCones += length(ind)
@@ -679,9 +679,9 @@ function addPrimalCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
                     max_violation = viol
                 end
                 if cb != []
-                    @addLazyConstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
+                    @lazyconstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
                 else
-                    @addConstraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
+                    @constraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
                 end
             else
                 for j = 2:length(ind)
@@ -694,14 +694,14 @@ function addPrimalCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
                         new_rhs += V[i] * separator[I[i]]
                     end
                     #new_rhs = (abs(new_rhs) < 1e-9 ? 0.0 : new_rhs)
-                    viol = vecdot(V, mip_solution[I]) - (initial_query ? 0.0 : getValue(m.mip_t[k][j-1])) - new_rhs
+                    viol = vecdot(V, mip_solution[I]) - (initial_query ? 0.0 : getvalue(m.mip_t[k][j-1])) - new_rhs
                     if viol > max_violation
                         max_violation = viol
                     end
                     if cb != []
-                        @addLazyConstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} - m.mip_t[k][j-1] <= new_rhs)     
+                        @lazyconstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} - m.mip_t[k][j-1] <= new_rhs)
                     else
-                        @addConstraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} - m.mip_t[k][j-1] <= new_rhs)     
+                        @constraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} - m.mip_t[k][j-1] <= new_rhs)
                     end         
                 end
                 k += 1
@@ -723,9 +723,9 @@ function addPrimalCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
                 max_violation = viol
             end
             if cb != []
-                @addLazyConstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
+                @lazyconstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
             else
-                @addConstraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
+                @constraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
             end
 
         elseif cone == :ExpPrimal
@@ -741,9 +741,9 @@ function addPrimalCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
                 max_violation = viol
             end
             if cb != []
-                @addLazyConstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
+                @lazyconstraint(cb, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
             else
-                @addConstraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
+                @constraint(mip_model, sum{V[i] * m.mip_x[I[i]], i in 1:length(I)} <= new_rhs)
             end
         end
     end
@@ -781,9 +781,9 @@ function addDualCuttingPlanes!(m, mip_model, separator, cb, mip_solution)
                 max_violation = viol
             end
             if cb != []
-                @addLazyConstraint(cb, sum{separator[i] * m.mip_x[i], i in ind} >= 0.0)
+                @lazyconstraint(cb, sum{separator[i] * m.mip_x[i], i in ind} >= 0.0)
             else
-                @addConstraint(mip_model, sum{separator[i] * m.mip_x[i], i in ind} >= 0.0)
+                @constraint(mip_model, sum{separator[i] * m.mip_x[i], i in ind} >= 0.0)
             end
         end
     end
@@ -794,31 +794,31 @@ end
 
 
 function loadMIPModel(m::PajaritoConicModel, mip_model)
-    @defVar(mip_model, m.l[i] <= x[i=1:m.numVar] <= m.u[i])
+    @variable(mip_model, m.l[i] <= x[i=1:m.numVar] <= m.u[i])
     t = Array(Vector{Variable},m.numSOCCones)
     k = 1
     for (cone, ind) in m.pajarito_var_cones
         if m.disaggregate_soc == _disagg_soc_on && cone == :SOC
-            @defVar(mip_model, 0.0 <= t[k][j=1:m.dimSOCCones[k]] <= Inf)
-            @addConstraint(mip_model, sum{t[k][i], i in 1:m.dimSOCCones[k]} - x[ind[1]] <= 0.0)      
+            @variable(mip_model, 0.0 <= t[k][j=1:m.dimSOCCones[k]] <= Inf)
+            @constraint(mip_model, sum{t[k][i], i in 1:m.dimSOCCones[k]} - x[ind[1]] <= 0.0)
             k += 1        
         end
     end
-    @setObjective(mip_model, :Min, dot(m.c,x))
+    @objective(mip_model, :Min, dot(m.c,x))
     for (cone,ind) in m.pajarito_constr_cones
         if cone == :Zero
-            @addConstraint(mip_model, m.A[ind,:]*x .== m.b[ind])
+            @constraint(mip_model, m.A[ind,:]*x .== m.b[ind])
         elseif cone == :NonNeg
-            @addConstraint(mip_model, m.A[ind,:]*x .<= m.b[ind])
+            @constraint(mip_model, m.A[ind,:]*x .<= m.b[ind])
         elseif cone == :NonPos
-            @addConstraint(mip_model, m.A[ind,:]*x .>= m.b[ind])
+            @constraint(mip_model, m.A[ind,:]*x .>= m.b[ind])
         else
             error("unrecognized cone $cone")
         end
     end
     numIntVar = 0
     for i in 1:m.numVar
-        setCategory(x[i], m.vartype[i])
+        setcategory(x[i], m.vartype[i])
         if m.vartype[i] == :Int || m.vartype[i] == :Bin
             numIntVar += 1
         end
@@ -1040,8 +1040,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             mip_objval = -Inf #MathProgBase.cbgetobj(cb)
             mip_solution = MathProgBase.cbgetmipsolution(cb)[1:m.numVar]
         else
-            mip_objval = getObjectiveValue(mip_model)
-            mip_solution = getValue(m.mip_x)
+            mip_objval = getobjectivevalue(mip_model)
+            mip_solution = getvalue(m.mip_x)
         end
 
         # TODO Enable this after extensive testing!
@@ -1222,21 +1222,21 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                     if cone == :SOC
                         j = 1
                         for i in ind[2:end]
-                            setSolutionValue!(cb, m.mip_t[k][j], conic_primal[i]^2)
+                            setsolutionvalue(cb, m.mip_t[k][j], conic_primal[i]^2)
                             j += 1
                         end
                         k += 1
                     end
                 end
             end
-            addSolution(cb)
+            addsolution(cb)
         end
     end
 
     # BC
     if m.algorithm == "BC"
-        addLazyCallback(mip_model,coniccallback)
-        addHeuristicCallback(mip_model, heuristiccallback)
+        addlazycallback(mip_model,coniccallback)
+        addheuristiccallback(mip_model, heuristiccallback)
         m.status = solve(mip_model)
     # OA
     elseif m.algorithm == "OA"
@@ -1248,8 +1248,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             # WARMSTART MIP FROM UPPER BOUND
             if !any(isnan,m.solution) && !isempty(m.solution)
                 warmstart_solution = completeSOCPDisaggregator(m, m.solution) 
-                if applicable(MathProgBase.setwarmstart!, getInternalModel(mip_model), warmstart_solution)
-                    MathProgBase.setwarmstart!(getInternalModel(mip_model), warmstart_solution)
+                if applicable(MathProgBase.setwarmstart!, internalmodel(mip_model), warmstart_solution)
+                    MathProgBase.setwarmstart!(internalmodel(mip_model), warmstart_solution)
                 end
             end
             # solve MIP model
@@ -1263,7 +1263,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             else 
                 (m.verbose > 1) && println("MIP Status: $mip_status")
             end
-            mip_solution = getValue(m.mip_x)
+            mip_solution = getvalue(m.mip_x)
             conic_objval = Inf
             coniccallback([])
             if cut_added == false
