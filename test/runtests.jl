@@ -7,43 +7,50 @@ using FactCheck
 using JuMP
 import Convex
 using Pajarito
-using GLPKMathProgInterface
-using ECOS
-using Ipopt
-using Mosek
+# using GLPKMathProgInterface
+# using ECOS
+# using Ipopt
+# using Mosek
 
 include(Pkg.dir("JuMP", "test", "solvers.jl"))
 
-# Define solvers
-mip_solvers = [GLPKSolverMIP()]
-nlp_solvers = [IpoptSolver(print_level=0)]
-conic_solvers = [ECOSSolver(verbose=0)]
-sdp_solvers = [MosekSolver(LOG=0)]
+# Define solvers using JuMP/test/solvers.jl
+solvers_mip = lazy_solvers
+solvers_nlnr = nlp_solvers
+solvers_conic = eco ? [ECOS.ECOSSolver(verbose=false)] : []
+solvers_sdp = mos ? [Mosek.MosekSolver(LOG=0)] : []
+
+@show solvers_mip
+@show solvers_nlnr
+@show solvers_conic
+@show solvers_sdp
 
 # Set fact check tolerance
 TOL = 1e-3
 
 # Nonlinear models tests in nlptest.jl
 include("nlptest.jl")
-for branch_cut in [true, false], mip_solver in mip_solvers, nlp_solver in nlp_solvers
-    runnonlineartests(branch_cut, mip_solver, nlp_solver)
+for bc in [true, false], mip in solvers_mip, nlnr in solvers_nlnr
+    runnonlineartests(bc, mip, nlnr)
 end
 
 # Conic models test in conictest.jl
 include("conictest.jl")
-# Conic model with conic solver
-for branch_cut in [true, false], mip_solver in mip_solvers, conic_solver in conic_solvers
-    runconictests(branch_cut, mip_solver, conic_solver)
-end
-# Conic model with nonlinear solver
-for branch_cut in [true, false], mip_solver in mip_solvers, nlp_solver in nlp_solvers
-    runconictests(branch_cut, mip_solver, nlp_solver)
+for bc in [true, false], mip in solvers_mip
+    # Conic model with conic solvers
+    for conic in solvers_conic
+        runconictests(bc, mip, conic)
+    end
+    # Conic model with nonlinear solvers
+    for nlnr in solvers_nlnr
+        runconictests(bc, mip, nlnr)
+    end
 end
 
 # SDP conic models tests in sdptest.jl
 include("sdptest.jl")
-for branch_cut in [true, false], mip_solver in mip_solvers, sdp_solver in sdp_solvers
-    runsdptests(branch_cut, mip_solver, sdp_solver)
+for bc in [true, false], mip in solvers_mip, sdp in solvers_sdp
+    runsdptests(bc, mip, sdp)
 end
 
 FactCheck.exitstatus()
