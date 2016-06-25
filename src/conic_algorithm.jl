@@ -52,7 +52,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     proj_dual_feas::Bool        # Project dual cone strictly feasible dual vectors onto dual cone boundaries
     solver_mip::MathProgBase.AbstractMathProgSolver # MIP solver
     solver_cont::MathProgBase.AbstractMathProgSolver # Continuous solver
-    timeout::Float64            # Time limit for OA/BC not including initial load
+    timeout::Float64            # Time limit for OA/BC not including initial load (in seconds)
     tol_rel_opt::Float64        # Relative optimality gap termination condition
     tol_zero::Float64           # Tolerance for setting small values to zeros
     sdp_init_soc::Bool          # Use SDP initial SOC cuts (if MIP solver supports MISOCP)
