@@ -34,7 +34,7 @@ end
 include("conictest.jl")
 for bc in [true, false]
     # Default solvers
-    # runconicdefaulttests(bc)
+    runconicdefaulttests(bc)
 
     for mip in solvers_mip
         # Conic model with conic solvers
