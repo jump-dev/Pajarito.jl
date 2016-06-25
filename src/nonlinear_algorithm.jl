@@ -3,9 +3,23 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+#=========================================================
+TODO
+Rewrite to the standard of conicmodel.jl
+=========================================================#
+
 using JuMP
 
-type PajaritoModel <: MathProgBase.AbstractNonlinearModel
+type PajaritoNonlinearModel <: MathProgBase.AbstractNonlinearModel
+    # SOLVER DATA:
+    verbose::Int                # Verbosity level flag
+    algorithm                   # Choice of algorithm: "OA" or "BC"
+    mip_solver                  # Choice of MILP solver
+    cont_solver                 # Choice of Conic solver
+    opt_tolerance               # Relative optimality tolerance
+    time_limit                  # Time limit
+    instance::AbstractString    # Path to instance
+
     solution::Vector{Float64}
     status
     objval::Float64
@@ -15,16 +29,6 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     numConstr::Int
     numNLConstr::Int
 
-    # SOLVER DATA:
-    verbose::Int                # Verbosity level flag
-    algorithm                   # Choice of algorithm: "OA" or "BC"
-    mip_solver                  # Choice of MILP solver
-    cont_solver                 # Choice of Conic solver
-    opt_tolerance               # Relative optimality tolerance
-    time_limit                  # Time limit
-    profile::Bool               # Performance profile switch
-    instance::AbstractString    # Path to instance
-    
     A
     A_lb
     A_ub
@@ -44,7 +48,7 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
     nlp_load_timer
 
     # CONSTRUCTOR:
-    function PajaritoModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,profile,instance)
+    function PajaritoNonlinearModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,instance)
         m = new()
         m.solution = Float64[]
         m.verbose = verbose
@@ -53,7 +57,6 @@ type PajaritoModel <: MathProgBase.AbstractNonlinearModel
         m.cont_solver = cont_solver
         m.opt_tolerance = opt_tolerance
         m.time_limit = time_limit
-        m.profile = profile
         m.instance = instance
         return m
     end
@@ -80,7 +83,6 @@ end
 function MathProgBase.eval_grad_f(d::InfeasibleNLPEvaluator, g, x)
     g[:] = [zeros(d.numVar); ones(d.numNLConstr)]
 end
-
 
 function MathProgBase.eval_g(d::InfeasibleNLPEvaluator, g, x)
     MathProgBase.eval_g(d.d, g, x[1:d.numVar])
@@ -110,7 +112,7 @@ function MathProgBase.jac_structure(d::InfeasibleNLPEvaluator)
     return I_new, J_new
 end
 
-function MathProgBase.eval_jac_g(d::InfeasibleNLPEvaluator, J, x) 
+function MathProgBase.eval_jac_g(d::InfeasibleNLPEvaluator, J, x)
     MathProgBase.eval_jac_g(d.d, J, x[1:d.numVar])
     k = length(J) - d.numNLConstr + 1
     for i in 1:d.numConstr
@@ -129,7 +131,7 @@ function MathProgBase.eval_hesslag(d::InfeasibleNLPEvaluator, H, x, σ, μ)
 end
 
 MathProgBase.hesslag_structure(d::InfeasibleNLPEvaluator) = MathProgBase.hesslag_structure(d.d)
-MathProgBase.initialize(d::InfeasibleNLPEvaluator, requested_features::Vector{Symbol}) = 
+MathProgBase.initialize(d::InfeasibleNLPEvaluator, requested_features::Vector{Symbol}) =
 MathProgBase.initialize(d.d, requested_features)
 MathProgBase.features_available(d::InfeasibleNLPEvaluator) = [:Grad,:Jac,:Hess]
 function MathProgBase.eval_jac_prod(d::InfeasibleNLPEvaluator, y, x, w)
@@ -162,11 +164,8 @@ MathProgBase.isconstrlinear(d::InfeasibleNLPEvaluator, i::Int) = MathProgBase.is
 MathProgBase.obj_expr(d::InfeasibleNLPEvaluator) = MathProgBase.obj_expr(d.d)
 MathProgBase.constr_expr(d::InfeasibleNLPEvaluator, i::Int) = MathProgBase.constr_expr(d.d, i)
 
-# BEGIN MATHPROGBASE INTERFACE
-MathProgBase.NonlinearModel(s::PajaritoSolver) = PajaritoModel(s.verbose, s.algorithm, s.mip_solver, s.cont_solver, s.opt_tolerance, s.time_limit, s.profile, s.instance)
-
 function MathProgBase.loadproblem!(
-    m::PajaritoModel, numVar, numConstr, l, u, lb, ub, sense, d)
+    m::PajaritoNonlinearModel, numVar, numConstr, l, u, lb, ub, sense, d)
 
     if !applicable(MathProgBase.NonlinearModel, m.cont_solver)
         error("$(m.cont_solver) is not a nonlinear solver.")
@@ -197,14 +196,35 @@ function MathProgBase.loadproblem!(
     m.solution = fill(NaN, m.numVar)
 end
 
-function populatelinearmatrix(m::PajaritoModel)
+function OAprintLevel(iter, mip_objval, conic_objval, optimality_gap, best_objval, primal_infeasibility, OA_infeasibility)
+
+    if abs(conic_objval) == Inf || isnan(conic_objval)
+        conic_objval_str = @sprintf "%s" "              "
+    else
+        conic_objval_str = @sprintf "%+.7e" conic_objval
+    end
+    if abs(optimality_gap) == Inf || isnan(optimality_gap)
+        optimality_gap_str = @sprintf "%s" "              "
+    else
+        optimality_gap_str = @sprintf "%+.7e" optimality_gap
+    end
+    if abs(best_objval) == Inf || isnan(best_objval)
+        best_objval_str = @sprintf "%s" "              "
+    else
+        best_objval_str = @sprintf "%+.7e" best_objval
+    end
+
+    @printf "%9d   %+.7e   %s   %s   %s   %+.7e   %+.7e\n" iter mip_objval conic_objval_str optimality_gap_str best_objval_str primal_infeasibility OA_infeasibility
+end
+
+function populatelinearmatrix(m::PajaritoNonlinearModel)
     # set up map of linear rows
     constrlinear = Array(Bool, m.numConstr)
     numlinear = 0
     constraint_to_linear = fill(-1,m.numConstr)
     for i = 1:m.numConstr
         constrlinear[i] = MathProgBase.isconstrlinear(m.d, i)
-        if constrlinear[i] 
+        if constrlinear[i]
             numlinear += 1
             constraint_to_linear[i] = numlinear
         end
@@ -224,7 +244,7 @@ function populatelinearmatrix(m::PajaritoModel)
     if m.objlinear
         (m.verbose > 0) && println("Objective function is linear")
         m.c = c
-    else 
+    else
         (m.verbose > 0) && println("Objective function is nonlinear")
         m.c = zeros(m.numVar)
     end
@@ -258,12 +278,9 @@ function populatelinearmatrix(m::PajaritoModel)
 
     # Now we have linear parts
     m.constrlinear = constrlinear
-
-
-
 end
 
-function addCuttingPlanes!(m::PajaritoModel, mip_model, separator, jac_I, jac_J, jac_V, grad_f, cb, mip_solution)
+function addCuttingPlanes!(m::PajaritoNonlinearModel, mip_model, separator, jac_I, jac_J, jac_V, grad_f, cb, mip_solution)
     max_violation = -1e+5
     # EVALUATE g and jac_g AT MIP SOLUTION THAT IS INFEASIBLE
     g = zeros(m.numConstr)
@@ -301,9 +318,9 @@ function addCuttingPlanes!(m::PajaritoModel, mip_model, separator, jac_I, jac_J,
             for j = 1:length(varidx_new[i])
                 new_rhs += coef_new[i][j] * separator[Int(varidx_new[i][j])]
             end
-            (m.verbose > 1) && println("varidx $(varidx_new[i])") 
-            (m.verbose > 1) && println("coef $(coef_new[i])") 
-            (m.verbose > 1) && println("rhs $new_rhs") 
+            (m.verbose > 1) && println("varidx $(varidx_new[i])")
+            (m.verbose > 1) && println("coef $(coef_new[i])")
+            (m.verbose > 1) && println("rhs $new_rhs")
             if m.constrtype[i] == :(<=)
                 if cb != []
                     @lazyconstraint(cb, dot(coef_new[i], m.mip_x[varidx_new[i]]) <= new_rhs)
@@ -326,14 +343,14 @@ function addCuttingPlanes!(m::PajaritoModel, mip_model, separator, jac_I, jac_J,
                     max_violation = viol
                 end
                 #MathProgBase.addconstr!(mip_model, varidx_new[i], coef_new[i], new_rhs, Inf)
-            end 
+            end
         end
     end
-    # CREATE OBJECTIVE CUTS   
+    # CREATE OBJECTIVE CUTS
     if !(m.objlinear)
         (m.verbose > 1) && println("Create supporting hyperplane for objective f(x) <= t")
-        f = MathProgBase.eval_f(m.d, separator[1:m.numVar])  
-        MathProgBase.eval_grad_f(m.d, grad_f, separator[1:m.numVar]) 
+        f = MathProgBase.eval_f(m.d, separator[1:m.numVar])
+        MathProgBase.eval_grad_f(m.d, grad_f, separator[1:m.numVar])
         if m.objsense == :Max
             f = -f
             grad_f = -grad_f
@@ -346,9 +363,9 @@ function addCuttingPlanes!(m::PajaritoModel, mip_model, separator, jac_I, jac_J,
         end
         varidx[m.numVar+1] = m.numVar+1
         grad_f[m.numVar+1] = -(1.0)
-        (m.verbose > 1) && println("varidx $(varidx)") 
-        (m.verbose > 1) && println("coef $(grad_f)") 
-        (m.verbose > 1) && println("rhs $new_rhs") 
+        (m.verbose > 1) && println("varidx $(varidx)")
+        (m.verbose > 1) && println("coef $(grad_f)")
+        (m.verbose > 1) && println("rhs $new_rhs")
         if cb != []
             @lazyconstraint(cb, dot(grad_f, m.mip_x[varidx]) <= new_rhs)
         else
@@ -364,7 +381,7 @@ function addCuttingPlanes!(m::PajaritoModel, mip_model, separator, jac_I, jac_J,
     return max_violation
 end
 
-function loadMIPModel(m::PajaritoModel, mip_model)
+function loadMIPModel(m::PajaritoNonlinearModel, mip_model)
     lb = [m.l; -1e6]
     ub = [m.u; 1e6]
     @variable(mip_model, lb[i] <= x[i=1:m.numVar+1] <= ub[i])
@@ -374,6 +391,9 @@ function loadMIPModel(m::PajaritoModel, mip_model)
         if m.vartype[i] == :Int || m.vartype[i] == :Bin
             numIntVar += 1
         end
+    end
+    if numIntVar == 0
+        error("No variables of type integer or binary; call the conic continuous solver directly for pure continuous problems")
     end
     setcategory(x[m.numVar+1], :Cont)
     for i = 1:m.numConstr-m.numNLConstr
@@ -402,11 +422,10 @@ function loadMIPModel(m::PajaritoModel, mip_model)
     =#
 end
 
-function checkInfeasibility(m::PajaritoModel, solution)
-
+function checkInfeasibility(m::PajaritoNonlinearModel, solution)
     g = zeros(m.numConstr)
     g_val = -1e+5*ones(m.numConstr)
-    MathProgBase.eval_g(m.d, g, solution[1:m.numVar])  
+    MathProgBase.eval_g(m.d, g, solution[1:m.numVar])
     for i = 1:m.numConstr
         if !m.constrlinear[i]
             if m.constrtype[i] == :(<=)
@@ -418,18 +437,14 @@ function checkInfeasibility(m::PajaritoModel, solution)
     end
 
     return maximum(g_val)
-
 end
 
-
-
-function compareIntegerSolutions(m::PajaritoModel, sol1, sol2)
+function compareIntegerSolutions(m::PajaritoNonlinearModel, sol1, sol2)
     int_ind = filter(i->m.vartype[i] == :Int || m.vartype[i] == :Bin, 1:m.numVar)
     return round(sol1[int_ind]) == round(sol2[int_ind])
 end
 
-function MathProgBase.optimize!(m::PajaritoModel)
-
+function MathProgBase.optimize!(m::PajaritoNonlinearModel)
     start = time()
 
     cputime_nlp = 0.0
@@ -488,13 +503,13 @@ function MathProgBase.optimize!(m::PajaritoModel)
     elseif ini_nlp_status == :Infeasible
         warn("Initial NLP Relaxation Infeasible.")
         m.status = :Infeasible
-        return     
-    # TODO Figure out the conditions for this to hold!  
+        return
+    # TODO Figure out the conditions for this to hold!
     elseif ini_nlp_status == :Unbounded
         warn("Initial NLP Relaxation Unbounded.")
         m.status = :InfeasibleOrUnbounded
         return
-    else 
+    else
         warn("NLP Solver Failure.")
         m.status = :Error
         return
@@ -532,7 +547,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
             if m.vartype[i] == :Int || m.vartype[i] == :Bin
                 new_u[i] = mip_solution[i]
                 new_l[i] = mip_solution[i]
-            end   
+            end
         end
 
         # set up ipopt to solve continuous relaxation
@@ -553,7 +568,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
         inf_model = MathProgBase.NonlinearModel(m.cont_solver)
         start_load = time()
         MathProgBase.loadproblem!(inf_model,
-        m.numVar+m.numNLConstr, m.numConstr, l_inf, u_inf, m.lb, m.ub, :Min, d_inf) 
+        m.numVar+m.numNLConstr, m.numConstr, l_inf, u_inf, m.lb, m.ub, :Min, d_inf)
         m.nlp_load_timer += time() - start_load
 
         #MathProgBase.setvarUB!(nlp_model, new_u)
@@ -582,13 +597,13 @@ function MathProgBase.optimize!(m::PajaritoModel)
                 if nlp_objval < m.objval
                     m.objval = nlp_objval
                     m.solution = separator[1:m.numVar]
-                end 
+                end
             end
 
         else
             # Create the warm start solution for inf model
             inf_initial_solution = zeros(m.numVar + m.numNLConstr);
-            inf_initial_solution[1:m.numVar] = mip_solution[1:m.numVar] 
+            inf_initial_solution[1:m.numVar] = mip_solution[1:m.numVar]
             g = zeros(m.numConstr)
             MathProgBase.eval_g(m.d, g, inf_initial_solution[1:m.numVar])
             k = 1
@@ -645,7 +660,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
                 m.iterations = iter
                 (m.verbose > 1) && println("Number of OA iterations: $iter")
             else
-                @assert cycle_indicator 
+                @assert cycle_indicator
                 m.status = :Suboptimal
             end
         end
@@ -688,7 +703,7 @@ function MathProgBase.optimize!(m::PajaritoModel)
                 (m.verbose > 1) && println("MIP Infeasible")
                 m.status = :Infeasible
                 return
-            else 
+            else
                 (m.verbose > 1) && println("MIP Status: $mip_status")
             end
             mip_solution = getvalue(m.mip_x)
@@ -713,21 +728,18 @@ function MathProgBase.optimize!(m::PajaritoModel)
     (m.verbose > 0) && println("\nPajarito finished...\n")
     (m.verbose > 0) && @printf "Status            = %13s.\n" m.status
     (m.verbose > 0) && (m.status == :Optimal) && @printf "Optimum objective = %13.5f.\n" m.objval
-    (m.verbose > 0) && (m.algorithm == "OA") && @printf "Iterations        = %13d.\n" iter
+    (m.verbose > 0) && (m.algorithm == "OA")  && @printf "Iterations        = %13d.\n" iter
     (m.verbose > 0) && @printf "Total time        = %13.5f sec.\n" (time()-start)
     (m.verbose > 0) && @printf "MIP total time    = %13.5f sec.\n" cputime_mip
-    (m.verbose > 0) && @printf "NLP total time    = %13.5f sec.\n\n" cputime_nlp
-
-    (m.profile) && @printf "Profiler:\n"
-    (m.profile) && @printf "Subproblem load time = %13.5f sec.\n" m.nlp_load_timer
-
+    (m.verbose > 0) && @printf "NLP total time    = %13.5f sec.\n" cputime_nlp
+    (m.verbose > 0) && @printf "Subprob load time = %13.5f sec.\n" m.nlp_load_timer
 end
 
-MathProgBase.setwarmstart!(m::PajaritoModel, x) = (m.solution = x)
-MathProgBase.setvartype!(m::PajaritoModel, v::Vector{Symbol}) = (m.vartype = v)
+MathProgBase.setwarmstart!(m::PajaritoNonlinearModel, x) = (m.solution = x)
+MathProgBase.setvartype!(m::PajaritoNonlinearModel, v::Vector{Symbol}) = (m.vartype = v)
 #MathProgBase.setvarUB!(m::IpoptMathProgModel, v::Vector{Float64}) = (m.u = v)
 #MathProgBase.setvarLB!(m::IpoptMathProgModel, v::Vector{Float64}) = (m.l = v)
 
-MathProgBase.status(m::PajaritoModel) = m.status
-MathProgBase.getobjval(m::PajaritoModel) = m.objval
-MathProgBase.getsolution(m::PajaritoModel) = m.solution
+MathProgBase.status(m::PajaritoNonlinearModel) = m.status
+MathProgBase.getobjval(m::PajaritoNonlinearModel) = m.objval
+MathProgBase.getsolution(m::PajaritoNonlinearModel) = m.solution

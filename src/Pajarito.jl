@@ -2,33 +2,22 @@
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
-######################################################
-# This package contains the mixed-integer non-linear
-# programming (MINLP) problem solver Pajarito.jl:
-#
-#       P olyhedral
-#       A pproximation
-# (in)  J ulia :
-#       A utomatic
-#       R eformulations
-# (for) I n T eger
-#       O ptimization
-# 
-# It applies outer approximation to a series of
-# mixed-integer linear programming problems
-# that approximates the original MINLP in a polyhedral
-# form.
-######################################################
+
+#=========================================================
+This package contains the mixed-integer non-linear programming
+(MINLP) solver Pajarito. It applies outer approximation to a
+sequence of mixed-integer linear (or second-order cone) programming
+problems that approximate the original MINLP, until convergence.
+=========================================================#
 
 __precompile__()
+
+
 module Pajarito
+    import MathProgBase
+    using ConicNonlinearBridge
 
-import MathProgBase
-using ConicNonlinearBridge
-
-include("solver.jl")
-include("common_functions.jl")
-include("nonlinear.jl")
-include("conic.jl")
-
-end # module
+    include("solver.jl")
+    include("conic_algorithm.jl")
+    include("nonlinear_algorithm.jl")
+end
