@@ -560,7 +560,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 @constraint(model_mip, sum{v^2, v in vars[3:end]} <= vars[1] * x_help_cone[1])
             elseif m.disagg && (length(vars) > 3)
                 # TODO this only adds one cut for dividing by vars[2], but may need two. otherwise, add extra SOCRotated in 3 dim to conic and use SOC disagg
-                # warn("Disaggregation for cones $species is not currently supported (but we know how to implement this, so please open an issue and include your model data)")
+                warn("Disaggregation for cones $species is not currently supported (but we know how to implement this, so please open an issue and include your model data)")
                 # num_cone_dagg += 1
                 # x_dagg_cone = @variable(model_mip, _[j in 1:(length(vars) - 2)] >= 0., basename="d$(num_cone_dagg)SOCR", start=0.)
                 # @constraint(model_mip, 2 * vars[1] - sum(x_dagg_cone) >= 0.)
