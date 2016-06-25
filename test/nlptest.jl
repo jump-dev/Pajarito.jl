@@ -6,8 +6,8 @@
 function runnonlineartests(branch_cut, mip_solver, nlp_solver)
     algorithm = branch_cut ? "BC" : "OA"
 
-    facts("Sparse matrix bug test") do
-        m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_con=nlp_solver))
+    facts("\n\n\n\nSparse matrix bug test\n\n") do
+        m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_cont=nlp_solver))
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -20,8 +20,8 @@ function runnonlineartests(branch_cut, mip_solver, nlp_solver)
         @fact solve(m) --> :Optimal
     end
 
-    facts("Convex constraint with LB and UB test") do
-        m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_con=nlp_solver))
+    facts("\n\n\n\nConvex constraint with LB and UB test\n\n") do
+        m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_cont=nlp_solver))
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -34,8 +34,8 @@ function runnonlineartests(branch_cut, mip_solver, nlp_solver)
         @fact_throws ErrorException solve(m)
     end
 
-    facts("Infeasible NLP problem") do
-        m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_con=nlp_solver))
+    facts("\n\n\n\nInfeasible NLP problem\n\n") do
+        m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_cont=nlp_solver))
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -51,8 +51,8 @@ function runnonlineartests(branch_cut, mip_solver, nlp_solver)
         @fact status --> :Infeasible
     end
 
-    facts("Infeasible MIP problem") do
-        m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_con=nlp_solver))
+    facts("\n\n\n\nInfeasible MIP problem\n\n") do
+        m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_cont=nlp_solver))
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -69,9 +69,9 @@ function runnonlineartests(branch_cut, mip_solver, nlp_solver)
         @fact status --> :Infeasible
     end
 
-    facts("Solver test") do
+    facts("\n\n\n\nSolver test\n\n") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_con=nlp_solver))
+            m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_cont=nlp_solver))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -90,9 +90,9 @@ function runnonlineartests(branch_cut, mip_solver, nlp_solver)
         end
     end
 
-    facts("Optimal solution with nonlinear objective") do
+    facts("\n\n\n\nOptimal solution with nonlinear objective test\n\n") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_con=nlp_solver))
+            m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_cont=nlp_solver))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -111,34 +111,28 @@ function runnonlineartests(branch_cut, mip_solver, nlp_solver)
         end
     end
 
-    # TODO setvartype is not called if there are no integer variables in the model
-    # facts("No integer variables") do
-    # for mip_solver in mip_solvers
-    # context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-    #     m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_con=nlp_solver))
-    #
-    #     @variable(m, x >= 0, start = 1)
-    #     @variable(m, y >= 0, start = 1)
-    #
-    #     @objective(m, Min, -3x - y)
-    #
-    #     @constraint(m, 3x + 2y + 10 <= 20)
-    #     @constraint(m, x >= 1)
-    #
-    #     @NLconstraint(m, x^2 <= 5)
-    #     @NLconstraint(m, exp(y) + x <= 7)
-    #
-    #     status = solve(m)
-    #
-    #     @fact status --> :Optimal
-    #     # TODO CHECK SOLUTION APPROXIMATELY
-    # end
-    # end
-    # end
-
-    facts("Maximization problem") do
+    facts("\n\n\n\nNo integer variables test\n\n") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_con=nlp_solver))
+            m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_cont=nlp_solver))
+
+            @variable(m, x >= 0, start = 1)
+            @variable(m, y >= 0, start = 1)
+
+            @objective(m, Min, -3x - y)
+
+            @constraint(m, 3x + 2y + 10 <= 20)
+            @constraint(m, x >= 1)
+
+            @NLconstraint(m, x^2 <= 5)
+            @NLconstraint(m, exp(y) + x <= 7)
+
+            @fact_throws ErrorException solve(m)
+        end
+    end
+
+    facts("\n\n\n\nMaximization problem\n\n") do
+        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
+            m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_cont=nlp_solver))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -149,13 +143,14 @@ function runnonlineartests(branch_cut, mip_solver, nlp_solver)
             @NLconstraint(m, x^2 <= 9)
 
             status = solve(m)
-            @fact round(getobjectivevalue(m)-9.5) --> 0.0
+
+            @fact round(getobjectivevalue(m) - 9.5) --> 0.0
         end
     end
 
-    facts("Maximization problem with nonlinear function") do
+    facts("\n\n\n\nMaximization problem with nonlinear function\n\n") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_con=nlp_solver))
+            m = Model(solver=PajaritoSolver(branch_cut=branch_cut, solver_mip=mip_solver, solver_cont=nlp_solver))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -166,30 +161,8 @@ function runnonlineartests(branch_cut, mip_solver, nlp_solver)
             @NLconstraint(m, x^2 <= 9)
 
             status = solve(m)
-            @fact round(getobjectivevalue(m)+2.0) --> 0.0
+
+            @fact round(getobjectivevalue(m) + 2.0) --> 0.0
         end
     end
-
-    # if !branch_cut
-    # facts("Print test") do
-    # for mip_solver in mip_solvers
-    # context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-    #     m = Model(solver=PajaritoSolver(verbose=1,profile=true,algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
-    #
-    #     @variable(m, x >= 0, start = 1, Int)
-    #     @variable(m, y >= 0, start = 1)
-    #
-    #     @objective(m, Max, -x^2 - y)
-    #
-    #     @constraint(m, x + 2y >= 4)
-    #
-    #     @NLconstraint(m, x^2 <= 9)
-    #
-    #     status = solve(m)
-    #     @fact status --> :Optimal
-    #
-    # end
-    # end
-    # end
-    # end
 end

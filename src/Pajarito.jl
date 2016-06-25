@@ -4,10 +4,10 @@
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #=========================================================
-This package contains the mixed-integer non-linear programming
-(MINLP) solver Pajarito. It applies outer approximation to a
-sequence of mixed-integer linear (or second-order cone) programming
-problems that approximate the original MINLP, until convergence.
+This package contains the mixed-integer convex programming (MICP)
+solver Pajarito. It applies outer approximation to a sequence
+of mixed-integer linear (or second-order cone) programming
+problems that approximate the original MICP, until convergence.
 =========================================================#
 
 __precompile__()

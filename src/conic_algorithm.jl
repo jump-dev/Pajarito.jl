@@ -1,4 +1,4 @@
-#  Copyright 2016, Los Alamos National Laboratory, LANS LLC.
+#  Copyright 2016, Los Alamos National Laboratory, LANS LLC, and Chris Coey.
 #  This Source Code Form is subject to the terms of the Mozilla Public
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, you can obtain one at http://mozilla.org/MPL/2.0/.
@@ -51,7 +51,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     proj_dual_infeas::Bool      # Project dual cone infeasible dual vectors onto dual cone boundaries
     proj_dual_feas::Bool        # Project dual cone strictly feasible dual vectors onto dual cone boundaries
     solver_mip::MathProgBase.AbstractMathProgSolver # MIP solver
-    solver_con::MathProgBase.AbstractMathProgSolver # Continuous solver
+    solver_cont::MathProgBase.AbstractMathProgSolver # Continuous solver
     timeout::Float64            # Time limit for OA/BC not including initial load
     tol_rel_opt::Float64        # Relative optimality gap termination condition
     tol_zero::Float64           # Tolerance for setting small values to zeros
@@ -119,7 +119,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     queue_heur::Vector{Vector{Float64}} # Heuristic queue for x_all
 
     # Model constructor
-    function PajaritoConicModel(path, log_level, branch_cut, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, solver_mip, solver_con, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(path, log_level, branch_cut, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, solver_mip, solver_cont, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         m = new()
 
         m.path = path
@@ -131,7 +131,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.proj_dual_infeas = proj_dual_infeas
         m.proj_dual_feas = proj_dual_feas
         m.solver_mip = solver_mip
-        m.solver_con = solver_con
+        m.solver_cont = solver_cont
         m.timeout = timeout
         m.tol_rel_opt = tol_rel_opt
         m.tol_zero = tol_zero
@@ -251,7 +251,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     end
 
     # Verify cone compatibility with solver and consistency of cone indices
-    conic_species = MathProgBase.supportedcones(m.solver_con)
+    conic_species = MathProgBase.supportedcones(m.solver_cont)
     summary = Dict{Symbol,Dict{Symbol,Real}}()
     for (species, inds) in vcat(cone_con, cone_var)
         if !(species in conic_species)
@@ -866,7 +866,7 @@ function process_relax!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
     # Instantiate and solve the conic relaxation model
     tic()
-    model_relax = MathProgBase.ConicModel(m.solver_con)
+    model_relax = MathProgBase.ConicModel(m.solver_cont)
     MathProgBase.loadproblem!(model_relax, m.c_orig, m.A_orig, m.b_orig, m.cone_con_orig, m.cone_var_orig)
     MathProgBase.optimize!(model_relax)
     status_relax = MathProgBase.status(model_relax)
@@ -929,7 +929,7 @@ function process_conic!(m::PajaritoConicModel, bint_new::Vector{Float64}, logs::
     b_conic = m.b_full - m.A_bint * bint_new
 
     # Instantiate and solve the conic model
-    model_conic = MathProgBase.ConicModel(m.solver_con)
+    model_conic = MathProgBase.ConicModel(m.solver_cont)
     MathProgBase.loadproblem!(model_conic, m.c_cont, m.A_cont, b_conic, m.cone_con_full, m.cone_var_cont)
     MathProgBase.optimize!(model_conic)
     status_conic = MathProgBase.status(model_conic)
