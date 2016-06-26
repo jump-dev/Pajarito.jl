@@ -18,7 +18,6 @@ type PajaritoNonlinearModel <: MathProgBase.AbstractNonlinearModel
     cont_solver                 # Choice of Conic solver
     opt_tolerance               # Relative optimality tolerance
     time_limit                  # Time limit
-    instance::AbstractString    # Path to instance
 
     solution::Vector{Float64}
     status
@@ -48,7 +47,7 @@ type PajaritoNonlinearModel <: MathProgBase.AbstractNonlinearModel
     nlp_load_timer
 
     # CONSTRUCTOR:
-    function PajaritoNonlinearModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit,instance)
+    function PajaritoNonlinearModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit)
         m = new()
         m.solution = Float64[]
         m.verbose = verbose
@@ -57,7 +56,6 @@ type PajaritoNonlinearModel <: MathProgBase.AbstractNonlinearModel
         m.cont_solver = cont_solver
         m.opt_tolerance = opt_tolerance
         m.time_limit = time_limit
-        m.instance = instance
         return m
     end
 end

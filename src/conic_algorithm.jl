@@ -20,6 +20,7 @@ TODO issues
 - MPB issue - can't call supportedcones on defaultConicsolver
 
 TODO features
+- want to be able to query logs information etc
 - use JP updated SOC disagg with half as many cuts
 - for SOCRotated disagg cuts
 -- maybe add two disagg cuts - one for dividing by p and one for dividing by q
@@ -43,7 +44,6 @@ using JuMP
 
 type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # Solver parameters
-    path::AbstractString        # File path
     log_level::Int              # Verbosity level flag
     branch_cut::Bool            # Use BC algorithm, else use OA
     misocp::Bool                # Use SOC/SOCRotated cones in the MIP model (if MIP solver supports MISOCP)
@@ -120,10 +120,9 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     queue_heur::Vector{Vector{Float64}} # Heuristic queue for x_all
 
     # Model constructor
-    function PajaritoConicModel(path, log_level, branch_cut, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, solver_mip, solver_cont, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, branch_cut, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, solver_mip, solver_cont, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         m = new()
 
-        m.path = path
         m.log_level = log_level
         m.branch_cut = branch_cut
         m.misocp = misocp
@@ -1453,21 +1452,20 @@ function print_gap(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 end
 
 # Save solution data to file
-function save_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
-    if !isempty(m.path)
-        @printf "\nWriting results to file %s... " m.path
-
-        out_file = open("output.txt", "a")
-
-        # TODO probably want more info, better format
-        write(out_file, "$(m.path):\n$(m.status)\n$(logs[:n_conic])\n$(logs[:total_setup]) $(logs[:oa_bc]) $(logs[:mip_solve]) $(logs[:conic_solve])\n$(m.obj_best) $(m.obj_mip) $(m.gap_rel_opt)\n$(m.soln_best)\n")
-
-        close(out_file)
-
-        @printf "save complete.\n\n"
-        flush(STDOUT)
-    end
-end
+# function save_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
+#     if !isempty(m.path)
+#         @printf "\nWriting results to file %s... " m.path
+#
+#         out_file = open("output.txt", "a")
+#
+#         write(out_file, "$(m.path):\n$(m.status)\n$(logs[:n_conic])\n$(logs[:total_setup]) $(logs[:oa_bc]) $(logs[:mip_solve]) $(logs[:conic_solve])\n$(m.obj_best) $(m.obj_mip) $(m.gap_rel_opt)\n$(m.soln_best)\n")
+#
+#         close(out_file)
+#
+#         @printf "save complete.\n\n"
+#         flush(STDOUT)
+#     end
+# end
 
 # Print after finish
 function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})

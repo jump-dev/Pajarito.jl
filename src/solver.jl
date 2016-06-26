@@ -10,7 +10,6 @@ This file implements the default PajaritoSolver
 export PajaritoSolver
 
 immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
-    path::AbstractString        # File path
     log_level::Int              # Verbosity level flag
     branch_cut::Bool            # Use BC algorithm, else use OA
     misocp::Bool                # Use SOC/SOCRotated cones in the MIP model (if MIP solver supports MISOCP)
@@ -32,7 +31,6 @@ end
 
 
 function PajaritoSolver(;
-    path = "",
     log_level = 2,
     branch_cut = false,
     misocp = false,
@@ -52,14 +50,14 @@ function PajaritoSolver(;
     sdp_tol_eigval = 1e-10
     )
 
-    PajaritoSolver(path, log_level, branch_cut, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, solver_mip, solver_cont, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    PajaritoSolver(log_level, branch_cut, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, solver_mip, solver_cont, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
 end
 
 
 # Create Pajarito conic model: can solve with either conic algorithm or nonlinear algorithm wrapped with ConicNonlinearBridge
 function MathProgBase.ConicModel(s::PajaritoSolver)
     if applicable(MathProgBase.ConicModel, s.solver_cont)
-        return PajaritoConicModel(s.path, s.log_level, s.branch_cut, s.misocp, s.disagg, s.drop_dual_infeas, s.proj_dual_infeas, s.proj_dual_feas, s.solver_mip, s.solver_cont, s.timeout, s.tol_rel_opt, s.tol_zero, s.sdp_init_soc, s.sdp_eig, s.sdp_soc, s.sdp_tol_eigvec, s.sdp_tol_eigval)
+        return PajaritoConicModel(s.log_level, s.branch_cut, s.misocp, s.disagg, s.drop_dual_infeas, s.proj_dual_infeas, s.proj_dual_feas, s.solver_mip, s.solver_cont, s.timeout, s.tol_rel_opt, s.tol_zero, s.sdp_init_soc, s.sdp_eig, s.sdp_soc, s.sdp_tol_eigvec, s.sdp_tol_eigval)
 
     elseif applicable(MathProgBase.NonlinearModel, s.solver_cont)
         return MathProgBase.ConicModel(ConicNonlinearBridge.ConicNLPWrapper(nlp_solver=s))
@@ -83,7 +81,6 @@ function MathProgBase.NonlinearModel(s::PajaritoSolver)
     cont_solver = s.solver_cont
     opt_tolerance = s.tol_rel_opt
     time_limit = s.timeout
-    instance = s.path
 
-    return PajaritoNonlinearModel(verbose, algorithm, mip_solver, cont_solver, opt_tolerance, time_limit, instance)
+    return PajaritoNonlinearModel(verbose, algorithm, mip_solver, cont_solver, opt_tolerance, time_limit)
 end
