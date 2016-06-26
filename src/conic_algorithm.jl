@@ -44,18 +44,18 @@ using JuMP
 
 type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # Solver parameters
-    log_level::Int              # Verbosity level flag
+    log_level::Int              # Verbosity flag: 1 for minimal OA iteration and solve statistics, 2 for including cone summary information, 3 for running commentary
     mip_solver_drives::Bool     # Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
-    misocp::Bool                # Use SOC/SOCRotated cones in the MIP model (if MIP solver supports MISOCP)
-    disagg::Bool                # Disaggregate SOC/SOCRotated cones in MIP (if solver is conic)
+    misocp::Bool                # Use SOC/SOCRotated cones in the MIP outer approximation model (if MIP solver supports MISOCP)
+    disagg::Bool                # Disaggregate SOC/SOCRotated cones in the MIP only (if solver is conic)
     drop_dual_infeas::Bool      # Do not add cuts from dual cone infeasible dual vectors
     proj_dual_infeas::Bool      # Project dual cone infeasible dual vectors onto dual cone boundaries
     proj_dual_feas::Bool        # Project dual cone strictly feasible dual vectors onto dual cone boundaries
     mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver
     cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver
-    timeout::Float64            # Time limit for algorithm not including initial load and conic relaxation solve (in seconds)
+    timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
     tol_rel_opt::Float64        # Relative optimality gap termination condition
-    tol_zero::Float64           # Tolerance for setting small values to zeros
+    tol_zero::Float64           # Tolerance for setting small absolute values to zeros
     sdp_init_soc::Bool          # Use SDP initial SOC cuts (if MIP solver supports MISOCP)
     sdp_eig::Bool               # Use SDP eigenvector-derived cuts
     sdp_soc::Bool               # Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
