@@ -14,7 +14,7 @@ http://mathprogbasejl.readthedocs.org/en/latest/conic.html
 
 
 TODO issues
-- some infeasible solutions from heuristic callback
+- some infeasible solutions from heuristic callback? maybe want to project the primal solutions onto primal cones (can reuse code from dual projections)
 - maybe give MIP solvers command to run gap to 0 (otherwise may cycle if not goes to 0)
 - stop 0 = 0 constraints being added
 - MPB issue - can't call supportedcones on defaultConicsolver
@@ -35,7 +35,7 @@ TODO features
 -- only variables removed from conic should be integer linear cone ones
 -- need extra constraint zero cones and extend b_conic so can effectively fix values of variables in conic that are integer and in nonlinear cones
 - currently all SDP sanitized eigvecs have norm 1, but may want to multiply V by say 100 (or perhaps largest eigenvalue) before removing zeros, to get more significant digits
-- could automatically give timeout and gap tol as options to mip solver for BC. and for OA, probably want timeout too in case MIP solves are extremely slow
+- could automatically give timeout and gap tol as options to mip solver for mip-driven. and for iterative, probably want timeout too in case MIP solves are extremely slow
 - when JuMP can handle anonymous variables, use that syntax
 - could check that primal solution is feasible for the original problem. if the solver is well-behaved then x_i^2/x_0 should still tend to zero if the x_i^2 and x_0 are approximately zero
 =========================================================#
@@ -45,7 +45,7 @@ using JuMP
 type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # Solver parameters
     log_level::Int              # Verbosity level flag
-    branch_cut::Bool            # Use BC algorithm, else use OA
+    mip_solver_drives::Bool     # Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
     misocp::Bool                # Use SOC/SOCRotated cones in the MIP model (if MIP solver supports MISOCP)
     disagg::Bool                # Disaggregate SOC/SOCRotated cones in MIP (if solver is conic)
     drop_dual_infeas::Bool      # Do not add cuts from dual cone infeasible dual vectors
@@ -53,19 +53,19 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     proj_dual_feas::Bool        # Project dual cone strictly feasible dual vectors onto dual cone boundaries
     solver_mip::MathProgBase.AbstractMathProgSolver # MIP solver
     solver_cont::MathProgBase.AbstractMathProgSolver # Continuous solver
-    timeout::Float64            # Time limit for OA/BC not including initial load (in seconds)
+    timeout::Float64            # Time limit for algorithm not including initial load and conic relaxation solve (in seconds)
     tol_rel_opt::Float64        # Relative optimality gap termination condition
     tol_zero::Float64           # Tolerance for setting small values to zeros
     sdp_init_soc::Bool          # Use SDP initial SOC cuts (if MIP solver supports MISOCP)
     sdp_eig::Bool               # Use SDP eigenvector-derived cuts
-    sdp_soc::Bool               # Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP branch and cut process)
+    sdp_soc::Bool               # Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
     sdp_tol_eigvec::Float64     # Tolerance for setting small values in SDP eigenvectors to zeros (for cut sanitation)
     sdp_tol_eigval::Float64     # Tolerance for ignoring eigenvectors corresponding to small (positive) eigenvalues
 
     # Internal switches
     _misocp::Bool               # Only if using MIP solver supporting MISOCP
     _sdp_init_soc::Bool         # Only if using MIP solver supporting MISOCP
-    _sdp_soc::Bool              # Only if using MIP solver supporting MISOCP (cannot add SOCs during BC)
+    _sdp_soc::Bool              # Only if using MIP solver supporting MISOCP (cannot add SOCs during MIP-driven solve)
 
     # Initial conic data
     num_var_orig::Int           # Initial number of variables
@@ -111,7 +111,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
     # Dynamic solve data
     summary::Dict{Symbol,Dict{Symbol,Real}} # Infeasibilities (outer, cut, dual) of each cone species at current iteration
-    bc_started::Bool            # Bool for whether branch and cut MIP process has begun
+    bc_started::Bool            # Bool for whether MIP-driven solve has begun
     status::Symbol              # Current solve status
     obj_mip::Float64            # Latest MIP (outer approx) objective value
     obj_best::Float64           # Best conic (feasible) objective value
@@ -120,11 +120,11 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     queue_heur::Vector{Vector{Float64}} # Heuristic queue for x_all
 
     # Model constructor
-    function PajaritoConicModel(log_level, branch_cut, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, solver_mip, solver_cont, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, mip_solver_drives, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, solver_mip, solver_cont, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         m = new()
 
         m.log_level = log_level
-        m.branch_cut = branch_cut
+        m.mip_solver_drives = mip_solver_drives
         m.misocp = misocp
         m.disagg = disagg
         m.drop_dual_infeas = drop_dual_infeas
@@ -160,8 +160,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         if m._misocp
             m._sdp_init_soc = m.sdp_init_soc
             if m.sdp_soc
-                if m.branch_cut
-                    warn("Rotated-SOC cuts for SDP cones cannot be added during the branch and cut process, but will be used for initial cuts\n")
+                if m.mip_solver_drives
+                    warn("Rotated-SOC cuts for SDP cones cannot be added during the MIP solver-driven algorithm, but will be used for initial cuts\n")
                 end
                 m._sdp_soc = true
             end
@@ -171,8 +171,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         end
 
         # TODO automatically pass as options to MIP solver
-        if m.branch_cut
-            warn("For branch and cut, time limit and optimality tolerance must be specified as MIP solver options, not Pajarito options\n")
+        if m.mip_solver_drives
+            warn("For the MIP solver-driven algorithm, time limit and optimality tolerance must be specified as MIP solver options, not Pajarito options\n")
         end
 
         if m.drop_dual_infeas && m.proj_dual_infeas
@@ -363,7 +363,7 @@ function MathProgBase.setvartype!(m::PajaritoConicModel, types_var::Vector{Symbo
     m.types_orig = types_var
 end
 
-# Solve using OA or BC algorithm, given the initial conic model data and the variable types vector and possibly a warm-start vector
+# Solve, given the initial conic model data and the variable types vector and possibly a warm-start vector
 function MathProgBase.optimize!(m::PajaritoConicModel)
     # Initialize
     if m.status != :Loaded
@@ -386,15 +386,15 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         logs[:total_setup] = time() - logs[:total_setup]
 
         # Solve the transformed model with specified algorithm
-        logs[:oa_bc] = time()
-        if m.branch_cut
-            # Branch and cut
-            solve_BC!(m, logs)
+        logs[:oa_alg] = time()
+        if m.mip_solver_drives
+            # MIP solver driven outer approximation algorithm
+            solve_mip_driven!(m, logs)
         else
-            # Outer approximation
-            solve_OA!(m, logs)
+            # Iterative outer approximation algorithm
+            solve_iterative!(m, logs)
         end
-        logs[:oa_bc] = time() - logs[:oa_bc]
+        logs[:oa_alg] = time() - logs[:oa_alg]
     else
         logs[:total_setup] = time() - logs[:total_setup]
     end
@@ -755,9 +755,9 @@ end
  Iterative algorithm functions
 =========================================================#
 
-# Solve the MIP model using outer approximation algorithm
-function solve_OA!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
-    @printf "\nStarting outer approximation algorithm:\n"
+# Solve the MIP model using iterative outer approximation algorithm
+function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
+    @printf "\nStarting iterative outer approximation algorithm:\n"
     soln_round_prev = fill(NaN, length(m.cols_bint))
 
     while true
@@ -801,17 +801,17 @@ function solve_OA!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
 
         # Finish if exceeded timeout option
-        if (time() - logs[:oa_bc]) > m.timeout
+        if (time() - logs[:oa_alg]) > m.timeout
             m.status = :UserLimit
             break
         end
     end
 end
 
-# Solve the MIP model using branch and cut callback algorithm
-function solve_BC!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
-    # Initialize heuristic solution queue vectors, set bool to stop adding SOC cuts during BC
-    @printf "\nStarting branch and cut algorithm:\n"
+# Solve the MIP model using MIP solver-driven callback algorithm
+function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
+    # Initialize heuristic solution queue vectors, set bool to stop adding SOC cuts during MIP driven solve
+    @printf "\nStarting MIP solver-driven outer approximation algorithm:\n"
     m.bc_started = true
     m.queue_heur = Vector{Float64}[]
 
@@ -924,7 +924,7 @@ function process_conic!(m::PajaritoConicModel, bint_new::Vector{Float64}, logs::
     # Calculate updated b vector for conic model from current integer solution
     tic()
     if any((val -> isnan(val)), bint_new)
-        if m.branch_cut
+        if m.mip_solver_drives
             println("Current integer solution vector has NaN values; terminating Pajarito\n")
             throw(CallbackAbort())
         else
@@ -943,14 +943,14 @@ function process_conic!(m::PajaritoConicModel, bint_new::Vector{Float64}, logs::
 
     # Only proceed if status is infeasible, optimal or suboptimal
     if status_conic == :Unbounded
-        if m.branch_cut
+        if m.mip_solver_drives
             println("Conic status was $status_conic\n")
             throw(CallbackAbort())
         else
             error("Conic status was $status_conic\n")
         end
     elseif !(status_conic in (:Optimal, :Suboptimal, :Infeasible))
-        if m.branch_cut
+        if m.mip_solver_drives
             println("Conic solver failure with status $status_conic\n")
             throw(CallbackAbort())
         else
@@ -995,8 +995,8 @@ function process_conic!(m::PajaritoConicModel, bint_new::Vector{Float64}, logs::
             end
             @assert length(soln_all) == length(m.x_all)
 
-            # Use soln_all to add a solution to the heuristic queue for BC, or to warm-start the MIP for OA
-            if m.branch_cut
+            # Use soln_all to add a solution to the heuristic queue for MIP driven solve, or to warm-start the MIP for iterative algorithm
+            if m.mip_solver_drives
                 push!(m.queue_heur, soln_all)
             else
                 for (val, var) in zip(soln_all, m.x_all)
@@ -1174,7 +1174,7 @@ function add_cone_cuts!(m::PajaritoConicModel, n::Int, species::Symbol, dual::Ve
             Vdual[abs(Vdual) .< m.sdp_tol_eigvec] = 0.
 
             if size(Vdual, 2) > 0
-                # Cannot add SOC cuts during branch and cut MIP solve
+                # Cannot add SOC cuts during MIP solve
                 if m._sdp_soc && !m.bc_started
                     # add_sdp_soc_cuts!(m, n, m.summary[species], m.map_vars_smat[n], Vdual)
                     add_sdp_soc_cuts!(m, n, m.summary[species], m.map_vars_smat[n], Vdual)
@@ -1224,7 +1224,7 @@ function add_linear_cut!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, va
     # Re-sanitize cut
     cut[abs(cut) .< m.tol_zero] = 0.
 
-    # Add cut (lazy cut if using BC)
+    # Add cut (lazy cut if using MIP driven solve)
     if haskey(m.model_mip.ext, :cb)
         @lazyconstraint(m.model_mip.ext[:cb], dot(cut, vars) >= 0.)
     else
@@ -1380,9 +1380,9 @@ function create_logs()
     logs[:conic_solve] = 0. # Solving conic subproblem model
     logs[:conic_cuts] = 0.  # Adding cuts for conic subproblem model
     logs[:outer_inf] = 0.   # Calculating outer infeasibility for all cones
-    logs[:cb_heur] = 0.     # Using heuristic callback (BC only)
+    logs[:cb_heur] = 0.     # Using heuristic callback (MIP driven solve only)
     logs[:mip_solve] = 0.   # Solving the MIP model
-    logs[:oa_bc] = 0.       # Performing OA/BC algorithm
+    logs[:oa_alg] = 0.      # Performing outer approximation algorithm
 
     # Iteration counters
     logs[:n_conic] = 0      # Number of conic subproblem solves
@@ -1441,9 +1441,9 @@ function print_gap(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
 
         if m.gap_rel_opt < 1000
-            @printf "%4d | %+14.6e | %+14.6e | %11.3e | %11.3e\n" logs[:n_conic] m.obj_best m.obj_mip m.gap_rel_opt (time() - logs[:oa_bc])
+            @printf "%4d | %+14.6e | %+14.6e | %11.3e | %11.3e\n" logs[:n_conic] m.obj_best m.obj_mip m.gap_rel_opt (time() - logs[:oa_alg])
         else
-            @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" logs[:n_conic] m.obj_best m.obj_mip ">1000" (time() - logs[:oa_bc])
+            @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" logs[:n_conic] m.obj_best m.obj_mip ">1000" (time() - logs[:oa_alg])
         end
 
         flush(STDOUT)
@@ -1457,7 +1457,7 @@ end
 #
 #         out_file = open("output.txt", "a")
 #
-#         write(out_file, "$(m.path):\n$(m.status)\n$(logs[:n_conic])\n$(logs[:total_setup]) $(logs[:oa_bc]) $(logs[:mip_solve]) $(logs[:conic_solve])\n$(m.obj_best) $(m.obj_mip) $(m.gap_rel_opt)\n$(m.soln_best)\n")
+#         write(out_file, "$(m.path):\n$(m.status)\n$(logs[:n_conic])\n$(logs[:total_setup]) $(logs[:oa_alg]) $(logs[:mip_solve]) $(logs[:conic_solve])\n$(m.obj_best) $(m.obj_mip) $(m.gap_rel_opt)\n$(m.soln_best)\n")
 #
 #         close(out_file)
 #
@@ -1468,12 +1468,12 @@ end
 
 # Print after finish
 function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
-    if m.branch_cut
-        @printf "\nFinished branch and cut (BC) algorithm:\n"
+    if m.mip_solver_drives
+        @printf "\nFinished MIP solver-driven outer approximation algorithm:\n"
     else
-        @printf "\nFinished outer approximation (OA) algorithm:\n"
+        @printf "\nFinished iterative outer approximation algorithm:\n"
     end
-    @printf " - Total time (s)       = %14.2e\n" (logs[:total_setup] + logs[:oa_bc])
+    @printf " - Total time (s)       = %14.2e\n" (logs[:total_setup] + logs[:oa_alg])
     @printf " - Status               = %14s\n" m.status
     @printf " - Best feasible obj.   = %+14.6e\n" m.obj_best
     @printf " - Final OA obj. bound  = %+14.6e\n" m.obj_mip
@@ -1481,7 +1481,7 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     @printf " - Conic iter. count    = %14d\n" logs[:n_conic]
 
     if m.log_level > 1
-        if m.branch_cut
+        if m.mip_solver_drives
             @printf " - Heur. callback count = %14d\n" logs[:n_cb_heur]
             @printf " - Heur. solution count = %14d\n" logs[:n_sol_heur]
         end
@@ -1494,17 +1494,17 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             @printf " -- Solve relax         = %14.2e\n" logs[:relax_solve]
             @printf " -- Add relax cuts      = %14.2e\n" logs[:relax_cuts]
         end
-        if m.branch_cut
-            @printf " - BC algorithm         = %14.2e\n" logs[:oa_bc]
+        if m.mip_solver_drives
+            @printf " - MIP-driven algorithm = %14.2e\n" logs[:oa_alg]
         else
-            @printf " - OA algorithm         = %14.2e\n" logs[:oa_bc]
+            @printf " - Iterative algorithm  = %14.2e\n" logs[:oa_alg]
         end
         @printf " -- Solve MIP           = %14.2e\n" logs[:mip_solve]
         @printf " -- Solve conic         = %14.2e\n" logs[:conic_solve]
         if m.log_level > 1
             @printf " -- Add conic cuts      = %14.2e\n" logs[:conic_cuts]
             @printf " -- Calc. outer inf.    = %14.2e\n" logs[:outer_inf]
-            if m.branch_cut
+            if m.mip_solver_drives
                 @printf " -- Use heur. callback  = %14.2e\n" logs[:cb_heur]
             end
         end

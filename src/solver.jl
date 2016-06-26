@@ -11,7 +11,7 @@ export PajaritoSolver
 
 immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     log_level::Int              # Verbosity level flag
-    branch_cut::Bool            # Use BC algorithm, else use OA
+    mip_solver_drives::Bool     # Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
     misocp::Bool                # Use SOC/SOCRotated cones in the MIP model (if MIP solver supports MISOCP)
     disagg::Bool                # Disaggregate SOC/SOCRotated cones in MIP (if solver is conic)
     drop_dual_infeas::Bool      # Do not add cuts from dual cone infeasible dual vectors
@@ -32,7 +32,7 @@ end
 
 function PajaritoSolver(;
     log_level = 2,
-    branch_cut = false,
+    mip_solver_drives = false,
     misocp = false,
     disagg = true,
     drop_dual_infeas = false,
@@ -50,14 +50,14 @@ function PajaritoSolver(;
     sdp_tol_eigval = 1e-10
     )
 
-    PajaritoSolver(log_level, branch_cut, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, solver_mip, solver_cont, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    PajaritoSolver(log_level, mip_solver_drives, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, solver_mip, solver_cont, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
 end
 
 
 # Create Pajarito conic model: can solve with either conic algorithm or nonlinear algorithm wrapped with ConicNonlinearBridge
 function MathProgBase.ConicModel(s::PajaritoSolver)
     if applicable(MathProgBase.ConicModel, s.solver_cont)
-        return PajaritoConicModel(s.log_level, s.branch_cut, s.misocp, s.disagg, s.drop_dual_infeas, s.proj_dual_infeas, s.proj_dual_feas, s.solver_mip, s.solver_cont, s.timeout, s.tol_rel_opt, s.tol_zero, s.sdp_init_soc, s.sdp_eig, s.sdp_soc, s.sdp_tol_eigvec, s.sdp_tol_eigval)
+        return PajaritoConicModel(s.log_level, s.mip_solver_drives, s.misocp, s.disagg, s.drop_dual_infeas, s.proj_dual_infeas, s.proj_dual_feas, s.solver_mip, s.solver_cont, s.timeout, s.tol_rel_opt, s.tol_zero, s.sdp_init_soc, s.sdp_eig, s.sdp_soc, s.sdp_tol_eigvec, s.sdp_tol_eigval)
 
     elseif applicable(MathProgBase.NonlinearModel, s.solver_cont)
         return MathProgBase.ConicModel(ConicNonlinearBridge.ConicNLPWrapper(nlp_solver=s))
@@ -76,7 +76,7 @@ function MathProgBase.NonlinearModel(s::PajaritoSolver)
 
     # Translate options into old nonlinearmodel.jl fields
     verbose = s.log_level
-    algorithm = (s.branch_cut ? "BC" : "OA")
+    algorithm = (s.mip_solver_drives ? "BC" : "OA")
     mip_solver = s.solver_mip
     cont_solver = s.solver_cont
     opt_tolerance = s.tol_rel_opt
