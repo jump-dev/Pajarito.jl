@@ -401,7 +401,6 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     # Print summary
     print_finish(m, logs)
-    save_finish(m, logs)
 end
 
 # Redefine MathProgBase functions for getting model information
