@@ -17,6 +17,7 @@ TODO issues
 - some infeasible solutions from heuristic callback
 - maybe give MIP solvers command to run gap to 0 (otherwise may cycle if not goes to 0)
 - stop 0 = 0 constraints being added
+- MPB issue - can't call supportedcones on defaultConicsolver
 
 TODO features
 - use JP updated SOC disagg with half as many cuts
@@ -250,14 +251,20 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
         error("Some indices in vector c appear in multiple variable cones\n")
     end
 
-    # Verify cone compatibility with solver and consistency of cone indices
-    conic_species = MathProgBase.supportedcones(m.solver_cont)
+    # Verify cone compatibility with solver if solver is not defaultConicsolver
+    # TODO defaultConicsolver is an MPB issue
+    if m.solver_cont != MathProgBase.defaultConicsolver
+        conic_species = MathProgBase.supportedcones(m.solver_cont)
+        for (species, inds) in vcat(cone_con, cone_var)
+            if !(species in conic_species)
+                error("Cones $species are not supported by the specified conic solver\n")
+            end
+        end
+    end
+
+    # Verify consistency of cone indices and create cone summary dictionary with min/max dimensions of each species
     summary = Dict{Symbol,Dict{Symbol,Real}}()
     for (species, inds) in vcat(cone_con, cone_var)
-        if !(species in conic_species)
-            error("Cones $species are not supported by the specified conic solver\n")
-        end
-
         # Verify dimensions of cones
         if isempty(inds)
             error("A cone $species has no associated indices\n")
