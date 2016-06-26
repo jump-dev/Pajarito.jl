@@ -567,7 +567,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 @constraint(model_mip, sum{v^2, v in vars[3:end]} <= vars[1] * x_help_cone[1])
             elseif m.disagg && (length(vars) > 3)
                 # TODO this only adds one cut for dividing by vars[2], but may need two. otherwise, add extra SOCRotated in 3 dim to conic and use SOC disagg
-                warn("Disaggregation for cones $species is not currently supported (but we know how to implement this, so please open an issue and include your model data)")
+                warn("Disaggregation for cones $species is not currently supported (but we know how to implement this, so please open an issue and include your model data)\n")
                 # num_cone_dagg += 1
                 # x_dagg_cone = @variable(model_mip, _[j in 1:(length(vars) - 2)] >= 0., basename="d$(num_cone_dagg)SOCR", start=0.)
                 # @constraint(model_mip, 2 * vars[1] - sum(x_dagg_cone) >= 0.)
@@ -772,7 +772,7 @@ function solve_OA!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             break
         end
         if status_mip == :Unbounded
-            error("MIP solver returned status $status_mip, which could indicate that the cuts added were too weak")
+            error("MIP solver returned status $status_mip, which could indicate that the cuts added were too weak\n")
         end
         m.obj_mip = getobjectivevalue(m.model_mip)
 
@@ -927,7 +927,7 @@ function process_conic!(m::PajaritoConicModel, bint_new::Vector{Float64}, logs::
     tic()
     if any((val -> isnan(val)), bint_new)
         if m.branch_cut
-            println("Current integer solution vector has NaN values; terminating Pajarito")
+            println("Current integer solution vector has NaN values; terminating Pajarito\n")
             throw(CallbackAbort())
         else
             error("Current integer solution vector has NaN values; terminating Pajarito\n")
@@ -946,14 +946,14 @@ function process_conic!(m::PajaritoConicModel, bint_new::Vector{Float64}, logs::
     # Only proceed if status is infeasible, optimal or suboptimal
     if status_conic == :Unbounded
         if m.branch_cut
-            println("Conic status was $status_conic")
+            println("Conic status was $status_conic\n")
             throw(CallbackAbort())
         else
             error("Conic status was $status_conic\n")
         end
     elseif !(status_conic in (:Optimal, :Suboptimal, :Infeasible))
         if m.branch_cut
-            println("Conic solver failure with status $status_conic")
+            println("Conic solver failure with status $status_conic\n")
             throw(CallbackAbort())
         else
             error("Conic solver failure with status $status_conic\n")

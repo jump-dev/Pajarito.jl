@@ -305,10 +305,10 @@ function addCuttingPlanes!(m::PajaritoNonlinearModel, mip_model, separator, jac_
             val = m.lb[i] - g[i]
         end
         lin = m.constrlinear[i]
-        (m.verbose > 1) && println("Constraint $i value $val linear $lin")
+        (m.verbose > 2) && println("Constraint $i value $val linear $lin")
         if !(lin) #&& (val > 1e-4) # m.ub[i] is in the constraint somehow
             # CREATE SUPPORTING HYPERPLANE
-            (m.verbose > 1) && println("Create supporting hyperplane for constraint $i")
+            (m.verbose > 2) && println("Create supporting hyperplane for constraint $i")
             new_rhs::Float64
             if m.constrtype[i] == :(<=)
                 new_rhs = m.ub[i] - g[i]
@@ -318,9 +318,9 @@ function addCuttingPlanes!(m::PajaritoNonlinearModel, mip_model, separator, jac_
             for j = 1:length(varidx_new[i])
                 new_rhs += coef_new[i][j] * separator[Int(varidx_new[i][j])]
             end
-            (m.verbose > 1) && println("varidx $(varidx_new[i])")
-            (m.verbose > 1) && println("coef $(coef_new[i])")
-            (m.verbose > 1) && println("rhs $new_rhs")
+            (m.verbose > 2) && println("varidx $(varidx_new[i])")
+            (m.verbose > 2) && println("coef $(coef_new[i])")
+            (m.verbose > 2) && println("rhs $new_rhs")
             if m.constrtype[i] == :(<=)
                 if cb != []
                     @lazyconstraint(cb, dot(coef_new[i], m.mip_x[varidx_new[i]]) <= new_rhs)
@@ -348,7 +348,7 @@ function addCuttingPlanes!(m::PajaritoNonlinearModel, mip_model, separator, jac_
     end
     # CREATE OBJECTIVE CUTS
     if !(m.objlinear)
-        (m.verbose > 1) && println("Create supporting hyperplane for objective f(x) <= t")
+        (m.verbose > 2) && println("Create supporting hyperplane for objective f(x) <= t")
         f = MathProgBase.eval_f(m.d, separator[1:m.numVar])
         MathProgBase.eval_grad_f(m.d, grad_f, separator[1:m.numVar])
         if m.objsense == :Max
@@ -363,9 +363,9 @@ function addCuttingPlanes!(m::PajaritoNonlinearModel, mip_model, separator, jac_
         end
         varidx[m.numVar+1] = m.numVar+1
         grad_f[m.numVar+1] = -(1.0)
-        (m.verbose > 1) && println("varidx $(varidx)")
-        (m.verbose > 1) && println("coef $(grad_f)")
-        (m.verbose > 1) && println("rhs $new_rhs")
+        (m.verbose > 2) && println("varidx $(varidx)")
+        (m.verbose > 2) && println("coef $(grad_f)")
+        (m.verbose > 2) && println("rhs $new_rhs")
         if cb != []
             @lazyconstraint(cb, dot(grad_f, m.mip_x[varidx]) <= new_rhs)
         else
@@ -631,7 +631,7 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
             MathProgBase.optimize!(inf_model)
             cputime_nlp += time() - start_nlp
             inf_model_status = MathProgBase.status(inf_model)
-            if inf_model_status != :Optimal && inf_model_stauts != :Suboptimal
+            if inf_model_status != :Optimal && inf_model_status != :Suboptimal
                 warn("NLP Solver Failure.")
                 m.status = :Error
                 return
