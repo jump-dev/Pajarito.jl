@@ -32,20 +32,19 @@ end
 
 # Conic models test in conictest.jl
 include("conictest.jl")
-for bc in [true, false]
-    # Default solvers
-    runconicdefaulttests(bc)
 
-    for mip in solvers_mip
-        # Conic model with conic solvers
-        for conic in solvers_conic
-            runconictests(bc, mip, conic)
-        end
+# Default solvers test for OA only
+runconicdefaulttests(false)
 
-        # Conic model with nonlinear solvers
-        for nlnr in solvers_nlnr
-            runconictests(bc, mip, nlnr)
-        end
+for bc in [true, false], mip in solvers_mip
+    # Conic model with conic solvers
+    for conic in solvers_conic
+        runconictests(bc, mip, conic)
+    end
+
+    # Conic model with nonlinear solvers
+    for nlnr in solvers_nlnr
+        runconictests(bc, mip, nlnr)
     end
 end
 
