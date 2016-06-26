@@ -30,7 +30,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                 x >= 4,
                                 x^2 <= 9)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, solver_mip=mip_solver, solver_cont=conic_solver))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver))
 
             @fact problem.status --> :Infeasible
         end
@@ -44,7 +44,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                 x <= 10,
                                 x^2 <= 9)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, solver_mip=mip_solver, solver_cont=conic_solver))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver))
 
             @fact problem.optval --> roughly(9.0, TOL)
         end
@@ -60,7 +60,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                 3x + 2y <= 10,
                                 exp(x) <= 10)
 
-           @fact_throws ErrorException Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, solver_mip=mip_solver, solver_cont=conic_solver))
+           @fact_throws ErrorException Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver))
        end
     end
 
@@ -74,7 +74,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                 3x + 2y <= 10,
                                 exp(x) <= 10)
 
-           Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, solver_mip=mip_solver, solver_cont=conic_solver))
+           Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver))
 
            @fact problem.optval --> roughly(8.0, TOL)
        end
@@ -92,7 +92,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                x^2 <= 5,
                                exp(y) + x <= 7)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, solver_mip=mip_solver, solver_cont=conic_solver))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver))
 
             # @fact problem.status --> :Optimal
             @fact Convex.evaluate(x) --> roughly(2.0, TOL)
@@ -111,7 +111,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                x^2 <= 5,
                                exp(y) + x <= 7)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, disagg=false, solver_mip=mip_solver, solver_cont=conic_solver))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, disagg=false, mip_solver=mip_solver, cont_solver=conic_solver))
 
             # @fact problem.status --> :Optimal
             @fact Convex.evaluate(x) --> roughly(2.0, TOL)
@@ -128,7 +128,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                3x + 2y <= 30,
                                exp(y^2) + x <= 7)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, solver_mip=mip_solver, solver_cont=conic_solver))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver))
 
             # @fact problem.status --> :Optimal
             @fact Convex.evaluate(x) --> roughly(6.0, TOL)

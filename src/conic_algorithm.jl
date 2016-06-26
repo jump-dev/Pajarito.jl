@@ -51,8 +51,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     drop_dual_infeas::Bool      # Do not add cuts from dual cone infeasible dual vectors
     proj_dual_infeas::Bool      # Project dual cone infeasible dual vectors onto dual cone boundaries
     proj_dual_feas::Bool        # Project dual cone strictly feasible dual vectors onto dual cone boundaries
-    solver_mip::MathProgBase.AbstractMathProgSolver # MIP solver
-    solver_cont::MathProgBase.AbstractMathProgSolver # Continuous solver
+    mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver
+    cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver
     timeout::Float64            # Time limit for algorithm not including initial load and conic relaxation solve (in seconds)
     tol_rel_opt::Float64        # Relative optimality gap termination condition
     tol_zero::Float64           # Tolerance for setting small values to zeros
@@ -120,7 +120,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     queue_heur::Vector{Vector{Float64}} # Heuristic queue for x_all
 
     # Model constructor
-    function PajaritoConicModel(log_level, mip_solver_drives, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, solver_mip, solver_cont, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, mip_solver_drives, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         m = new()
 
         m.log_level = log_level
@@ -130,8 +130,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.drop_dual_infeas = drop_dual_infeas
         m.proj_dual_infeas = proj_dual_infeas
         m.proj_dual_feas = proj_dual_feas
-        m.solver_mip = solver_mip
-        m.solver_cont = solver_cont
+        m.mip_solver = mip_solver
+        m.cont_solver = cont_solver
         m.timeout = timeout
         m.tol_rel_opt = tol_rel_opt
         m.tol_zero = tol_zero
@@ -145,7 +145,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
         # Determine whether to use MISOCP outer approximation MIP
         if m.misocp
-            mip_species = MathProgBase.supportedcones(m.solver_mip)
+            mip_species = MathProgBase.supportedcones(m.mip_solver)
             if ((:SOC in mip_species) && (:SOCRotated in mip_species))
                 m._misocp = true
             else
@@ -161,7 +161,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
             m._sdp_init_soc = m.sdp_init_soc
             if m.sdp_soc
                 if m.mip_solver_drives
-                    warn("Rotated-SOC cuts for SDP cones cannot be added during the MIP solver-driven algorithm, but will be used for initial cuts\n")
+                    warn("Rotated-SOC cuts for SDP cones cannot be added during the MIP-solver-driven algorithm, but will be used for initial cuts\n")
                 end
                 m._sdp_soc = true
             end
@@ -172,7 +172,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
         # TODO automatically pass as options to MIP solver
         if m.mip_solver_drives
-            warn("For the MIP solver-driven algorithm, time limit and optimality tolerance must be specified as MIP solver options, not Pajarito options\n")
+            warn("For the MIP-solver-driven algorithm, time limit and optimality tolerance must be specified as MIP solver options, not Pajarito options\n")
         end
 
         if m.drop_dual_infeas && m.proj_dual_infeas
@@ -252,8 +252,8 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
 
     # Verify cone compatibility with solver if solver is not defaultConicsolver
     # TODO defaultConicsolver is an MPB issue
-    if m.solver_cont != MathProgBase.defaultConicsolver
-        conic_species = MathProgBase.supportedcones(m.solver_cont)
+    if m.cont_solver != MathProgBase.defaultConicsolver
+        conic_species = MathProgBase.supportedcones(m.cont_solver)
         for (species, inds) in vcat(cone_con, cone_var)
             if !(species in conic_species)
                 error("Cones $species are not supported by the specified conic solver\n")
@@ -618,7 +618,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     end
 
     # Initialize JuMP model for MIP outer approximation problem
-    model_mip = JuMP.Model(solver = m.solver_mip)
+    model_mip = JuMP.Model(solver = m.mip_solver)
 
     # Create initial variables and set types and warm-start and objective
     x_orig = @variable(model_mip, _[1:m.num_var_orig])
@@ -808,10 +808,10 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     end
 end
 
-# Solve the MIP model using MIP solver-driven callback algorithm
+# Solve the MIP model using MIP-solver-driven callback algorithm
 function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     # Initialize heuristic solution queue vectors, set bool to stop adding SOC cuts during MIP driven solve
-    @printf "\nStarting MIP solver-driven outer approximation algorithm:\n"
+    @printf "\nStarting MIP-solver-driven outer approximation algorithm:\n"
     m.bc_started = true
     m.queue_heur = Vector{Float64}[]
 
@@ -871,7 +871,7 @@ function process_relax!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
     # Instantiate and solve the conic relaxation model
     tic()
-    model_relax = MathProgBase.ConicModel(m.solver_cont)
+    model_relax = MathProgBase.ConicModel(m.cont_solver)
     MathProgBase.loadproblem!(model_relax, m.c_orig, m.A_orig, m.b_orig, m.cone_con_orig, m.cone_var_orig)
     MathProgBase.optimize!(model_relax)
     status_relax = MathProgBase.status(model_relax)
@@ -934,7 +934,7 @@ function process_conic!(m::PajaritoConicModel, bint_new::Vector{Float64}, logs::
     b_conic = m.b_full - m.A_bint * bint_new
 
     # Instantiate and solve the conic model
-    model_conic = MathProgBase.ConicModel(m.solver_cont)
+    model_conic = MathProgBase.ConicModel(m.cont_solver)
     MathProgBase.loadproblem!(model_conic, m.c_cont, m.A_cont, b_conic, m.cone_con_full, m.cone_var_cont)
     MathProgBase.optimize!(model_conic)
     status_conic = MathProgBase.status(model_conic)
@@ -1469,7 +1469,7 @@ end
 # Print after finish
 function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     if m.mip_solver_drives
-        @printf "\nFinished MIP solver-driven outer approximation algorithm:\n"
+        @printf "\nFinished MIP-solver-driven outer approximation algorithm:\n"
     else
         @printf "\nFinished iterative outer approximation algorithm:\n"
     end

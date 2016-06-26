@@ -17,8 +17,8 @@ immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     drop_dual_infeas::Bool      # Do not add cuts from dual cone infeasible dual vectors
     proj_dual_infeas::Bool      # Project dual cone infeasible dual vectors onto dual cone boundaries
     proj_dual_feas::Bool        # Project dual cone strictly feasible dual vectors onto dual cone boundaries
-    solver_mip::MathProgBase.AbstractMathProgSolver # MIP solver
-    solver_cont::MathProgBase.AbstractMathProgSolver # Continuous solver
+    mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver
+    cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver
     timeout::Float64            # Time limit for OA/BC not including initial load (in seconds)
     tol_rel_opt::Float64        # Relative optimality gap termination condition
     tol_zero::Float64           # Tolerance for setting small values to zeros
@@ -38,8 +38,8 @@ function PajaritoSolver(;
     drop_dual_infeas = false,
     proj_dual_infeas = true,
     proj_dual_feas = false,
-    solver_mip = MathProgBase.defaultMIPsolver,
-    solver_cont = MathProgBase.defaultConicsolver,
+    mip_solver = MathProgBase.defaultMIPsolver,
+    cont_solver = MathProgBase.defaultConicsolver,
     timeout = 60*5,
     tol_rel_opt = 1e-5,
     tol_zero = 1e-10,
@@ -50,16 +50,16 @@ function PajaritoSolver(;
     sdp_tol_eigval = 1e-10
     )
 
-    PajaritoSolver(log_level, mip_solver_drives, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, solver_mip, solver_cont, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    PajaritoSolver(log_level, mip_solver_drives, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
 end
 
 
 # Create Pajarito conic model: can solve with either conic algorithm or nonlinear algorithm wrapped with ConicNonlinearBridge
 function MathProgBase.ConicModel(s::PajaritoSolver)
-    if applicable(MathProgBase.ConicModel, s.solver_cont)
-        return PajaritoConicModel(s.log_level, s.mip_solver_drives, s.misocp, s.disagg, s.drop_dual_infeas, s.proj_dual_infeas, s.proj_dual_feas, s.solver_mip, s.solver_cont, s.timeout, s.tol_rel_opt, s.tol_zero, s.sdp_init_soc, s.sdp_eig, s.sdp_soc, s.sdp_tol_eigvec, s.sdp_tol_eigval)
+    if applicable(MathProgBase.ConicModel, s.cont_solver)
+        return PajaritoConicModel(s.log_level, s.mip_solver_drives, s.misocp, s.disagg, s.drop_dual_infeas, s.proj_dual_infeas, s.proj_dual_feas, s.mip_solver, s.cont_solver, s.timeout, s.tol_rel_opt, s.tol_zero, s.sdp_init_soc, s.sdp_eig, s.sdp_soc, s.sdp_tol_eigvec, s.sdp_tol_eigval)
 
-    elseif applicable(MathProgBase.NonlinearModel, s.solver_cont)
+    elseif applicable(MathProgBase.NonlinearModel, s.cont_solver)
         return MathProgBase.ConicModel(ConicNonlinearBridge.ConicNLPWrapper(nlp_solver=s))
 
     else
@@ -70,15 +70,15 @@ end
 
 # Create Pajarito nonlinear model: can solve with nonlinear algorithm only
 function MathProgBase.NonlinearModel(s::PajaritoSolver)
-    if !applicable(MathProgBase.NonlinearModel, s.solver_cont)
+    if !applicable(MathProgBase.NonlinearModel, s.cont_solver)
         error("Continuous solver specified is not a nonlinear solver recognized by MathProgBase\n")
     end
 
     # Translate options into old nonlinearmodel.jl fields
     verbose = s.log_level
     algorithm = (s.mip_solver_drives ? "BC" : "OA")
-    mip_solver = s.solver_mip
-    cont_solver = s.solver_cont
+    mip_solver = s.mip_solver
+    cont_solver = s.cont_solver
     opt_tolerance = s.tol_rel_opt
     time_limit = s.timeout
 
