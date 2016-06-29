@@ -46,15 +46,15 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # Solver parameters
     log_level::Int              # Verbosity flag: 1 for minimal OA iteration and solve statistics, 2 for including cone summary information, 3 for running commentary
     mip_solver_drives::Bool     # Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
-    mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver (MILP or MISOCP)
-    cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver (conic or nonlinear)
-    timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
-    rel_gap::Float64            # Relative optimality gap termination condition
     soc_in_mip::Bool            # (Conic only) Use SOC/SOCRotated cones in the MIP outer approximation model (if MIP solver supports MISOCP)
     disagg_soc::Bool            # (Conic only) Disaggregate SOC/SOCRotated cones in the MIP only
     drop_dual_infeas::Bool      # (Conic only) Do not add cuts from dual cone infeasible dual vectors
     proj_dual_infeas::Bool      # (Conic only) Project dual cone infeasible dual vectors onto dual cone boundaries
     proj_dual_feas::Bool        # (Conic only) Project dual cone strictly feasible dual vectors onto dual cone boundaries
+    mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver (MILP or MISOCP)
+    cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver (conic or nonlinear)
+    timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
+    rel_gap::Float64            # Relative optimality gap termination condition
     zero_tol::Float64           # (Conic only) Tolerance for setting small absolute values in duals to zeros
     sdp_init_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
     sdp_eig::Bool               # (Conic SDP only) Use SDP eigenvector-derived cuts
