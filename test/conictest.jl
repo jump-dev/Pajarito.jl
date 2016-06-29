@@ -111,7 +111,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                x^2 <= 5,
                                exp(y) + x <= 7)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, disagg=false, mip_solver=mip_solver, cont_solver=conic_solver))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, disagg_soc=false, mip_solver=mip_solver, cont_solver=conic_solver))
 
             # @fact problem.status --> :Optimal
             @fact Convex.evaluate(x) --> roughly(2.0, TOL)

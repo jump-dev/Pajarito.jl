@@ -21,9 +21,9 @@ TODO issues
 
 TODO features
 - want to be able to query logs information etc
-- use JP updated SOC disagg with half as many cuts
-- for SOCRotated disagg cuts
--- maybe add two disagg cuts - one for dividing by p and one for dividing by q
+- use JP updated SOC disagg_soc with half as many cuts
+- for SOCRotated disagg_soc cuts
+-- maybe add two disagg_soc cuts - one for dividing by p and one for dividing by q
 -- or reformulate pq >= sum x^2 using 3-dim SOCRotated pq >= w^2 and n dim SOC w^2 >= sum x^2
 - have option to only add violated cuts (especially for SDP, where each SOC cut slows down mip and we have many SOC cuts)
 - print cone info to one file and gap info to another file
@@ -46,16 +46,16 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # Solver parameters
     log_level::Int              # Verbosity flag: 1 for minimal OA iteration and solve statistics, 2 for including cone summary information, 3 for running commentary
     mip_solver_drives::Bool     # Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
-    misocp::Bool                # Use SOC/SOCRotated cones in the MIP outer approximation model (if MIP solver supports MISOCP)
-    disagg::Bool                # Disaggregate SOC/SOCRotated cones in the MIP only (if solver is conic)
+    soc_in_mip::Bool            # Use SOC/SOCRotated cones in the MIP outer approximation model (if MIP solver supports MISOCP)
+    disagg_soc::Bool            # Disaggregate SOC/SOCRotated cones in the MIP only (if solver is conic)
     drop_dual_infeas::Bool      # Do not add cuts from dual cone infeasible dual vectors
     proj_dual_infeas::Bool      # Project dual cone infeasible dual vectors onto dual cone boundaries
     proj_dual_feas::Bool        # Project dual cone strictly feasible dual vectors onto dual cone boundaries
     mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver
     cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver
     timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
-    tol_rel_opt::Float64        # Relative optimality gap termination condition
-    tol_zero::Float64           # Tolerance for setting small absolute values to zeros
+    rel_gap::Float64            # Relative optimality gap termination condition
+    zero_tol::Float64           # Tolerance for setting small absolute values to zeros
     sdp_init_soc::Bool          # Use SDP initial SOC cuts (if MIP solver supports MISOCP)
     sdp_eig::Bool               # Use SDP eigenvector-derived cuts
     sdp_soc::Bool               # Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
@@ -63,7 +63,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     sdp_tol_eigval::Float64     # Tolerance for ignoring eigenvectors corresponding to small (positive) eigenvalues
 
     # Internal switches
-    _misocp::Bool               # Only if using MIP solver supporting MISOCP
+    _soc_in_mip::Bool           # Only if using MIP solver supporting MISOCP
     _sdp_init_soc::Bool         # Only if using MIP solver supporting MISOCP
     _sdp_soc::Bool              # Only if using MIP solver supporting MISOCP (cannot add SOCs during MIP-driven solve)
 
@@ -120,21 +120,21 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     queue_heur::Vector{Vector{Float64}} # Heuristic queue for x_all
 
     # Model constructor
-    function PajaritoConicModel(log_level, mip_solver_drives, misocp, disagg, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, tol_rel_opt, tol_zero, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, mip_solver_drives, soc_in_mip, disagg_soc, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         m = new()
 
         m.log_level = log_level
         m.mip_solver_drives = mip_solver_drives
-        m.misocp = misocp
-        m.disagg = disagg
+        m.soc_in_mip = soc_in_mip
+        m.disagg_soc = disagg_soc
         m.drop_dual_infeas = drop_dual_infeas
         m.proj_dual_infeas = proj_dual_infeas
         m.proj_dual_feas = proj_dual_feas
         m.mip_solver = mip_solver
         m.cont_solver = cont_solver
         m.timeout = timeout
-        m.tol_rel_opt = tol_rel_opt
-        m.tol_zero = tol_zero
+        m.rel_gap = rel_gap
+        m.zero_tol = zero_tol
         m.sdp_init_soc = sdp_init_soc
         m.sdp_eig = sdp_eig
         m.sdp_soc = sdp_soc
@@ -144,20 +144,20 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         @printf "\n\n"
 
         # Determine whether to use MISOCP outer approximation MIP
-        if m.misocp
+        if m.soc_in_mip
             mip_species = MathProgBase.supportedcones(m.mip_solver)
             if ((:SOC in mip_species) && (:SOCRotated in mip_species))
-                m._misocp = true
+                m._soc_in_mip = true
             else
                 warn("MIP solver specified does not support MISOCP; defaulting to MILP outer approximation model\n")
-                m._misocp = false
+                m._soc_in_mip = false
             end
         else
-            m._misocp = false
+            m._soc_in_mip = false
         end
 
         # Determine which SOC cuts to use for SDPs
-        if m._misocp
+        if m._soc_in_mip
             m._sdp_init_soc = m.sdp_init_soc
             if m.sdp_soc
                 if m.mip_solver_drives
@@ -304,9 +304,9 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
 
     # Check for values in A smaller than zero tolerance
     A_sp = sparse(A)
-    A_num_zeros = count(val -> (abs(val) < m.tol_zero), nonzeros(A_sp))
+    A_num_zeros = count(val -> (abs(val) < m.zero_tol), nonzeros(A_sp))
     if A_num_zeros > 0
-        @printf "Matrix A has %d entries smaller than zero tolerance %e; performance may be improved by first fixing small magnitudes to zero\n" A_num_zeros m.tol_zero
+        @printf "Matrix A has %d entries smaller than zero tolerance %e; performance may be improved by first fixing small magnitudes to zero\n" A_num_zeros m.zero_tol
     end
 
     m.num_con_orig = num_con_orig
@@ -544,9 +544,9 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             end
             setlowerbound(vars[1], 0.)
 
-            if m._misocp
+            if m._soc_in_mip
                 @constraint(model_mip, sum{v^2, v in vars[2:end]} <= vars[1]^2)
-            elseif m.disagg && (length(vars) > 2)
+            elseif m.disagg_soc && (length(vars) > 2)
                 num_cone_dagg += 1
                 x_dagg_cone = @variable(model_mip, _[j in 1:(length(vars) - 1)] >= 0., basename="d$(num_cone_dagg)SOC", start=0.)
                 @constraint(model_mip, vars[1] - sum(x_dagg_cone) >= 0.)
@@ -559,12 +559,12 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             setlowerbound(vars[1], 0.)
             setlowerbound(vars[2], 0.)
 
-            if m._misocp
+            if m._soc_in_mip
                 x_help_cone = @variable(model_mip, _[1:1] >= 0., basename="h$(num_cone_nlnr)SOCRh", start=0.)
                 @constraint(model_mip, x_help_cone[1] == 2 * vars[2])
                 @constraint(model_mip, sum{v^2, v in vars[3:end]} <= vars[1] * x_help_cone[1])
-            elseif m.disagg && (length(vars) > 3)
-                # TODO this only adds one cut for dividing by vars[2], but may need two. otherwise, add extra SOCRotated in 3 dim to conic and use SOC disagg
+            elseif m.disagg_soc && (length(vars) > 3)
+                # TODO this only adds one cut for dividing by vars[2], but may need two. otherwise, add extra SOCRotated in 3 dim to conic and use SOC disagg_soc
                 warn("Disaggregation for cones $species is not currently supported (but we know how to implement this, so please open an issue and include your model data)\n")
                 # num_cone_dagg += 1
                 # x_dagg_cone = @variable(model_mip, _[j in 1:(length(vars) - 2)] >= 0., basename="d$(num_cone_dagg)SOCR", start=0.)
@@ -795,7 +795,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         m.gap_rel_opt = abs(m.obj_mip - m.obj_best) / (abs(m.obj_best) + 1e-5)
         print_gap(m, logs)
         print_inf(m)
-        if m.gap_rel_opt < m.tol_rel_opt
+        if m.gap_rel_opt < m.rel_gap
             m.status = :Optimal
             break
         end
@@ -1074,14 +1074,14 @@ end
 # Process dual vector and add dual cuts to MIP
 function add_cone_cuts!(m::PajaritoConicModel, n::Int, species::Symbol, dual::Vector{Float64})
     # Rescale the dual, don't add zero vectors
-    if maximum(abs(dual)) > m.tol_zero
+    if maximum(abs(dual)) > m.zero_tol
         dual = dual ./ maximum(abs(dual))
     else
         return
     end
 
     # Sanitize rescaled dual: remove near-zeros
-    dual[abs(dual) .< m.tol_zero] = 0.
+    dual[abs(dual) .< m.zero_tol] = 0.
 
     # For primal cone species:
     # 1 - calculate dual cone infeasibility of dual vector (negative value means strictly feasible in cone, zero means on cone boundary, positive means infeasible for cone)
@@ -1117,7 +1117,7 @@ function add_cone_cuts!(m::PajaritoConicModel, n::Int, species::Symbol, dual::Ve
                 dual = vcat((dual[1:2] * (norm(dual[3:end]) / sqrt(2 * dual[1] * dual[2]))), dual[3:end])
             end
 
-            # TODO when disagg enabled for SOCRotated, add two sets of cuts
+            # TODO when disagg_soc enabled for SOCRotated, add two sets of cuts
             # if isempty(m.map_vars_dagg[n])
             add_linear_cut!(m, m.summary[species], m.map_vars[n], dual)
             # else
@@ -1195,7 +1195,7 @@ function add_cone_cuts!(m::PajaritoConicModel, n::Int, species::Symbol, dual::Ve
                 # dual = make_svec(sum([(eigvals_dual[jV] * (eigvecs_dual[:, jV] * eigvecs_dual[:, jV]')) for jV in find((val -> val > 0.), eigvals_dual)]))
 
                 # Re-sanitize and add cut in smat space
-                # dual_smat[abs(dual_smat) .< m.tol_zero] = 0.
+                # dual_smat[abs(dual_smat) .< m.zero_tol] = 0.
                 # add_linear_cut!(m, m.summary[species], vec(m.map_vars_smat[n]), vec(dual_smat))
                 # add_linear_cut!(m, m.summary[species], m.map_vars[n], make_svec(Vdual[:, jV] * Vdual[:, jV]'))
 
@@ -1221,9 +1221,6 @@ end
 
 # Add a single linear cut and calculate cut infeasibility
 function add_linear_cut!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, vars::Vector{JuMP.Variable}, cut::Vector{Float64})
-    # Re-sanitize cut
-    cut[abs(cut) .< m.tol_zero] = 0.
-
     # Add cut (lazy cut if using MIP driven solve)
     if haskey(m.model_mip.ext, :cb)
         @lazyconstraint(m.model_mip.ext[:cb], dot(cut, vars) >= 0.)
