@@ -782,8 +782,14 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         bint_new = getvalue(m.x_bint)
         soln_round_curr = round(Int, bint_new)
         if soln_round_prev == soln_round_curr
-            warn("Mixed-integer solutions are cycling; terminating Pajarito\n")
-            m.status = :Suboptimal
+            # Check if we've converged anyway
+            m.gap_rel_opt = abs(m.obj_mip - m.obj_best) / (abs(m.obj_best) + 1e-5)
+            if m.gap_rel_opt < m.rel_gap
+                m.status = :Optimal
+            else
+                warn("Mixed-integer solutions are cycling; terminating Pajarito\n")
+                m.status = :Suboptimal
+            end
             break
         end
         soln_round_prev = soln_round_curr
