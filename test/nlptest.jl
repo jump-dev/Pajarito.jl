@@ -3,216 +3,166 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-function runnonlineartests(algorithm, mip_solvers)
+function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
+    algorithm = mip_solver_drives ? "BC" : "OA"
 
-facts("Sparse matrix bug test") do
-    m = Model(solver=PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
+    facts("Sparse matrix bug test") do
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
-    @variable(m, x >= 0, start = 1, Int)
-    @variable(m, y >= 0, start = 1)
+        @variable(m, x >= 0, start = 1, Int)
+        @variable(m, y >= 0, start = 1)
 
-    @objective(m, Min, -3x - y)
+        @objective(m, Min, -3x - y)
 
-    @constraint(m, 3x + 10 <= 20)
+        @constraint(m, 3x + 10 <= 20)
+        @NLconstraint(m, y^2 <= 10)
 
-    @NLconstraint(m, y^2 <= 10)
+        @fact solve(m) --> :Optimal
+    end
 
-    @fact solve(m) --> :Optimal
+    facts("Convex constraint with LB and UB test") do
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
-end
+        @variable(m, x >= 0, start = 1, Int)
+        @variable(m, y >= 0, start = 1)
 
+        @objective(m, Min, -3x - y)
 
-facts("Convex constraint with LB and UB") do
-    m = Model(solver=PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
+        @constraint(m, 3x + 2y + 10 <= 20)
+        @NLconstraint(m, 8 <= x^2 <= 10)
 
-    @variable(m, x >= 0, start = 1, Int)
-    @variable(m, y >= 0, start = 1)
+        @fact_throws ErrorException solve(m)
+    end
 
-    @objective(m, Min, -3x - y)
+    facts("Infeasible NLP problem") do
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
-    @constraint(m, 3x + 2y + 10 <= 20)
+        @variable(m, x >= 0, start = 1, Int)
+        @variable(m, y >= 0, start = 1)
 
-    @NLconstraint(m, 8 <= x^2 <= 10)
+        @objective(m, Min, -3x - y)
 
-    @fact_throws ErrorException solve(m)
+        @constraint(m, 3x + 2y + 10 <= 20)
+        @NLconstraint(m, x^2 >= 9)
+        @NLconstraint(m, exp(y) + x <= 2)
 
-end
+        status = solve(m)
 
-facts("Infeasible NLP problem") do
-    m = Model(solver=PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
+        @fact status --> :Infeasible
+    end
 
-    @variable(m, x >= 0, start = 1, Int)
-    @variable(m, y >= 0, start = 1)
+    facts("Infeasible MIP problem") do
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
-    @objective(m, Min, -3x - y)
+        @variable(m, x >= 0, start = 1, Int)
+        @variable(m, y >= 0, start = 1)
 
-    @constraint(m, 3x + 2y + 10 <= 20)
+        @objective(m, Min, -3x - y)
 
-    @NLconstraint(m, x^2 >= 9)
-    @NLconstraint(m, exp(y) + x <= 2)
+        @constraint(m, 3x + 2y + 10 <= 20)
+        @constraint(m, 6x + 5y >= 30)
+        @NLconstraint(m, x^2 >= 8)
+        @NLconstraint(m, exp(y) + x <= 7)
 
-    status = solve(m)
+        status = solve(m)
 
-    @fact status --> :Infeasible
-end
+        @fact status --> :Infeasible
+    end
 
-facts("Infeasible MIP problem") do
-    m = Model(solver=PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
+    facts("Solver test") do
+        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
-    @variable(m, x >= 0, start = 1, Int)
-    @variable(m, y >= 0, start = 1)
+            @variable(m, x >= 0, start = 1, Int)
+            @variable(m, y >= 0, start = 1)
 
-    @objective(m, Min, -3x - y)
+            @objective(m, Min, -3x - y)
 
-    @constraint(m, 3x + 2y + 10 <= 20)
-    @constraint(m, 6x + 5y >= 30)
+            @constraint(m, 3x + 2y + 10 <= 20)
+            @constraint(m, x >= 1)
+            @NLconstraint(m, x^2 <= 5)
+            @NLconstraint(m, exp(y) + x <= 7)
 
-    @NLconstraint(m, x^2 >= 8)
-    @NLconstraint(m, exp(y) + x <= 7)
+            status = solve(m)
 
-    status = solve(m)
+            @fact status --> :Optimal
+            @fact getvalue(x) --> 2.0
+        end
+    end
 
-    @fact status --> :Infeasible
-end
+    facts("Optimal solution with nonlinear objective test") do
+        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
-facts("Solver test") do
-for mip_solver in mip_solvers
-context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
+            @variable(m, x >= 0, start = 1, Int)
+            @variable(m, y >= 0, start = 1)
 
-    m = Model(solver=PajaritoSolver(algorithm=algorithm,verbose=0,mip_solver=mip_solver,cont_solver=nlp_solver))
+            @objective(m, Min, -3x - y)
 
-    @variable(m, x >= 0, start = 1, Int)
-    @variable(m, y >= 0, start = 1)
+            @constraint(m, 3x + 2y + 10 <= 20)
+            @constraint(m, x >= 1)
+            @NLconstraint(m, x^2 <= 5)
+            @NLconstraint(m, exp(y) + x <= 7)
 
-    @objective(m, Min, -3x - y)
+            status = solve(m)
 
-    @constraint(m, 3x + 2y + 10 <= 20)
-    @constraint(m, x >= 1)
+            @fact status --> :Optimal
+            @fact getvalue(x) --> 2.0
+        end
+    end
 
-    @NLconstraint(m, x^2 <= 5)
-    @NLconstraint(m, exp(y) + x <= 7)
+    facts("No integer variables test") do
+        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
-    status = solve(m)
+            @variable(m, x >= 0, start = 1)
+            @variable(m, y >= 0, start = 1)
 
-    @fact status --> :Optimal
-    @fact getvalue(x) --> 2.0
-end
-end
-end
+            @objective(m, Min, -3x - y)
 
-facts("Optimal solution with nonlinear objective") do
-for mip_solver in mip_solvers
-context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-    m = Model(solver=PajaritoSolver(algorithm=algorithm,verbose=0,mip_solver=mip_solver,cont_solver=nlp_solver))
+            @constraint(m, 3x + 2y + 10 <= 20)
+            @constraint(m, x >= 1)
 
-    @variable(m, x >= 0, start = 1, Int)
-    @variable(m, y >= 0, start = 1)
+            @NLconstraint(m, x^2 <= 5)
+            @NLconstraint(m, exp(y) + x <= 7)
 
-    @NLobjective(m, Min, -3x - y)
+            @fact_throws ErrorException solve(m)
+        end
+    end
 
-    @constraint(m, 3x + 2y + 10 <= 20)
-    @constraint(m, x >= 1)
+    facts("Maximization problem") do
+        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
-    @NLconstraint(m, x^2 <= 5)
-    @NLconstraint(m, exp(y) + x <= 7)
+            @variable(m, x >= 0, start = 1, Int)
+            @variable(m, y >= 0, start = 1)
 
-    status = solve(m)
+            @objective(m, Max, 3x + y)
 
-    @fact status --> :Optimal
-    @fact getvalue(x) --> 2.0
-end
-end
-end
+            @constraint(m, 3x + 2y + 10 <= 20)
+            @NLconstraint(m, x^2 <= 9)
 
-# TODO setvartype is not called if there are no integer variables in the model
-facts("No integer variables") do
-for mip_solver in mip_solvers
-context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-    m = Model(solver=PajaritoSolver(algorithm=algorithm,verbose=0,mip_solver=mip_solver,cont_solver=nlp_solver))
+            status = solve(m)
 
-    @variable(m, x >= 0, start = 1)
-    @variable(m, y >= 0, start = 1)
+            @fact round(getobjectivevalue(m) - 9.5) --> 0.0
+        end
+    end
 
-    @NLobjective(m, Min, -3x - y)
+    facts("Maximization problem with nonlinear function") do
+        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
-    @constraint(m, 3x + 2y + 10 <= 20)
-    @constraint(m, x >= 1)
+            @variable(m, x >= 0, start = 1, Int)
+            @variable(m, y >= 0, start = 1)
 
-    @NLconstraint(m, x^2 <= 5)
-    @NLconstraint(m, exp(y) + x <= 7)
+            @objective(m, Max, -x^2 - y)
 
-    status = solve(m)
+            @constraint(m, x + 2y >= 4)
+            @NLconstraint(m, x^2 <= 9)
 
-    @fact status --> :Optimal
-    # TODO CHECK SOLUTION APPROXIMATELY
-end
-end
-end
+            status = solve(m)
 
-facts("Maximization problem") do
-for mip_solver in mip_solvers
-context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-    m = Model(solver=PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
-
-    @variable(m, x >= 0, start = 1, Int)
-    @variable(m, y >= 0, start = 1)
-
-    @objective(m, Max, 3x + y)
-
-    @constraint(m, 3x + 2y + 10 <= 20)
-
-    @NLconstraint(m, x^2 <= 9)
-
-    status = solve(m)
-    @fact round(getobjectivevalue(m)-9.5) --> 0.0
-
-end
-end
-end
-
-facts("Maximization problem with nonlinear function") do
-for mip_solver in mip_solvers
-context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-    m = Model(solver=PajaritoSolver(algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
-
-    @variable(m, x >= 0, start = 1, Int)
-    @variable(m, y >= 0, start = 1)
-
-    @objective(m, Max, -x^2 - y)
-
-    @constraint(m, x + 2y >= 4)
-
-    @NLconstraint(m, x^2 <= 9)
-
-    status = solve(m)
-    @fact round(getobjectivevalue(m)+2.0) --> 0.0
-
-end
-end
-end
-
-
-if algorithm == "OA"
-facts("Print test") do
-for mip_solver in mip_solvers
-context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-    m = Model(solver=PajaritoSolver(verbose=1,profile=true,algorithm=algorithm,mip_solver=mip_solver,cont_solver=nlp_solver))
-
-    @variable(m, x >= 0, start = 1, Int)
-    @variable(m, y >= 0, start = 1)
-
-    @objective(m, Max, -x^2 - y)
-
-    @constraint(m, x + 2y >= 4)
-
-    @NLconstraint(m, x^2 <= 9)
-
-    status = solve(m)
-    @fact status --> :Optimal
-
-end
-end
-end
-end
-
+            @fact round(getobjectivevalue(m) + 2.0) --> 0.0
+        end
+    end
 end
