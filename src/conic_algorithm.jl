@@ -757,7 +757,7 @@ end
 
 # Solve the MIP model using iterative outer approximation algorithm
 function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
-    @printf "\nStarting iterative outer approximation algorithm:\n"
+    m.log_level > 0 && @printf "\nStarting iterative outer approximation algorithm:\n"
     soln_round_prev = fill(NaN, length(m.cols_bint))
 
     while true
@@ -811,7 +811,7 @@ end
 # Solve the MIP model using MIP-solver-driven callback algorithm
 function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     # Initialize heuristic solution queue vectors, set bool to stop adding SOC cuts during MIP driven solve
-    @printf "\nStarting MIP-solver-driven outer approximation algorithm:\n"
+    m.log_level > 0 && @printf "\nStarting MIP-solver-driven outer approximation algorithm:\n"
     m.bc_started = true
     m.queue_heur = Vector{Float64}[]
 
@@ -1465,6 +1465,7 @@ end
 
 # Print after finish
 function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
+    m.log_level > 0 || return
     if m.mip_solver_drives
         @printf "\nFinished MIP-solver-driven outer approximation algorithm:\n"
     else

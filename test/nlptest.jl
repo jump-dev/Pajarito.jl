@@ -6,8 +6,8 @@
 function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
     algorithm = mip_solver_drives ? "BC" : "OA"
 
-    facts("\n\n\n\nSparse matrix bug test\n\n") do
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver))
+    facts("Sparse matrix bug test") do
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -20,8 +20,8 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
         @fact solve(m) --> :Optimal
     end
 
-    facts("\n\n\n\nConvex constraint with LB and UB test\n\n") do
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver))
+    facts("Convex constraint with LB and UB test") do
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -34,8 +34,8 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
         @fact_throws ErrorException solve(m)
     end
 
-    facts("\n\n\n\nInfeasible NLP problem\n\n") do
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver))
+    facts("Infeasible NLP problem") do
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -51,8 +51,8 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
         @fact status --> :Infeasible
     end
 
-    facts("\n\n\n\nInfeasible MIP problem\n\n") do
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver))
+    facts("Infeasible MIP problem") do
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -69,9 +69,9 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
         @fact status --> :Infeasible
     end
 
-    facts("\n\n\n\nSolver test\n\n") do
+    facts("Solver test") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -90,9 +90,9 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
         end
     end
 
-    facts("\n\n\n\nOptimal solution with nonlinear objective test\n\n") do
+    facts("Optimal solution with nonlinear objective test") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -111,9 +111,9 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
         end
     end
 
-    facts("\n\n\n\nNo integer variables test\n\n") do
+    facts("No integer variables test") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
             @variable(m, x >= 0, start = 1)
             @variable(m, y >= 0, start = 1)
@@ -130,9 +130,9 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
         end
     end
 
-    facts("\n\n\n\nMaximization problem\n\n") do
+    facts("Maximization problem") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -148,9 +148,9 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
         end
     end
 
-    facts("\n\n\n\nMaximization problem with nonlinear function\n\n") do
+    facts("Maximization problem with nonlinear function") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)

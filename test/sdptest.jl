@@ -6,9 +6,9 @@
 function runsdptests(mip_solver_drives, mip_solver, sdp_solver)
     algorithm = mip_solver_drives ? "BC" : "OA"
 
-    facts("\n\n\n\nRotated SOC problem\n\n") do
+    facts("Rotated SOC problem") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(sdp_solver))") do
-            problem = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=sdp_solver))
+            problem = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=sdp_solver,log_level=0))
 
             c = [-3.0; 0.0; 0.0;0.0]
             A = zeros(4,4)
@@ -37,7 +37,7 @@ function runsdptests(mip_solver_drives, mip_solver, sdp_solver)
         end
     end
 
-    facts("\n\n\n\nMaximization problem\n\n") do
+    facts("Maximization problem") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(sdp_solver))") do
             x = Convex.Variable(1,:Int)
             y = Convex.Variable(1, Convex.Positive())
@@ -49,7 +49,7 @@ function runsdptests(mip_solver_drives, mip_solver, sdp_solver)
                                 x^2 <= 4,
                                 y >= z[2,2])
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=sdp_solver))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=sdp_solver,log_level=0))
 
             @fact problem.optval --> roughly(8.0, TOL)
         end

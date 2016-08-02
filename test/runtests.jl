@@ -12,7 +12,9 @@ include(Pkg.dir("JuMP", "test", "solvers.jl"))
 
 # Define solvers using JuMP/test/solvers.jl
 solvers_mip = lazy_solvers
-solvers_nlnr = nlp_solvers
+solvers_nlnr = []
+ipt && push!(solvers_nlnr, Ipopt.IpoptSolver(print_level=0))
+kni && push!(solvers_nlnr, KNITRO.KnitroSolver(objrange=1e16,outlev=0,maxit=100000))
 solvers_conic = eco ? [ECOS.ECOSSolver(verbose=false)] : []
 solvers_sdp = mos ? [Mosek.MosekSolver(LOG=0)] : []
 
