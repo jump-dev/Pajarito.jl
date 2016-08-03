@@ -1433,12 +1433,14 @@ end
 # Print objective gap information
 function print_gap(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     if m.log_level > 0
-        if (logs[:n_conic] == 0) || (m.log_level > 1)
+        if (logs[:n_conic] == 1) || (m.log_level > 1)
             @printf "\n%-4s | %-14s | %-14s | %-11s | %-11s\n" "Iter" "Best obj" "OA obj" "Rel gap" "Time (s)"
         end
 
         if m.gap_rel_opt < 1000
             @printf "%4d | %+14.6e | %+14.6e | %11.3e | %11.3e\n" logs[:n_conic] m.obj_best m.obj_mip m.gap_rel_opt (time() - logs[:oa_alg])
+        elseif isnan(m.gap_rel_opt)
+            @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" logs[:n_conic] m.obj_best m.obj_mip "Inf" (time() - logs[:oa_alg])
         else
             @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" logs[:n_conic] m.obj_best m.obj_mip ">1000" (time() - logs[:oa_alg])
         end
