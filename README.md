@@ -68,14 +68,24 @@ Mixed-integer convex programming is an active area of research, and we are seeki
 
 ## References
 
-If you find Pajarito useful in your work, we kindly request that you cite the following [paper](http://arxiv.org/abs/1511.06710):
+If you find Pajarito useful in your work, we kindly request that you cite the following [paper](http://dx.doi.org/10.1007/978-3-319-33461-5_9) ([arXiv preprint](http://arxiv.org/abs/1511.06710)):
 
-    @article{LubinYamangilBentVielma2016,
-    title = {Extended Formulations in Mixed-integer Convex Programming},
-    author = {Miles Lubin, Emre Yamangil, Russell Bent, Juan Pablo Vielma},
-    journal = {arXiv:1511.06710 [math.OC]},
-    year = {2016},
-    url = {http://arxiv.org/abs/1511.06710}
+    @Inbook{LubinYamangilBentVielma2016,
+    author="Lubin, Miles
+    and Yamangil, Emre
+    and Bent, Russell
+    and Vielma, Juan Pablo",
+    editor="Louveaux, Quentin
+    and Skutella, Martin",
+    title="Extended Formulations in Mixed-Integer Convex Programming",
+    bookTitle="Integer Programming and Combinatorial Optimization: 18th International Conference, IPCO 2016, Li{\`e}ge, Belgium, June 1-3, 2016, Proceedings",
+    year="2016",
+    publisher="Springer International Publishing",
+    address="Cham",
+    pages="102--113",
+    isbn="978-3-319-33461-5",
+    doi="10.1007/978-3-319-33461-5_9",
+    url="http://dx.doi.org/10.1007/978-3-319-33461-5_9"
     }
 
 The paper describes the motivation of Pajarito and is recommended reading for advanced users.
