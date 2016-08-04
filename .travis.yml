@@ -6,6 +6,9 @@ os:
 julia:
   - 0.4
   - nightly
+# Workaround for https://github.com/travis-ci/travis-ci/issues/4942
+git:
+  depth: 99999
 matrix:
   allow_failures:
     - julia: nightly
@@ -17,8 +20,8 @@ addons:
   - libgmp-dev
   - gfortran
 # uncomment the following lines to override the default test script
-script:
-  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-  - julia -e 'Pkg.clone(pwd()); Pkg.build("Pajarito"); Pkg.test("Pajarito"; coverage=true)'
+#script:
+#  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+#  - julia -e 'Pkg.clone(pwd()); Pkg.build("Pajarito"); Pkg.test("Pajarito"; coverage=true)'
 after_success:
   - julia -e 'cd(Pkg.dir("Pajarito")); Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
