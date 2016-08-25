@@ -165,4 +165,22 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
             @fact round(getobjectivevalue(m) + 2.0) --> 0.0
         end
     end
+
+    facts("Maximization problem with nonlinear function (LP/QP interface)") do
+        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+
+            @variable(m, x >= 0, start = 1, Int)
+            @variable(m, y >= 0, start = 1)
+
+            @objective(m, Max, -x^2 - y)
+
+            @constraint(m, x + 2y >= 4)
+            @constraint(m, x^2 <= 9)
+
+            status = solve(m)
+
+            @fact round(getobjectivevalue(m) + 2.0) --> 0.0
+        end
+    end
 end
