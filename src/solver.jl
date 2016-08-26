@@ -84,3 +84,5 @@ function MathProgBase.NonlinearModel(s::PajaritoSolver)
 
     return PajaritoNonlinearModel(verbose, algorithm, mip_solver, cont_solver, opt_tolerance, time_limit)
 end
+
+MathProgBase.LinearQuadraticModel(s::PajaritoSolver) = MathProgBase.NonlinearToLPQPBridge(MathProgBase.NonlinearModel(s))

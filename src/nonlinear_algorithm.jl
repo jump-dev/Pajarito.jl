@@ -450,6 +450,12 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
 
     m.nlp_load_timer = 0.0
 
+    # if we haven't gotten a starting point,
+    # (e.g., if acting as MIQP solver) assume zero is okay
+    if any(isnan,m.solution)
+        m.solution = zeros(length(m.solution))
+    end
+
     populatelinearmatrix(m)
     # solve it
     # MathProgBase.optimize!(nlp_model)
