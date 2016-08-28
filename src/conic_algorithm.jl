@@ -408,6 +408,7 @@ MathProgBase.numconstr(m::PajaritoConicModel) = m.num_con_orig
 MathProgBase.numvar(m::PajaritoConicModel) = m.num_var_orig
 MathProgBase.status(m::PajaritoConicModel) = m.status
 MathProgBase.getobjval(m::PajaritoConicModel) = m.obj_best
+MathProgBase.getobjbound(m::PajaritoConicModel) = m.obj_mip
 MathProgBase.getsolution(m::PajaritoConicModel) = m.soln_best
 
 
