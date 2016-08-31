@@ -843,7 +843,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     function callback_heur(cb)
         # Take each heuristic solution vector and add as a solution to the MIP
         tic()
-        while !isempty(m.queue_heur)
+        if !isempty(m.queue_heur)
             for (val, var) in zip(pop!(m.queue_heur), m.x_all)
                 setsolutionvalue(cb, var, val)
             end
