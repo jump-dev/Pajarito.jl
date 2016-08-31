@@ -595,8 +595,8 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     push!(map_vars, x_slck)
 
                 elseif m.disagg_soc && (length(x_slck) > 2)
-                    x_dagg = @variable(model_mip, [j in 1:(length(x_slck) - 1)] >= 0., basename="d$(num_cone_nlnr)SOC", start=0.)
-                    @constraint(model_mip, vars[1] - sum(x_dagg) >= 0.)
+                    x_dagg = @variable(model_mip, [j in 1:(length(x_slck) - 1)], lowerbound=0., basename="d$(num_cone_nlnr)SOC", start=0.)
+                    @constraint(model_mip, x_slck[1] - sum(x_dagg) >= 0.)
                     push!(map_vars, vcat(x_slck, x_dagg))
                 end
 
@@ -607,8 +607,8 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
                 if m._soc_in_mip
                     x_help = @variable(model_mip, lowerbound=0., basename="h$(num_cone_nlnr)SOCRh", start=0.)
-                    @constraint(model_mip, x_help[1] == 2 * x_slck[2])
-                    @constraint(model_mip, sum{v^2, v in x_slck[3:end]} <= x_slck[1] * x_help[1])
+                    @constraint(model_mip, x_help == 2 * x_slck[2])
+                    @constraint(model_mip, sum{v^2, v in x_slck[3:end]} <= x_slck[1] * x_help)
                     push!(map_vars, x_slck)
 
                 elseif m.disagg_soc && (length(x_slck) > 3)
@@ -641,7 +641,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 # Set up helper variables and initial SDP SOC cuts
                 if m._sdp_init_soc || m._sdp_soc
                     # Set up smat space variable array and add optional SDP initial SOC and dynamic SOC cuts
-                    x_help = @variable(model_mip, [j in 1:nSD] >= 0, basename="h$(num_cone_nlnr)SDhelp", start=0.)
+                    x_help = @variable(model_mip, [j in 1:nSD], lowerbound=0., basename="h$(num_cone_nlnr)SDhelp", start=0.)
                     x_smat = Array{JuMP.AffExpr,2}(nSD, nSD)
                     kSD = 1
                     for jSD in 1:nSD, iSD in jSD:nSD
@@ -663,7 +663,6 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             end
         end
     end
-    WHATTT
 
     # Store MIP data
     m.model_mip = model_mip
