@@ -20,6 +20,7 @@ TODO issues
 - MPB issue - can't call supportedcones on defaultConicsolver
 
 TODO features
+- does partial warm-start work? maybe need to extend to full MIP solution
 - add initial LINEAR sdp cuts (redundant with initial SOC cuts) -2m_ij <= m_ii + m_jj, 2m_ij <= m_ii + m_jj, all i,j
 - update for 0.5
 - replace "for i in 1:..."
@@ -99,22 +100,22 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     model_mip::JuMP.Model       # JuMP MIP (outer approximation) model
     x_mip::Vector{JuMP.Variable} # JuMP vector of original variables
     map_spec::Vector{Symbol}    # Species of nonlinear cone
-    map_rows::Vector{Vector{Int}}    # Row indices in MIP for nonlinear cone
-    map_dim::Vector{Int}     # Dimension of nonlinear cone
-    map_vars::Vector{Vector{AffExpr}}   # JuMP variables associated with slacks of nonlinear cone
-    num_cone_nlnr::Int # Number of nonlinear cones
+    map_rows::Vector{Vector{Int}} # Row indices in MIP for nonlinear cone
+    map_dim::Vector{Int}        # Dimension of nonlinear cone
+    map_vars::Vector{Vector{AffExpr}} # JuMP variables associated with slacks of nonlinear cone
+    num_cone_nlnr::Int          # Number of nonlinear cones
 
     # Conic constructed data
     cone_con_sub::Vector{Tuple{Symbol,Vector{Int}}} # Constraint cones data in conic subproblem
     cone_var_sub::Vector{Tuple{Symbol,Vector{Int}}} # Variable cones data in conic subproblem
-    map_rows_sub::Vector{Symbol} # Row indices in conic subproblem for nonlinear cone
-    cols_cont::Vector{Int} # Column indices of continuous variables in MIP
-    cols_int::Vector{Int} # Column indices of integer variables in MIP
+    map_rows_sub::Vector{Vector{Int}} # Row indices in conic subproblem for nonlinear cone
+    cols_cont::Vector{Int}      # Column indices of continuous variables in MIP
+    cols_int::Vector{Int}       # Column indices of integer variables in MIP
     A_sub_cont::SparseMatrixCSC{Float64,Int64} # Submatrix of A containing full rows and continuous variable columns
     A_sub_int::SparseMatrixCSC{Float64,Int64} # Submatrix of A containing full rows and integer variable columns
-    b_sub::Vector{Float64} # Subvector of b containing full rows
+    b_sub::Vector{Float64}      # Subvector of b containing full rows
     c_sub_cont::Vector{Float64} # Subvector of c for continuous variables
-    c_sub_int::Vector{Float64} # Subvector of c for integer variables
+    c_sub_int::Vector{Float64}  # Subvector of c for integer variables
 
     # Dynamic solve data
     summary::Dict{Symbol,Dict{Symbol,Real}} # Infeasibilities (outer, cut, dual) of each cone species at current iteration
@@ -388,7 +389,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     # Generate model data and instantiate MIP model
     logs[:total_setup] = time()
-    transform_data!(m, logs)
+    trans_data!(m, logs)
     create_mip_data!(m, logs)
     create_conic_data!(m, logs)
 
@@ -428,7 +429,7 @@ MathProgBase.getsolution(m::PajaritoConicModel) = m.soln_best
 =========================================================#
 
 # Transform data: convert variable cones to constraint cones, detect existing slack variables
-function transform_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
+function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     tic()
 
     # Convert nonlinear variable cones to constraint cones by adding new rows
@@ -469,8 +470,8 @@ function transform_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
     end
 
-    row_to_slckj = Dict{Int, Int}(0)
-    row_to_slckv = Dict{Int, Float64}(0)
+    row_to_slckj = Dict{Int,Int}()
+    row_to_slckv = Dict{Int,Float64}()
 
     slack_tol = 0.1 # TODO maybe make this an option
 
@@ -499,7 +500,7 @@ function transform_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     m.row_to_slckj = row_to_slckj
     m.row_to_slckv = row_to_slckv
 
-    logs[:transform_data] += toq()
+    logs[:trans_data] += toq()
 end
 
 # Generate MIP model and maps relating conic model and MIP model variables
@@ -512,12 +513,12 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     x_mip = @variable(model_mip, [1:m.num_var_new])
 
     for j in 1:m.num_var_new
-        setcategory(x_mip[j], m.types_new[j])
+        setcategory(x_mip[j], m.types_orig[j])
     end
 
-    if !isempty(m.start_new)
+    if !isempty(m.start_orig)
         for j in 1:m.num_var_new
-            setvalue(x_mip[j], m.start_new[j])
+            setvalue(x_mip[j], m.start_orig[j])
         end
     end
 
@@ -575,19 +576,19 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
             x_slck = JuMP.AffExpr[]
             for i in rows
-                if haskey(row_to_slckj, i)
+                if haskey(m.row_to_slckj, i)
                     #TODO is the coefficient here correct?
-                    append!(x_slck, (-1 / row_to_slckv[i] * x_mip[row_to_slckj[i]]))
-                    setname(x_mip[row_to_slckj[i]], "v$(row_to_slckj[i])_s$(i)_c$(num_cone_nlnr)")
+                    push!(x_slck, (-1 / m.row_to_slckv[i] * x_mip[m.row_to_slckj[i]]))
+                    setname(x_mip[m.row_to_slckj[i]], "v$(m.row_to_slckj[i])_s$(i)_c$(num_cone_nlnr)")
                 else
-                    append!(x_slck, @variable(model_mip, start=0., basename="s$(i)_c$(num_cone_nlnr)"))
+                    push!(x_slck, @variable(model_mip, _, basename="s$(i)_c$(num_cone_nlnr)", start=0.))
                 end
             end
             @constraint(model_mip, lhs_expr[rows] - x_slck .== 0.)
 
             # Set bounds on variables and save dimensions, add additional constraints/variables
             if spec == :SOC
-                setlowerbound(x_slck[1], 0.)
+                @constraint(model_mip, x_slck[1] >= 0.)
                 push!(map_dim, length(rows))
 
                 if m._soc_in_mip
@@ -598,11 +599,13 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     x_dagg = @variable(model_mip, [j in 1:(length(x_slck) - 1)], lowerbound=0., basename="d$(num_cone_nlnr)SOC", start=0.)
                     @constraint(model_mip, x_slck[1] - sum(x_dagg) >= 0.)
                     push!(map_vars, vcat(x_slck, x_dagg))
+                else
+                    push!(map_vars, x_slck)
                 end
 
             elseif spec == :SOCRotated
-                setlowerbound(x_slck[1], 0.)
-                setlowerbound(x_slck[2], 0.)
+                @constraint(model_mip, x_slck[1] >= 0.)
+                @constraint(model_mip, x_slck[2] >= 0.)
                 push!(map_dim, length(rows))
 
                 if m._soc_in_mip
@@ -615,11 +618,13 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     # TODO maybe just reformulate SOCRs to SOCs and disaggregate
                     warn("Disaggregation for cones $spec is not currently supported (it is better to reformulate manually using a linear transformation to SOC form)\n")
                     push!(map_vars, x_slck)
+                else
+                    push!(map_vars, x_slck)
                 end
 
             elseif spec == :ExpPrimal
-                setlowerbound(x_slck[2], 0.)
-                setlowerbound(x_slck[3], 0.)
+                @constraint(model_mip, x_slck[2] >= 0.)
+                @constraint(model_mip, x_slck[3] >= 0.)
                 push!(map_dim, length(rows))
                 push!(map_vars, x_slck)
 
@@ -630,7 +635,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 kSD = 1
                 for jSD in 1:nSD, iSD in jSD:nSD
                     if jSD == iSD
-                        setlowerbound(x_slck[kSD], 0.)
+                        @constraint(model_mip, x_slck[kSD] >= 0.)
                     end
                     kSD += 1
                 end
@@ -659,6 +664,8 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                         kSD += 1
                     end
                     push!(map_vars, vcat(x_slck, vec(x_smat)))
+                else
+                    push!(map_vars, vcat(x_slck))
                 end
             end
         end
@@ -684,6 +691,7 @@ function create_conic_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     # Build new subproblem variable cones by removing integer variables
     cols_cont = Int[]
     cols_int = Int[]
+    num_cont = 0
     cone_var_sub = Tuple{Symbol,Vector{Int}}[]
 
     for (spec, cols) in m.cone_var_new
@@ -698,7 +706,7 @@ function create_conic_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             end
         end
         if !isempty(cols_cont_new)
-            push!(cone_var_cont, (spec, cols_cont_new))
+            push!(cone_var_sub, (spec, cols_cont_new))
         end
     end
 
@@ -715,6 +723,7 @@ function create_conic_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     num_full = 0
     rows_full = Int[]
     cone_con_sub = Tuple{Symbol,Vector{Int}}[]
+    map_rows_sub = Vector{Int}[]
 
     for (spec, rows) in m.cone_con_new
         if spec in (:Zero, :NonNeg, :NonPos)
@@ -745,11 +754,11 @@ function create_conic_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     m.cols_int = cols_int
 
     # Build new subproblem A, b, c data by removing empty rows and integer variables
-    m.A_sub_cont = A_new[rows_full, cols_cont]
-    m.A_sub_int = A_new[rows_full, cols_int]
-    m.b_sub = b_new[rows_full]
-    m.c_sub_cont = c_new[cols_cont]
-    m.c_sub_int = c_new[cols_int]
+    m.A_sub_cont = m.A_new[rows_full, cols_cont]
+    m.A_sub_int = m.A_new[rows_full, cols_int]
+    m.b_sub = m.b_new[rows_full]
+    m.c_sub_cont = m.c_new[cols_cont]
+    m.c_sub_int = m.c_new[cols_int]
 
     logs[:conic_data] += toq()
 end
@@ -1409,6 +1418,7 @@ function create_logs()
     logs = Dict{Symbol,Real}()
 
     # Timers
+    logs[:trans_data] = 0.  # Transforming data
     logs[:conic_data] = 0.  # Generating conic data
     logs[:mip_data] = 0.    # Generating MIP data
     logs[:total_setup] = 0. # Performing total optimize algorithm
@@ -1529,8 +1539,9 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         @printf "\nTimers (s):\n"
         @printf " - Setup                = %14.2e\n" logs[:total_setup]
         if m.log_level > 1
-            @printf " -- Create conic data   = %14.2e\n" logs[:conic_data]
+            @printf " -- Transform data      = %14.2e\n" logs[:trans_data]
             @printf " -- Create MIP data     = %14.2e\n" logs[:mip_data]
+            @printf " -- Create conic data   = %14.2e\n" logs[:conic_data]
             @printf " -- Solve relax         = %14.2e\n" logs[:relax_solve]
             @printf " -- Add relax cuts      = %14.2e\n" logs[:relax_cuts]
         end
