@@ -460,12 +460,12 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
     # Detect existing slack variables in nonlinear cone rows with b=0, corresponding to isolated row nonzeros equal to -1
     row_slck_count = zeros(Int, num_con_new)
-    for ind in 1:length(A_I)
-        if A_V[ind] != 0.
-            if row_slck_count[A_I[ind]] == 0
-                row_slck_count[A_I[ind]] = ind
-            elseif row_slck_count[A_I[ind]] > 0
-                row_slck_count[A_I[ind]] == -1
+    for (ind, i) in enumerate(A_I)
+        if (b_new[i] == 0.) && (A_V[ind] != 0.)
+            if row_slck_count[i] == 0
+                row_slck_count[i] = ind
+            elseif row_slck_count[i] > 0
+                row_slck_count[i] == -1
             end
         end
     end
@@ -480,10 +480,11 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         if !(spec in (:Free, :Zero, :NonNeg, :NonPos))
             for i in rows
                 if row_slck_count[i] > 0
-                    if abs(A_V[row_slck_count[i]]) > slack_tol
-                        row_to_slckj[i] = A_J[row_slck_count[i]]
-                        row_to_slckv[i] = A_V[row_slck_count[i]]
-                    end
+                    # if abs(A_V[row_slck_count[i]]) > slack_tol
+                    # if A_V[row_slck_count[i]] == -1.
+                    #     row_to_slckj[i] = A_J[row_slck_count[i]]
+                    #     row_to_slckv[i] = A_V[row_slck_count[i]]
+                    # end
                 end
             end
         end
@@ -576,15 +577,15 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
             x_slck = JuMP.AffExpr[]
             for i in rows
-                if haskey(m.row_to_slckj, i)
-                    #TODO is the coefficient here correct?
-                    push!(x_slck, (-1 / m.row_to_slckv[i] * x_mip[m.row_to_slckj[i]]))
-                    setname(x_mip[m.row_to_slckj[i]], "v$(m.row_to_slckj[i])_s$(i)_c$(num_cone_nlnr)")
-                else
-                    push!(x_slck, @variable(model_mip, _, basename="s$(i)_c$(num_cone_nlnr)", start=0.))
-                end
+                # if haskey(m.row_to_slckj, i)
+                #     push!(x_slck, x_mip[m.row_to_slckj[i]])
+                #     setname(x_mip[m.row_to_slckj[i]], "v$(m.row_to_slckj[i])_s$(i)_c$(num_cone_nlnr)")
+                # else
+                    x_slck_i = @variable(model_mip, _, basename="s$(i)_c$(num_cone_nlnr)", start=0.)
+                    push!(x_slck, x_slck_i)
+                    @constraint(model_mip, lhs_expr[i] - x_slck_i == 0.)
+                # end
             end
-            @constraint(model_mip, lhs_expr[rows] - x_slck .== 0.)
 
             # Set bounds on variables and save dimensions, add additional constraints/variables
             if spec == :SOC
@@ -979,7 +980,6 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
     # Add dynamic cuts for each cone and calculate infeasibilities for cuts and duals
     tic()
     dual_con = MathProgBase.getdual(model_conic)
-    #TODO renormalize cut by coefficient on slack variable
     for n in 1:m.num_cone_nlnr
         add_cone_cuts!(m, m.map_spec[n], m.summary[m.map_spec[n]], m.map_dim[n], m.map_vars[n], dual_con[m.map_rows_sub[n]])
     end

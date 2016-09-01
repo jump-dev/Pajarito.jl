@@ -43,9 +43,9 @@ function PajaritoSolver(;
     timeout = 60*5,
     rel_gap = 1e-5,
     zero_tol = 1e-10,
-    sdp_init_soc = true,
+    sdp_init_soc = false,
     sdp_eig = true,
-    sdp_soc = true,
+    sdp_soc = false,
     sdp_tol_eigvec = 1e-5,
     sdp_tol_eigval = 1e-10
     )
