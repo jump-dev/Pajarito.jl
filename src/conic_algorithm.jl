@@ -480,11 +480,11 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         if !(spec in (:Free, :Zero, :NonNeg, :NonPos))
             for i in rows
                 if row_slck_count[i] > 0
-                    # if abs(A_V[row_slck_count[i]]) > slack_tol
+                    if abs(A_V[row_slck_count[i]]) > slack_tol
                     # if A_V[row_slck_count[i]] == -1.
-                    #     row_to_slckj[i] = A_J[row_slck_count[i]]
-                    #     row_to_slckv[i] = A_V[row_slck_count[i]]
-                    # end
+                        row_to_slckj[i] = A_J[row_slck_count[i]]
+                        row_to_slckv[i] = A_V[row_slck_count[i]]
+                    end
                 end
             end
         end
@@ -517,11 +517,11 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         setcategory(x_mip[j], m.types_orig[j])
     end
 
-    if !isempty(m.start_orig)
-        for j in 1:m.num_var_new
-            setvalue(x_mip[j], m.start_orig[j])
-        end
-    end
+    # if !isempty(m.start_orig)
+    #     for j in 1:m.num_var_new
+    #         setvalue(x_mip[j], m.start_orig[j])
+    #     end
+    # end
 
     @objective(model_mip, :Min, dot(m.c_new, x_mip))
 
@@ -577,14 +577,14 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
             x_slck = JuMP.AffExpr[]
             for i in rows
-                # if haskey(m.row_to_slckj, i)
-                #     push!(x_slck, x_mip[m.row_to_slckj[i]])
-                #     setname(x_mip[m.row_to_slckj[i]], "v$(m.row_to_slckj[i])_s$(i)_c$(num_cone_nlnr)")
-                # else
+                if haskey(m.row_to_slckj, i)
+                    push!(x_slck, (- m.row_to_slckv[i] * x_mip[m.row_to_slckj[i]]))
+                    setname(x_mip[m.row_to_slckj[i]], "v$(m.row_to_slckj[i])_s$(i)_c$(num_cone_nlnr)")
+                else
                     x_slck_i = @variable(model_mip, _, basename="s$(i)_c$(num_cone_nlnr)", start=0.)
                     push!(x_slck, x_slck_i)
                     @constraint(model_mip, lhs_expr[i] - x_slck_i == 0.)
-                # end
+                end
             end
 
             # Set bounds on variables and save dimensions, add additional constraints/variables
@@ -1165,7 +1165,7 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
             else
                 # Disaggregated cuts
                 for ind in 2:dim
-                    add_linear_cut!(m, spec_summ, [vars[1], vars[ind], vars[dim - 1 + ind]], [(dual[ind] / dual[1])^2, 1., (2 * dual[ind] / dual[1])])
+                    add_linear_cut!(m, spec_summ, [vars[1], vars[dim - 1 + ind], vars[ind]], [(dual[ind] / dual[1])^2, 1., (2 * dual[ind] / dual[1])])
                 end
             end
         end
