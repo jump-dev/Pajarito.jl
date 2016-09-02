@@ -27,10 +27,10 @@ solvers_sdp = mos ? [Mosek.MosekSolver(LOG=0)] : []
 TOL = 1e-3
 
 # Nonlinear models tests in nlptest.jl
-# include("nlptest.jl")
-# for mip_solver_drives in [true, false], mip in solvers_mip, nlnr in solvers_nlnr
-#     runnonlineartests(mip_solver_drives, mip, nlnr)
-# end
+include("nlptest.jl")
+for mip_solver_drives in [true, false], mip in solvers_mip, nlnr in solvers_nlnr
+    runnonlineartests(mip_solver_drives, mip, nlnr)
+end
 
 # Conic models test in conictest.jl
 include("conictest.jl")
@@ -51,9 +51,9 @@ for mip_solver_drives in [true, false], mip in solvers_mip
 end
 
 # SDP conic models tests in sdptest.jl
-include("sdptest.jl")
-for mip_solver_drives in [true, false], mip in solvers_mip, sdp in solvers_sdp
-    runsdptests(mip_solver_drives, mip, sdp)
-end
+# include("sdptest.jl")
+# for mip_solver_drives in [true, false], mip in solvers_mip, sdp in solvers_sdp
+#     runsdptests(mip_solver_drives, mip, sdp)
+# end
 
 FactCheck.exitstatus()

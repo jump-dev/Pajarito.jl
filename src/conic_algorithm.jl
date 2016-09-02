@@ -20,8 +20,7 @@ TODO issues
 - MPB issue - can't call supportedcones on defaultConicsolver
 
 TODO features
-- reformulate SOCRotated as SOC
-- when JuMP can handle anonymous variables, use that syntax
+- when JuMP can handle anonymous variables without errors, use that syntax
 - use new JuMP MPB time limit parameter for solver
 - does partial warm-start work? maybe need to extend to full MIP solution
 - add initial LINEAR sdp cuts (redundant with initial SOC cuts) -2m_ij <= m_ii + m_jj, 2m_ij <= m_ii + m_jj, all i,j
@@ -434,29 +433,43 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
     end
 
-    A_new = sparse(A_I, A_J, A_V, num_con_new, num_var_new)
-
     # Convert SOCRotated cones to SOC cones
     # (y,z,x) in RSOC <=> (y+z,y-z,sqrt(2)*x) in SOC
+    socr_rows = Vector{Int}[]
     for n_cone in 1:length(cone_con_new)
         (spec, rows) = cone_con_new[n_cone]
         if spec == :SOCRotated
-
-            # TODO Do this with IJV for sparse matrix
-
-
-
-
-            row_y = A_new[rows[1], :]
-            row_z = A_new[rows[2], :]
-            rows_x = A_new[rows[3:end], :]
-
-            A_new[rows[1], :] = row_y .+ row_z
-            A_new[rows[2], :] = row_y .- row_z
-            A_new[rows[3:end], :] = sqrt(2) .* rows_x
-
             cone_con_new[n_cone] = (:SOC, rows)
+            push!(socr_rows, rows)
         end
+    end
+
+    for rows in socr_rows
+        inds_1 = (A_I .== rows[1])
+        inds_2 = (A_I .== rows[2])
+        inds_3 = find(i -> (i in rows[3:end]), A_I)
+
+        append!(A_I, fill(rows[1], length(inds_2)))
+        append!(A_J, A_J[inds_2])
+        append!(A_V, A_V[inds_2])
+
+        append!(A_I, fill(rows[2], length(inds_1)))
+        append!(A_J, A_J[inds_1])
+        append!(A_V, -A_V[inds_1])
+
+        for ind in inds_3
+            A_V[ind] = sqrt(2) * A_V[ind]
+        end
+
+        # row_y = A_new[rows[1], :]
+        # row_z = A_new[rows[2], :]
+        # rows_x = A_new[rows[3:end], :]
+        #
+        # A_new[rows[1], :] = row_y .+ row_z
+        # A_new[rows[2], :] = row_y .- row_z
+        # A_new[rows[3:end], :] = sqrt(2) .* rows_x
+        #
+        # cone_con_new[n_cone] = (:SOC, rows)
     end
 
     # Detect existing slack variables in nonlinear cone rows with b=0, corresponding to isolated row nonzeros equal to -1
@@ -515,7 +528,7 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     m.num_var_new = num_var_new
     m.b_new = b_new
     m.c_new = m.c_orig
-    m.A_new = sparse(A_I, A_J, A_V)
+    m.A_new = sparse(A_I, A_J, A_V, num_con_new, num_var_new)
     m.row_to_slckj = row_to_slckj
     m.row_to_slckv = row_to_slckv
     m.num_cone_nlnr = num_cone_nlnr
@@ -1088,24 +1101,11 @@ function set_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vec
                 setvalue(var, (slck[(ind + 1)]^2 / slck[1]))
             end
         end
-
-    # elseif (spec == :SDP) && (m._sdp_init_soc || m._sdp_soc)
-    #     for (ind, var) in enumerate(vars[2])
-    #         setvalue(var, )
-    #     end
-    #
-    #     kSD = 1
-    #     for jSD in 1:dim, iSD in jSD:dim
-    #         if jSD == iSD
-    #             setvalue(vars[3][iSD, jSD], (slck[kSD] * sqrt(2)))
-    #         end
-    #         kSD += 1
-    #     end
     end
 end
 
 # Construct MIP solution on nonlinear cone variables and add heuristic solution
-function add_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vector{Vector{JuMP.Variable}}, isnew::Vector{Bool}, slck::Vector{Float64}, cb::JuMP.HeuristicCallback)
+function add_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vector{Vector{JuMP.Variable}}, isnew::Vector{Bool}, slck::Vector{Float64}, cb)
     # Set MIP-added slack variable values
     for ind in 1:dim
         if isnew[ind]
@@ -1124,19 +1124,6 @@ function add_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vec
                 setsolutionvalue(cb, var, (slck[(ind + 1)]^2 / slck[1]))
             end
         end
-
-    # elseif (spec == :SDP) && (m._sdp_init_soc || m._sdp_soc)
-    #     for (ind, var) in enumerate(vars[2])
-    #         setsolutionvalue(cb, var, )
-    #     end
-    #
-    #     kSD = 1
-    #     for jSD in 1:dim, iSD in jSD:dim
-    #         if jSD == iSD
-    #             setsolutionvalue(cb, vars[3][iSD, jSD], (slck[kSD] * sqrt(2)))
-    #         end
-    #         kSD += 1
-    #     end
     end
 end
 
