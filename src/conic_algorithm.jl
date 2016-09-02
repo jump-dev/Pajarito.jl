@@ -1006,7 +1006,7 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
     tic()
 
     # Check if integer solution vector is valid
-    if any((val -> isnan(val)), soln_int)
+    if any(isnan, soln_int)
         if m.mip_solver_drives
             println("Current integer solution vector has NaN values; terminating Pajarito\n")
             throw(CallbackAbort())
