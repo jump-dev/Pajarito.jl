@@ -20,24 +20,20 @@ TODO issues
 - MPB issue - can't call supportedcones on defaultConicsolver
 
 TODO features
+- reformulate SOCRotated as SOC
+- when JuMP can handle anonymous variables, use that syntax
+- use new JuMP MPB time limit parameter for solver
 - does partial warm-start work? maybe need to extend to full MIP solution
 - add initial LINEAR sdp cuts (redundant with initial SOC cuts) -2m_ij <= m_ii + m_jj, 2m_ij <= m_ii + m_jj, all i,j
 - update for 0.5
 - replace "for i in 1:..."
 - want to be able to query logs information etc
-- use JP updated SOC disagg_soc with half as many cuts
-- for SOCRotated disagg_soc cuts
--- maybe add two disagg_soc cuts - one for dividing by p and one for dividing by q
--- or reformulate pq >= sum x^2 using 3-dim SOCRotated pq >= w^2 and n dim SOC w^2 >= sum x^2
+- use option for JP updated SOC disagg_soc with half as many cuts, use abs value variable
 - have option to only add violated cuts (especially for SDP, where each SOC cut slows down mip and we have many SOC cuts)
 - print cone info to one file and gap info to another file
-- maybe if experience conic problem strong duality failure, use a no-good cut on that integer solution and proceed. but that could cut off optimal sol?
+- what to do if experience conic problem strong duality failure? could use a no-good cut on that integer solution and proceed, but that could cut off optimal sol?
 - dual cone projection - implement multiple heuristic projections and optimal euclidean projection
-- determine whether projecting from cone interior helps
 - currently all SDP sanitized eigvecs have norm 1, but may want to multiply V by say 100 (or perhaps largest eigenvalue) before removing zeros, to get more significant digits
-- could automatically give timeout and gap tol as options to mip solver for mip-driven. and for iterative, probably want timeout too in case MIP solves are extremely slow
-- when JuMP can handle anonymous variables, use that syntax
-- could check that primal solution is feasible for the original problem. if the solver is well-behaved then x_i^2/x_0 should still tend to zero if the x_i^2 and x_0 are approximately zero
 =========================================================#
 
 using JuMP
@@ -46,8 +42,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # Solver parameters
     log_level::Int              # Verbosity flag: 1 for minimal OA iteration and solve statistics, 2 for including cone summary information, 3 for running commentary
     mip_solver_drives::Bool     # Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
-    soc_in_mip::Bool            # (Conic only) Use SOC/SOCRotated cones in the MIP outer approximation model (if MIP solver supports MISOCP)
-    disagg_soc::Bool            # (Conic only) Disaggregate SOC/SOCRotated cones in the MIP only
+    soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
+    disagg_soc::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
     drop_dual_infeas::Bool      # (Conic only) Do not add cuts from dual cone infeasible dual vectors
     proj_dual_infeas::Bool      # (Conic only) Project dual cone infeasible dual vectors onto dual cone boundaries
     proj_dual_feas::Bool        # (Conic only) Project dual cone strictly feasible dual vectors onto dual cone boundaries
@@ -91,6 +87,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     A_new::SparseMatrixCSC{Float64,Int64} # Submatrix of A containing full rows and continuous variable columns
     row_to_slckj::Dict{Int,Int} # Dictionary from row index in MIP to slack column index if slack exists
     row_to_slckv::Dict{Int,Float64} # Dictionary from row index in MIP to slack coefficient if slack exists
+    num_cone_nlnr::Int          # Number of nonlinear cones
 
     # MIP constructed data
     model_mip::JuMP.Model       # JuMP MIP (outer approximation) model
@@ -98,8 +95,9 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     map_spec::Vector{Symbol}    # Species of nonlinear cone
     map_rows::Vector{Vector{Int}} # Row indices in MIP for nonlinear cone
     map_dim::Vector{Int}        # Dimension of nonlinear cone
-    map_vars::Vector{Vector{AffExpr}} # JuMP variables associated with slacks of nonlinear cone
-    num_cone_nlnr::Int          # Number of nonlinear cones
+    map_vars::Vector{Vector{Vector{JuMP.Variable}}} # JuMP variables associated with slacks of nonlinear cone
+    map_coefs::Vector{Vector{Float64}} # Coefficients associated with slacks of nonlinear cone (possibly not 1 for original slacks)
+    map_isnew::Vector{Vector{Bool}} # Vector of bools indicating which variables in map_vars were added to the MIP
 
     # Conic constructed data
     cone_con_sub::Vector{Tuple{Symbol,Vector{Int}}} # Constraint cones data in conic subproblem
@@ -121,7 +119,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     obj_best::Float64           # Best conic (feasible) objective value
     gap_rel_opt::Float64        # Relative optimality gap = |obj_mip - obj_best|/|obj_best|
     soln_best::Vector{Float64}  # Best original solution vector (corresponding to best objective)
-    queue_heur::Vector{Tuple{Vector{Float64},Vector{Float64},Vector{Float64}} # Heuristic queue for MIP solutions (if mip_solver_drives)
+    queue_heur::Vector{Vector{Vector{Float64}}} # Heuristic queue for MIP solutions (if mip_solver_drives)
 
     # Model constructor
     function PajaritoConicModel(log_level, mip_solver_drives, soc_in_mip, disagg_soc, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
@@ -266,7 +264,6 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     end
 
     # Verify consistency of cone indices and create cone summary dictionary with min/max dimensions of each species
-    summary = Dict{Symbol,Dict{Symbol,Real}}()
     for (spec, inds) in vcat(cone_con, cone_var)
         # Verify dimensions of cones
         if isempty(inds)
@@ -291,24 +288,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
         elseif spec == :ExpPrimal && (length(inds) != 3)
             error("A cone $spec does not have exactly 3 indices ($(length(inds)))\n")
         end
-
-        # Create cone summary dictionary
-        if spec in (:SOC, :SOCRotated, :SDP, :ExpPrimal)
-            if !haskey(summary, spec)
-                summary[spec] = Dict{Symbol,Real}(:count => 1, :max_dim => length(inds), :min_dim => length(inds))
-            else
-                summary[spec][:count] += 1
-                if (summary[spec][:max_dim] < length(inds))
-                    summary[spec][:max_dim] = length(inds)
-                elseif (summary[spec][:min_dim] > length(inds))
-                    summary[spec][:min_dim] = length(inds)
-                end
-            end
-        end
     end
-
-    # Print cones summary
-    print_cones(m, summary)
 
     # Check for values in A smaller than zero tolerance
     A_sp = sparse(A)
@@ -324,7 +304,6 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     m.b_orig = b
     m.cone_con_orig = Tuple{Symbol,Vector{Int}}[(spec, collect(inds)) for (spec, inds) in cone_con]
     m.cone_var_orig = Tuple{Symbol,Vector{Int}}[(spec, collect(inds)) for (spec, inds) in cone_var]
-    m.summary = summary
     m.soln_best = fill(NaN, m.num_var_orig)
     m.status = :Loaded
 
@@ -381,13 +360,14 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         error("Variable types were not specified; must call setvartype! function\n")
     end
     logs = create_logs()
-    reset_cone_summary!(m)
 
     # Generate model data and instantiate MIP model
     logs[:total_setup] = time()
     trans_data!(m, logs)
+    print_cones(m, m.summary)
     create_mip_data!(m, logs)
     create_conic_data!(m, logs)
+    reset_cone_summary!(m)
 
     # Solve relaxed conic problem, if feasible, add initial cuts to MIP model and use algorithm
     if process_relax!(m, logs)
@@ -454,6 +434,31 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
     end
 
+    A_new = sparse(A_I, A_J, A_V, num_con_new, num_var_new)
+
+    # Convert SOCRotated cones to SOC cones
+    # (y,z,x) in RSOC <=> (y+z,y-z,sqrt(2)*x) in SOC
+    for n_cone in 1:length(cone_con_new)
+        (spec, rows) = cone_con_new[n_cone]
+        if spec == :SOCRotated
+
+            # TODO Do this with IJV for sparse matrix
+
+
+
+
+            row_y = A_new[rows[1], :]
+            row_z = A_new[rows[2], :]
+            rows_x = A_new[rows[3:end], :]
+
+            A_new[rows[1], :] = row_y .+ row_z
+            A_new[rows[2], :] = row_y .- row_z
+            A_new[rows[3:end], :] = sqrt(2) .* rows_x
+
+            cone_con_new[n_cone] = (:SOC, rows)
+        end
+    end
+
     # Detect existing slack variables in nonlinear cone rows with b=0, corresponding to isolated row nonzeros equal to -1
     row_slck_count = zeros(Int, num_con_new)
     for (ind, i) in enumerate(A_I)
@@ -469,11 +474,28 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     row_to_slckj = Dict{Int,Int}()
     row_to_slckv = Dict{Int,Float64}()
 
-    slack_tol = 0.1 # TODO maybe make this an option
+    slack_tol = 0.1 # TODO maybe make this an option; may also want upper bound
 
-    # Use a tolerance for abs of the coefficient; if too small, cannot use as a slack variable
+    summary = Dict{Symbol,Dict{Symbol,Real}}()
+
+    num_cone_nlnr = 0
     for (spec, rows) in cone_con_new
         if !(spec in (:Free, :Zero, :NonNeg, :NonPos))
+            num_cone_nlnr += 1
+
+            # Create cone summary dictionary
+            if !haskey(summary, spec)
+                summary[spec] = Dict{Symbol,Real}(:count => 1, :max_dim => length(rows), :min_dim => length(rows))
+            else
+                summary[spec][:count] += 1
+                if (summary[spec][:max_dim] < length(rows))
+                    summary[spec][:max_dim] = length(rows)
+                elseif (summary[spec][:min_dim] > length(rows))
+                    summary[spec][:min_dim] = length(rows)
+                end
+            end
+
+            # Use a tolerance for abs of the coefficient; if too small, cannot use as a slack variable
             for i in rows
                 if row_slck_count[i] > 0
                     if abs(A_V[row_slck_count[i]]) > slack_tol
@@ -496,6 +518,8 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     m.A_new = sparse(A_I, A_J, A_V)
     m.row_to_slckj = row_to_slckj
     m.row_to_slckv = row_to_slckv
+    m.num_cone_nlnr = num_cone_nlnr
+    m.summary = summary
 
     logs[:trans_data] += toq()
 end
@@ -547,15 +571,17 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     end
 
     # Create maps from nonlinear cone index to associated information and slacks
-    map_spec = Symbol[]
-    map_rows = Vector{Int}[]
-    map_dim = Int[]
-    map_vars = Vector{JuMP.AffExpr}[]
+    map_spec = Vector{Symbol}(m.num_cone_nlnr)
+    map_rows = Vector{Vector{Int}}(m.num_cone_nlnr)
+    map_dim = Vector{Int}(m.num_cone_nlnr)
+    map_vars = Vector{Vector{Vector{JuMP.Variable}}}(m.num_cone_nlnr)
+    map_coefs = Vector{Vector{Float64}}(m.num_cone_nlnr)
+    map_isnew = Vector{Vector{Bool}}(m.num_cone_nlnr)
 
     # Add constraint cones to MIP; if linear, add directly, else create slacks if necessary
     lhs_expr = m.b_new - m.A_new * x_mip
 
-    num_cone_nlnr = 0
+    n_cone = 0
     for (spec, rows) in m.cone_con_new
         if spec == :NonNeg
             @constraint(model_mip, lhs_expr[rows] .>= 0.)
@@ -568,72 +594,78 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
         else
             # Create slack vector for nonlinear cone, re-using any slacks detected earlier
-            num_cone_nlnr += 1
-            push!(map_spec, spec)
-            push!(map_rows, rows)
+            n_cone += 1
+            map_spec[n_cone] = spec
+            map_rows[n_cone] = rows
 
-            x_slck = JuMP.AffExpr[]
-            for i in rows
+            len = length(rows)
+            vars = Vector{JuMP.Variable}(len)
+            coefs = ones(len)
+            isnew = Vector{Bool}(len)
+            for (ind, i) in enumerate(rows)
                 if haskey(m.row_to_slckj, i)
-                    push!(x_slck, (- m.row_to_slckv[i] * x_mip[m.row_to_slckj[i]]))
-                    setname(x_mip[m.row_to_slckj[i]], "v$(m.row_to_slckj[i])_s$(i)_c$(num_cone_nlnr)")
+                    vars[ind] = x_mip[m.row_to_slckj[i]]
+                    setname(x_mip[m.row_to_slckj[i]], "v$(m.row_to_slckj[i])_s$(i)_c$(n_cone)")
+                    coefs[ind] = - m.row_to_slckv[i]
+                    isnew[ind] = false
                 else
-                    x_slck_i = @variable(model_mip, _, basename="s$(i)_c$(num_cone_nlnr)", start=0.)
-                    push!(x_slck, x_slck_i)
-                    @constraint(model_mip, lhs_expr[i] - x_slck_i == 0.)
+                    vars[ind] = @variable(model_mip, _, basename="s$(i)_c$(n_cone)", start=0.)
+                    @constraint(model_mip, lhs_expr[i] - vars[ind] == 0.)
+                    isnew[ind] = true
                 end
             end
+            map_coefs[n_cone] = coefs
+            map_isnew[n_cone] = isnew
+            map_vars[n_cone] = [vars]
 
             # Set bounds on variables and save dimensions, add additional constraints/variables
             if spec == :SOC
-                @constraint(model_mip, x_slck[1] >= 0.)
-                push!(map_dim, length(rows))
+                map_dim[n_cone] = len
 
-                if m._soc_in_mip
-                    @constraint(model_mip, sum{v^2, v in x_slck[2:end]} <= x_slck[1]^2)
-                    push!(map_vars, x_slck)
-
-                elseif m.disagg_soc && (length(x_slck) > 2)
-                    x_dagg = @variable(model_mip, [j in 1:(length(x_slck) - 1)], lowerbound=0., basename="d$(num_cone_nlnr)SOC", start=0.)
-                    @constraint(model_mip, x_slck[1] - sum(x_dagg) >= 0.)
-                    push!(map_vars, vcat(x_slck, x_dagg))
+                if sign(coefs[1]) == 1
+                    setlowerbound(vars[1], 0.)
                 else
-                    push!(map_vars, x_slck)
+                    setupperbound(vars[1], 0.)
                 end
 
-            elseif spec == :SOCRotated
-                @constraint(model_mip, x_slck[1] >= 0.)
-                @constraint(model_mip, x_slck[2] >= 0.)
-                push!(map_dim, length(rows))
-
                 if m._soc_in_mip
-                    x_help = @variable(model_mip, lowerbound=0., basename="h$(num_cone_nlnr)SOCRh", start=0.)
-                    @constraint(model_mip, x_help == 2 * x_slck[2])
-                    @constraint(model_mip, sum{v^2, v in x_slck[3:end]} <= x_slck[1] * x_help)
-                    push!(map_vars, vcat(x_slck, x_help))
+                    #TODO use norm, fix jump issue 784 so that warm start works
+                    error("SOC in MIP is currently broken; terminating Pajarito")
+                    # @constraint(model_mip, norm2{coefs[j] .* vars[j], j in 2:len} <= coefs[1] * vars[1])
 
-                elseif m.disagg_soc && (length(x_slck) > 3)
-                    # TODO maybe just reformulate SOCRs to SOCs and disaggregate
-                    warn("Disaggregation for cones $spec is not currently supported (it is better to reformulate manually using a linear transformation to SOC form)\n")
-                    push!(map_vars, x_slck)
-                else
-                    push!(map_vars, x_slck)
+                elseif m.disagg_soc && (len > 2)
+                    dagg = @variable(model_mip, [j in 1:(len - 1)], lowerbound=0., basename="d$(n_cone)SOC", start=0.)
+                    @constraint(model_mip, coefs[1] * vars[1] - sum(dagg) >= 0.)
+                    push!(map_vars[n_cone], dagg)
                 end
 
             elseif spec == :ExpPrimal
-                @constraint(model_mip, x_slck[2] >= 0.)
-                @constraint(model_mip, x_slck[3] >= 0.)
-                push!(map_dim, length(rows))
-                push!(map_vars, x_slck)
+                map_dim[n_cone] = len
+
+                if sign(coefs[2]) == 1
+                    setlowerbound(vars[2], 0.)
+                else
+                    setupperbound(vars[2], 0.)
+                end
+                if sign(coefs[3]) == 1
+                    setlowerbound(vars[3], 0.)
+                else
+                    setupperbound(vars[3], 0.)
+                end
 
             elseif spec == :SDP
                 # Set up svec space variable vector
-                nSD = round(Int, sqrt(1/4 + 2 * length(x_slck)) - 1/2)
-                push!(map_dim, nSD)
+                nSD = round(Int, sqrt(1/4 + 2 * len) - 1/2)
+                map_dim[n_cone] = nSD
+
                 kSD = 1
                 for jSD in 1:nSD, iSD in jSD:nSD
                     if jSD == iSD
-                        @constraint(model_mip, x_slck[kSD] >= 0.)
+                        if sign(coefs[kSD]) == 1
+                            setlowerbound(vars[kSD], 0.)
+                        else
+                            setupperbound(vars[kSD], 0.)
+                        end
                     end
                     kSD += 1
                 end
@@ -642,28 +674,32 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 # TODO
 
                 # Set up helper variables and initial SDP SOC cuts
+                # TODO rethink helper and smat variables
+                # TODO not using coefs properly
                 if m._sdp_init_soc || m._sdp_soc
-                    # Set up smat space variable array and add optional SDP initial SOC and dynamic SOC cuts
-                    x_help = @variable(model_mip, [j in 1:nSD], lowerbound=0., basename="h$(num_cone_nlnr)SDhelp", start=0.)
-                    x_smat = Array{JuMP.AffExpr,2}(nSD, nSD)
-                    kSD = 1
-                    for jSD in 1:nSD, iSD in jSD:nSD
-                        if jSD == iSD
-                            # Create helper variable corresponding to diagonal element multiplied by sqrt(2)
-                            @constraint(model_mip, x_help[jSD] == x_slck[kSD] * sqrt(2))
-                            x_smat[jSD, iSD] = x_help[jSD]
-                        else
-                            x_smat[jSD, iSD] = x_smat[iSD, jSD] = x_slck[kSD]
-                            if m._sdp_init_soc
-                                # Add initial rotated SOC for off-diagonal element to enforce 2x2 principal submatrix PSDness
-                                @constraint(model_mip, x_help[jSD] * x_help[iSD] >= x_slck[kSD]^2)
-                            end
-                        end
-                        kSD += 1
-                    end
-                    push!(map_vars, vcat(x_slck, vec(x_smat)))
-                else
-                    push!(map_vars, vcat(x_slck))
+                    error("SOC in MIP is currently broken; terminating Pajarito")
+
+                    # # Set up smat space variable array and add optional SDP initial SOC and dynamic SOC cuts
+                    # help = @variable(model_mip, [j in 1:nSD], lowerbound=0., basename="h$(n_cone)SDhelp", start=0.)
+                    # smat = Array{JuMP.AffExpr,2}(nSD, nSD)
+                    # kSD = 1
+                    # for jSD in 1:nSD, iSD in jSD:nSD
+                    #     if jSD == iSD
+                    #         # Create helper variable corresponding to diagonal element multiplied by sqrt(2)
+                    #         @constraint(model_mip, help[jSD] == coefs[kSD] * sqrt(2) * vars[kSD])
+                    #         smat[jSD, iSD] = help[jSD]
+                    #     else
+                    #         smat[jSD, iSD] = smat[iSD, jSD] = coefs[kSD] * vars[kSD]
+                    #         if m._sdp_init_soc
+                    #             # Add initial rotated SOC for off-diagonal element to enforce 2x2 principal submatrix PSDness
+                    #             # TODO this won't work: not intepreted as rsoc, may need manual SOC transformation, norm maybe?
+                    #             @constraint(model_mip, help[jSD] * help[iSD] >= (coefs[kSD] * vars[kSD])^2)
+                    #         end
+                    #     end
+                    #     kSD += 1
+                    # end
+                    # push!(map_vars[n_cone], help)
+                    # push!(map_vars[n_cone], smat)
                 end
             end
         end
@@ -676,7 +712,8 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     m.map_rows = map_rows
     m.map_dim = map_dim
     m.map_vars = map_vars
-    m.num_cone_nlnr = num_cone_nlnr
+    m.map_coefs = map_coefs
+    m.map_isnew = map_isnew
 
     logs[:mip_data] += toq()
     # println(model_mip)
@@ -836,7 +873,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         @printf "\nStarting MIP-solver-driven outer approximation algorithm:\n"
     end
     m.bc_started = true
-    m.queue_heur = Tuple{Vector{Float64},Vector{Float64},Vector{Float64}}[]
+    m.queue_heur = Vector{Vector{Float64}}[]
 
     # Add lazy cuts callback to solve the conic subproblem, add lazy cuts, and save a heuristic solution if conic solution is best
     function callback_lazy(cb)
@@ -874,7 +911,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             # Set values of MIP-added slacks and helper and disaggregated variables for nonlinear cones
             slck_sub = b_sub_int - m.A_sub_cont * soln_sub
             for n in 1:m.num_cone_nlnr
-                use_cone_soln(m, m.map_spec[n], m.map_dim[n], m.map_vars[n], m.map_isnew[n], slck_sub[m.map_rows_sub[n]], cb)
+                add_cone_soln!(m, m.map_spec[n], m.map_dim[n], m.map_vars[n], m.map_isnew[n], slck_sub[m.map_rows_sub[n]], cb)
             end
 
             addsolution(cb)
@@ -932,7 +969,7 @@ function process_relax!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     tic()
     dual_con = MathProgBase.getdual(model_relax)
     for n in 1:m.num_cone_nlnr
-        add_cone_cuts!(m, m.map_spec[n], m.summary[m.map_spec[n]], m.map_dim[n], m.map_vars[n], dual_con[m.map_rows[n]])
+        add_cone_cuts!(m, m.map_spec[n], m.summary[m.map_spec[n]], m.map_dim[n], m.map_vars[n], m.map_coefs[n], dual_con[m.map_rows[n]])
     end
     logs[:relax_cuts] += toq()
 
@@ -990,7 +1027,7 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
     tic()
     dual_con = MathProgBase.getdual(model_conic)
     for n in 1:m.num_cone_nlnr
-        add_cone_cuts!(m, m.map_spec[n], m.summary[m.map_spec[n]], m.map_dim[n], m.map_vars[n], dual_con[m.map_rows_sub[n]])
+        add_cone_cuts!(m, m.map_spec[n], m.summary[m.map_spec[n]], m.map_dim[n], m.map_vars[n], m.map_coefs[n], dual_con[m.map_rows_sub[n]])
     end
     logs[:conic_cuts] += toq()
 
@@ -1006,7 +1043,7 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
             m.soln_best[m.cols_cont] = soln_sub
 
             if m.mip_solver_drives
-                push!(m.queue_heur, (soln_int, soln_sub, b_sub_int))
+                push!(m.queue_heur, [soln_int, soln_sub, b_sub_int])
             else
                 # Set values of original variables
                 for (val, var) in zip(soln_int, m.x_mip[m.cols_int])
@@ -1019,10 +1056,11 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
                 # Set values of MIP-added slacks and helper and disaggregated variables for nonlinear cones
                 slck_sub = b_sub_int - m.A_sub_cont * soln_sub
                 for n in 1:m.num_cone_nlnr
-                    set_cone_soln(m, m.map_spec[n], m.map_dim[n], m.map_vars[n], m.map_isnew[n], slck_sub[m.map_rows_sub[n]], _)
+                    set_cone_soln!(m, m.map_spec[n], m.map_dim[n], m.map_vars[n], m.map_isnew[n], slck_sub[m.map_rows_sub[n]])
                 end
             end
         end
+    end
 
     # Free the conic model
     if applicable(MathProgBase.freemodel!, model_conic)
@@ -1031,74 +1069,74 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
 end
 
 # Construct MIP solution on nonlinear cone variables and warm-start
-function set_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vector{JuMP.AffExpr}, isnew::Vector{Bool}, slck::Vector{Float64})
+function set_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vector{Vector{JuMP.Variable}}, isnew::Vector{Bool}, slck::Vector{Float64})
     # Set MIP-added slack variable values
     for ind in 1:dim
         if isnew[ind]
-            setvalue(vars[ind], slck[ind])
+            setvalue(vars[1][ind], slck[ind])
         end
     end
 
     # Set helper variable values and disaggregated variable values
     if (spec == :SOC) && m.disagg_soc && (dim > 2)
         if slck[1] == 0.
-            for var in vars[(dim + 1):end]
+            for var in vars[2]
                 setvalue(var, 0.)
             end
         else
-            for (ind, var) in enumerate(vars[(dim + 1):end])
+            for (ind, var) in enumerate(vars[2])
                 setvalue(var, (slck[(ind + 1)]^2 / slck[1]))
             end
         end
 
-    elseif (spec == :SOCRotated) && m._soc_in_mip
-        setvalue(vars[(dim + 1)], (2 * slck[2]))
-
-    elseif (spec == :SDP) && (m._sdp_init_soc || m._sdp_soc)
-        vars_smat = reshape(vars[(dim * (dim + 1) / 2 + 1):end], dim, dim)
-        kSD = 1
-        for jSD in 1:dim, iSD in jSD:dim
-            if jSD == iSD
-                setvalue(vars_smat[iSD, jSD], (slck[kSD] * sqrt(2)))
-            end
-            kSD += 1
-        end
+    # elseif (spec == :SDP) && (m._sdp_init_soc || m._sdp_soc)
+    #     for (ind, var) in enumerate(vars[2])
+    #         setvalue(var, )
+    #     end
+    #
+    #     kSD = 1
+    #     for jSD in 1:dim, iSD in jSD:dim
+    #         if jSD == iSD
+    #             setvalue(vars[3][iSD, jSD], (slck[kSD] * sqrt(2)))
+    #         end
+    #         kSD += 1
+    #     end
     end
 end
 
 # Construct MIP solution on nonlinear cone variables and add heuristic solution
-function add_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vector{JuMP.AffExpr}, isnew::Vector{Bool}, slck::Vector{Float64}, cb::JuMP.HeuristicCallback)
+function add_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vector{Vector{JuMP.Variable}}, isnew::Vector{Bool}, slck::Vector{Float64}, cb::JuMP.HeuristicCallback)
     # Set MIP-added slack variable values
     for ind in 1:dim
         if isnew[ind]
-            setsolutionvalue(cb, vars[ind], slck[ind])
+            setsolutionvalue(cb, vars[1][ind], slck[ind])
         end
     end
 
     # Set helper variable values and disaggregated variable values
     if (spec == :SOC) && m.disagg_soc && (dim > 2)
         if slck[1] == 0.
-            for var in vars[(dim + 1):end]
+            for var in vars[2]
                 setsolutionvalue(cb, var, 0.)
             end
         else
-            for (ind, var) in enumerate(vars[(dim + 1):end])
+            for (ind, var) in enumerate(vars[2])
                 setsolutionvalue(cb, var, (slck[(ind + 1)]^2 / slck[1]))
             end
         end
 
-    elseif (spec == :SOCRotated) && m._soc_in_mip
-        setsolutionvalue(cb, vars[(dim + 1)], (2 * slck[2]))
-
-    elseif (spec == :SDP) && (m._sdp_init_soc || m._sdp_soc)
-        vars_smat = reshape(vars[(dim * (dim + 1) / 2 + 1):end], dim, dim)
-        kSD = 1
-        for jSD in 1:dim, iSD in jSD:dim
-            if jSD == iSD
-                setsolutionvalue(cb, vars_smat[iSD, jSD], (slck[kSD] * sqrt(2)))
-            end
-            kSD += 1
-        end
+    # elseif (spec == :SDP) && (m._sdp_init_soc || m._sdp_soc)
+    #     for (ind, var) in enumerate(vars[2])
+    #         setsolutionvalue(cb, var, )
+    #     end
+    #
+    #     kSD = 1
+    #     for jSD in 1:dim, iSD in jSD:dim
+    #         if jSD == iSD
+    #             setsolutionvalue(cb, vars[3][iSD, jSD], (slck[kSD] * sqrt(2)))
+    #         end
+    #         kSD += 1
+    #     end
     end
 end
 
@@ -1128,13 +1166,10 @@ function calc_inf_outer!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         tic()
         for n in 1:m.num_cone_nlnr
             spec = m.map_spec[n]
-            soln = getvalue(m.map_vars[n])
+            soln = m.map_coefs[n] .* getvalue(m.map_vars[n][1])
 
             if spec == :SOC
                 inf_outer = sumabs2(soln[2:end]) - soln[1]^2
-
-            elseif spec == :SOCRotated
-                inf_outer = sumabs2(soln[3:end]) - 2 * soln[1] * soln[2]
 
             elseif spec == :ExpPrimal
                 # TODO consider other case?
@@ -1162,7 +1197,7 @@ end
 =========================================================#
 
 # Process dual vector and add dual cuts to MIP
-function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Symbol,Real}, dim::Int, vars::Vector{JuMP.AffExpr}, dual::Vector{Float64})
+function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Symbol,Real}, dim::Int, vars::Vector{Vector{JuMP.Variable}}, coefs::Vector{Float64}, dual::Vector{Float64})
     # Rescale the dual, don't add zero vectors
     if maximum(abs(dual)) > m.zero_tol
         dual = dual ./ maximum(abs(dual))
@@ -1190,24 +1225,12 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
             if m.disagg_soc && (length(dual) > 2)
                 # Disaggregated cuts
                 for ind in 2:dim
-                    add_linear_cut!(m, spec_summ, [vars[1], vars[dim - 1 + ind], vars[ind]], [(dual[ind] / dual[1])^2, 1., (2 * dual[ind] / dual[1])])
+                    add_linear_cut!(m, spec_summ, [(coefs[1] * vars[1][1]), vars[2][ind - 1], (coefs[ind] * vars[1][ind])], [(dual[ind] / dual[1])^2, 1., (2 * dual[ind] / dual[1])])
                 end
             else
                 # Nondisaggregated cuts
-                add_linear_cut!(m, spec_summ, vars, dual)
+                add_linear_cut!(m, spec_summ, (coefs .* vars[1]), dual)
             end
-        end
-
-    elseif spec == :SOCRotated
-        inf_dual = sumabs2(dual[3:end]) - 2 * dual[1] * dual[2]
-
-        if (dual[1] > 0.) && (dual[2] > 0.) && (!m.drop_dual_infeas || (inf_dual <= 0.))
-            if ((inf_dual > 0.) && m.proj_dual_infeas) || ((inf_dual < 0.) && m.proj_dual_feas)
-                # Rescale variables in bilinear term
-                dual = vcat((dual[1:2] * (norm(dual[3:end]) / sqrt(2 * dual[1] * dual[2]))), dual[3:end])
-            end
-
-            add_linear_cut!(m, spec_summ, vars[1:dim], dual)
         end
 
     elseif spec == :ExpPrimal
@@ -1235,7 +1258,7 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
                     dual = vcat(dual[1], dual[2], (-dual[1] * exp(dual[2] / dual[1])) / e)
                 end
 
-                add_linear_cut!(m, spec_summ, vars, dual)
+                add_linear_cut!(m, spec_summ, (coefs .* vars[1]), dual)
             end
         end
 
@@ -1253,34 +1276,25 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
 
             if size(Vdual, 2) > 0
                 # Cannot add SOC cuts during MIP solve
-                if m._sdp_soc && !m.bc_started
-                    add_sdp_soc_cuts!(m, spec_summ, reshape(vars[(n_svec + 1):end], dim, dim), Vdual)
-                else
+                # if m._sdp_soc && !m.bc_started
+                # TODO broken because of coefs
+                #     add_sdp_soc_cuts!(m, spec_summ, reshape(vars[(n_svec + 1):end], dim, dim), coefs, Vdual)
+                # else
                     # Add linear cut for each significant eigenvector
                     for jV in 1:size(Vdual, 2)
-                        # println(vec(Vdual[:, jV] * Vdual[:, jV]'))
-                        # add_linear_cut!(m, spec_summ, vec(m.map_vars_smat[n]), vec(Vdual[:, jV] * Vdual[:, jV]'))
-                        add_linear_cut!(m, spec_summ, vars[1:n_svec], make_svec(Vdual[:, jV] * Vdual[:, jV]'))
+                        add_linear_cut!(m, spec_summ, (coefs .* vars[1]), make_svec(Vdual[:, jV] * Vdual[:, jV]'))
                     end
-                end
+                # end
             end
 
         elseif any(eigvals_dual .>= 0.) && (!m.drop_dual_infeas || (inf_dual <= 0.))
             if (inf_dual > 0.) && m.proj_dual_infeas
                 # Project by taking sum of nonnegative eigenvalues times outer products of corresponding eigenvectors
-                # dual_smat = sum([(eigvals_dual[jV] * (eigvecs_dual[:, jV] * eigvecs_dual[:, jV]')) for jV in find((val -> val >= 0.), eigvals_dual)])
-                # dual = make_svec(sum([(eigvals_dual[jV] * (eigvecs_dual[:, jV] * eigvecs_dual[:, jV]')) for jV in find((val -> val > 0.), eigvals_dual)]))
-
-                # Re-sanitize and add cut in smat space
-                # dual_smat[abs(dual_smat) .< m.zero_tol] = 0.
-                # add_linear_cut!(m, spec_summ, vec(m.map_vars_smat[n]), vec(dual_smat))
-                # add_linear_cut!(m, spec_summ, m.map_vars[n], make_svec(Vdual[:, jV] * Vdual[:, jV]'))
-
                 eigvals_dual[eigvals_dual .<= 0.] = 0.
                 dual = make_svec(eigvecs_dual * diagm(eigvals_dual) * eigvecs_dual')
             end
 
-            add_linear_cut!(m, spec_summ, vars[1:n_svec], dual)
+            add_linear_cut!(m, spec_summ, (coefs .* vars[1]), dual)
         end
     end
 
@@ -1297,17 +1311,17 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
 end
 
 # Add a single linear cut and calculate cut infeasibility
-function add_linear_cut!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, vars::Vector{JuMP.AffExpr}, cut::Vector{Float64})
+function add_linear_cut!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, slcks::Vector{JuMP.AffExpr}, cut::Vector{Float64})
     # Add cut (lazy cut if using MIP driven solve)
     if haskey(m.model_mip.ext, :cb)
-        @lazyconstraint(m.model_mip.ext[:cb], dot(cut, vars) >= 0.)
+        @lazyconstraint(m.model_mip.ext[:cb], dot(cut, slcks) >= 0.)
     else
-        @constraint(m.model_mip, dot(cut, vars) >= 0.)
+        @constraint(m.model_mip, dot(cut, slcks) >= 0.)
     end
 
     # Update cut infeasibility
     if m.log_level > 1
-        inf_cut = -dot(cut, getvalue(vars))
+        inf_cut = -dot(cut, getvalue(slcks))
         if inf_cut > 0.
             spec_summ[:cut_max_n] += 1
             spec_summ[:cut_max] = max(inf_cut, spec_summ[:cut_max])
@@ -1319,88 +1333,50 @@ function add_linear_cut!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, va
 end
 
 # Add SDP SOC cuts (derived from Schur complement) for each eigenvector and each diagonal element
-function add_sdp_soc_cuts!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, vars::Array{JuMP.AffExpr,2}, Vdual::Array{Float64,2})
-    (nSD, nV) = size(Vdual)
-
-    # For each sanitized eigenvector with significant eigenvalue
-    for jV in 1:nV
-        # Get eigenvector and form rank-1 outer product
-        vj = Vdual[:, jV]
-        vvj = vj * vj'
-
-        # For each diagonal element of SDP
-        for iSD in 1:nSD
-            no_i = vcat(1:(iSD - 1), (iSD + 1):nSD)
-
-            # Add helper variable for subvector iSD product
-            @variable(m.model_mip, vx, basename="h$(n)SDvx_$(jV)_$(iSD)")
-            @constraint(m.model_mip, vx == vecdot(vj[no_i], vars[no_i, iSD]))
-
-            # Add helper variable for submatrix iSD product
-            @variable(m.model_mip, vvX >= 0., basename="h$(n)SDvvX_$(jV)_$(iSD)")
-            @constraint(m.model_mip, vvX == vecdot(vvj[no_i, no_i], vars[no_i, no_i]))
-
-            # Add SOC constraint
-            @constraint(m.model_mip, vars[iSD, iSD] * vvX >= vx^2)
-
-            # Update cut infeasibility
-            if m.log_level > 1
-                inf_cut = -getvalue(vars[iSD, iSD]) * vecdot(vvj[no_i, no_i], getvalue(vars[no_i, no_i])) + (vecdot(vj[no_i], getvalue(vars[no_i, iSD])))^2
-                if inf_cut > 0.
-                    spec_summ[:cut_max_n] += 1
-                    spec_summ[:cut_max] = max(inf_cut, spec_summ[:cut_max])
-                elseif inf_cut < 0.
-                    spec_summ[:cut_min_n] += 1
-                    spec_summ[:cut_min] = max(-inf_cut, spec_summ[:cut_min])
-                end
-            end
-        end
-    end
-end
+# TODO broken
+# function add_sdp_soc_cuts!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, vars::Tuple{Vector{JuMP.Variable},Vector{JuMP.Variable},Array{JuMP.Variable,2}}, coefs::Vector{Float64}, Vdual::Array{Float64,2})
+#     (nSD, nV) = size(Vdual)
+#
+#     # For each sanitized eigenvector with significant eigenvalue
+#     for jV in 1:nV
+#         # Get eigenvector and form rank-1 outer product
+#         vj = Vdual[:, jV]
+#         vvj = vj * vj'
+#
+#         # For each diagonal element of SDP
+#         for iSD in 1:nSD
+#             no_i = vcat(1:(iSD - 1), (iSD + 1):nSD)
+#
+#             # Add helper variable for subvector iSD product
+#             @variable(m.model_mip, vx, basename="h$(n)SDvx_$(jV)_$(iSD)")
+#             @constraint(m.model_mip, vx == vecdot(vj[no_i], vars[no_i, iSD]))
+#
+#             # Add helper variable for submatrix iSD product
+#             @variable(m.model_mip, vvX >= 0., basename="h$(n)SDvvX_$(jV)_$(iSD)")
+#             @constraint(m.model_mip, vvX == vecdot(vvj[no_i, no_i], vars[no_i, no_i]))
+#
+#             # Add SOC constraint
+#             @constraint(m.model_mip, vars[iSD, iSD] * vvX >= vx^2)
+#
+#             # Update cut infeasibility
+#             if m.log_level > 1
+#                 inf_cut = -getvalue(vars[iSD, iSD]) * vecdot(vvj[no_i, no_i], getvalue(vars[no_i, no_i])) + (vecdot(vj[no_i], getvalue(vars[no_i, iSD])))^2
+#                 if inf_cut > 0.
+#                     spec_summ[:cut_max_n] += 1
+#                     spec_summ[:cut_max] = max(inf_cut, spec_summ[:cut_max])
+#                 elseif inf_cut < 0.
+#                     spec_summ[:cut_min_n] += 1
+#                     spec_summ[:cut_min] = max(-inf_cut, spec_summ[:cut_min])
+#                 end
+#             end
+#         end
+#     end
+# end
 
 
 #=========================================================
  Algorithm utilities
 =========================================================#
-
-# Use vector on nondisaggregated variables to calculate vector for disaggregated MIP variables
-# function get_dagg_values(spec::Symbol, vals::Vector{Float64})
-#     if spec == :SOC
-#         if vals[1] == 0.
-#             return zeros(length(vals) - 1)
-#         else
-#             return (vals[2:end]).^2 ./ vals[1]
-#         end
-
-    # TODO this is only for dividing by second element - update for both
-    # elseif spec == :SOCRotated
-    #     if (vals[1] == 0.) || (vals[2] == 0.)
-    #         return zeros(length(vals) - 2)
-    #     else
-    #         return (vals[3:end]).^2 ./ vals[2]
-    #     end
-    # end
-# end
-
-# Use vector on nondisaggregated variables to calculate vector for helper MIP variables
-# function get_help_values(spec::Symbol, vals::Vector{Float64})
-#     if spec == :SOCRotated
-#         return [2 * vals[2]]
-#
-#     elseif spec == :SDP
-#         nSD = round(Int, sqrt(1/4 + 2 * length(vals)) - 1/2)
-#         help_cone = Vector{Float64}(nSD)
-#         kSD = 1
-#         for jSD in 1:nSD, iSD in jSD:nSD
-#             if jSD == iSD
-#                 help_cone[jSD] = vals[kSD] * sqrt(2)
-#             end
-#             kSD += 1
-#         end
-#
-#         return help_cone
-#     end
-# end
 
 # Transform an svec form into an smat form
 function make_smat(svec::Vector{Float64})
