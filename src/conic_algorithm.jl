@@ -630,7 +630,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             end
             map_coefs[n_cone] = coefs
             map_isnew[n_cone] = isnew
-            map_vars[n_cone] = [vars]
+            map_vars[n_cone] = Vector{JuMP.Variable}[vars]
 
             # Set bounds on variables and save dimensions, add additional constraints/variables
             if spec == :SOC
