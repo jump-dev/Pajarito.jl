@@ -1057,7 +1057,7 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
             m.soln_best[m.cols_cont] = soln_sub
 
             if m.mip_solver_drives
-                push!(m.queue_heur, [soln_int, soln_sub, b_sub_int])
+                push!(m.queue_heur, Vector{Float64}[soln_int, soln_sub, b_sub_int])
             else
                 # Set values of original variables
                 for (val, var) in zip(soln_int, m.x_mip[m.cols_int])
