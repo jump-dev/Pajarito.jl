@@ -445,10 +445,14 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
     end
 
+    row_to_nzind = map(_ -> Int[], 1:num_con_new)
+    for (ind, i) in enumerate(A_I)
+        push!(row_to_nzind[i], ind)
+    end
+
     for rows in socr_rows
-        inds_1 = (A_I .== rows[1])
-        inds_2 = (A_I .== rows[2])
-        inds_3 = find(i -> (i in rows[3:end]), A_I)
+        inds_1 = row_to_nzind[rows[1]]
+        inds_2 = row_to_nzind[rows[2]]
 
         append!(A_I, fill(rows[1], length(inds_2)))
         append!(A_J, A_J[inds_2])
@@ -458,8 +462,10 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         append!(A_J, A_J[inds_1])
         append!(A_V, -A_V[inds_1])
 
-        for ind in inds_3
-            A_V[ind] = sqrt(2) * A_V[ind]
+        for i in rows[3:end]
+            for ind in row_to_nzind[i]
+                A_V[ind] = sqrt(2) * A_V[ind]
+            end
         end
 
         # row_y = A_new[rows[1], :]
