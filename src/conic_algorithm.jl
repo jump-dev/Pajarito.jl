@@ -34,10 +34,6 @@ TODO features
 - maybe if experience conic problem strong duality failure, use a no-good cut on that integer solution and proceed. but that could cut off optimal sol?
 - dual cone projection - implement multiple heuristic projections and optimal euclidean projection
 - determine whether projecting from cone interior helps
-- integers in nonlinear var cones
--- add cuts directly on integer vars (don't duplicate like the old way - otherwise this is equivalent)
--- only variables removed from conic should be integer linear cone ones
--- need extra constraint zero cones and extend b_conic so can effectively fix values of variables in conic that are integer and in nonlinear cones
 - currently all SDP sanitized eigvecs have norm 1, but may want to multiply V by say 100 (or perhaps largest eigenvalue) before removing zeros, to get more significant digits
 - could automatically give timeout and gap tol as options to mip solver for mip-driven. and for iterative, probably want timeout too in case MIP solves are extremely slow
 - when JuMP can handle anonymous variables, use that syntax
@@ -82,8 +78,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cone_var_orig::Vector{Tuple{Symbol,Vector{Int}}} # Initial variable cones vector (cone, index)
 
     # Mutable variable data
-    types_orig::Vector{Symbol}  # Variable types vector on original variables (only :Bin, :Cont, :Int)
-    start_orig::Vector{Float64} # Variable warm start vector on original variables
+    var_types::Vector{Symbol}   # Variable types vector on original variables (only :Bin, :Cont, :Int)
+    var_start::Vector{Float64}  # Variable warm start vector on original variables
 
     # Transformed data
     cone_con_new::Vector{Tuple{Symbol,Vector{Int}}} # Constraint cones data after converting variable cones to constraint cones
@@ -125,7 +121,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     obj_best::Float64           # Best conic (feasible) objective value
     gap_rel_opt::Float64        # Relative optimality gap = |obj_mip - obj_best|/|obj_best|
     soln_best::Vector{Float64}  # Best original solution vector (corresponding to best objective)
-    queue_heur::Vector{Vector{Float64}} # Heuristic queue for MIP solutions (if mip_solver_drives)
+    queue_heur::Vector{Tuple{Vector{Float64},Vector{Float64},Vector{Float64}} # Heuristic queue for MIP solutions (if mip_solver_drives)
 
     # Model constructor
     function PajaritoConicModel(log_level, mip_solver_drives, soc_in_mip, disagg_soc, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
@@ -188,8 +184,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         end
 
         # Initialize data
-        m.types_orig = Symbol[]
-        m.start_orig = Float64[]
+        m.var_types = Symbol[]
+        m.var_start = Float64[]
         m.bc_started = false
         m.num_var_orig = 0
         m.num_con_orig = 0
@@ -344,16 +340,16 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
 end
 
 # Store warm-start vector on original variables in Pajarito model
-function MathProgBase.setwarmstart!(m::PajaritoConicModel, start_orig::Vector{Real})
+function MathProgBase.setwarmstart!(m::PajaritoConicModel, var_start::Vector{Real})
     # Check if vector can be loaded
     if m.status != :Loaded
         error("Must specify warm start right after loading problem\n")
     end
-    if length(start_orig) != m.num_var_orig
-        error("Warm start vector length ($(length(start_orig))) does not match number of variables ($(m.num_var_orig))\n")
+    if length(var_start) != m.num_var_orig
+        error("Warm start vector length ($(length(var_start))) does not match number of variables ($(m.num_var_orig))\n")
     end
 
-    m.start_orig = start_orig
+    m.var_start = var_start
 end
 
 # Store variable type vector on original variables in Pajarito model
@@ -372,7 +368,7 @@ function MathProgBase.setvartype!(m::PajaritoConicModel, types_var::Vector{Symbo
         error("No variables are in :Bin, :Int; use conic solver directly if problem is continuous\n")
     end
 
-    m.types_orig = types_var
+    m.var_types = types_var
 end
 
 # Solve, given the initial conic model data and the variable types vector and possibly a warm-start vector
@@ -381,7 +377,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     if m.status != :Loaded
         error("Must call optimize! function after loading problem\n")
     end
-    if isempty(m.types_orig)
+    if isempty(m.var_types)
         error("Variable types were not specified; must call setvartype! function\n")
     end
     logs = create_logs()
@@ -514,12 +510,13 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     x_mip = @variable(model_mip, [1:m.num_var_new])
 
     for j in 1:m.num_var_new
-        setcategory(x_mip[j], m.types_orig[j])
+        setcategory(x_mip[j], m.var_types[j])
     end
 
-    # if !isempty(m.start_orig)
+    # TODO warm start entire algorithm
+    # if !isempty(m.var_start)
     #     for j in 1:m.num_var_new
-    #         setvalue(x_mip[j], m.start_orig[j])
+    #         setvalue(x_mip[j], m.var_start[j])
     #     end
     # end
 
@@ -613,7 +610,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     x_help = @variable(model_mip, lowerbound=0., basename="h$(num_cone_nlnr)SOCRh", start=0.)
                     @constraint(model_mip, x_help == 2 * x_slck[2])
                     @constraint(model_mip, sum{v^2, v in x_slck[3:end]} <= x_slck[1] * x_help)
-                    push!(map_vars, x_slck)
+                    push!(map_vars, vcat(x_slck, x_help))
 
                 elseif m.disagg_soc && (length(x_slck) > 3)
                     # TODO maybe just reformulate SOCRs to SOCs and disaggregate
@@ -698,7 +695,7 @@ function create_conic_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     for (spec, cols) in m.cone_var_new
         cols_cont_new = Int[]
         for j in cols
-            if m.types_orig[j] == :Cont
+            if m.var_types[j] == :Cont
                 push!(cols_cont, j)
                 num_cont += 1
                 push!(cols_cont_new, num_cont)
@@ -839,7 +836,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         @printf "\nStarting MIP-solver-driven outer approximation algorithm:\n"
     end
     m.bc_started = true
-    m.queue_heur = Vector{Float64}[]
+    m.queue_heur = Tuple{Vector{Float64},Vector{Float64},Vector{Float64}}[]
 
     # Add lazy cuts callback to solve the conic subproblem, add lazy cuts, and save a heuristic solution if conic solution is best
     function callback_lazy(cb)
@@ -863,12 +860,24 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         # Take each heuristic solution vector and add as a solution to the MIP
         tic()
         while !isempty(m.queue_heur)
-            #TODO call solution constructor function here
-            # for (val, var) in zip(pop!(m.queue_heur), m.x_mip)
-            #     setsolutionvalue(cb, var, val)
-            # end
+            # Get solution information
+            (soln_int, soln_sub, b_sub_int) = pop!(m.queue_heur)
 
-            # addsolution(cb)
+            # Set values of original variables
+            for (val, var) in zip(soln_int, m.x_mip[m.cols_int])
+                setsolutionvalue(cb, var, val)
+            end
+            for (val, var) in zip(soln_sub, m.x_mip[m.cols_cont])
+                setsolutionvalue(cb, var, val)
+            end
+
+            # Set values of MIP-added slacks and helper and disaggregated variables for nonlinear cones
+            slck_sub = b_sub_int - m.A_sub_cont * soln_sub
+            for n in 1:m.num_cone_nlnr
+                use_cone_soln(m, m.map_spec[n], m.map_dim[n], m.map_vars[n], m.map_isnew[n], slck_sub[m.map_rows_sub[n]], cb)
+            end
+
+            addsolution(cb)
             logs[:n_sol_heur] += 1
         end
         logs[:cb_heur] += toq()
@@ -990,31 +999,30 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
         soln_sub = MathProgBase.getsolution(model_conic)
         obj_new = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_sub)
 
-        # If new objective is best, store new objective and solution
+        # If new objective is best, store new objective and solution, and add heuristic solution or warm-start MIP
         if obj_new <= m.obj_best
             m.obj_best = obj_new
             m.soln_best[m.cols_int] = soln_int
             m.soln_best[m.cols_cont] = soln_sub
 
-            #TODO make a dictionary earlier from subproblem row index to slack index
-            #TODO renormalize soln by coefficient on slack variable (careful of sign)
-            #TODO maybe only do this for the rows with slack variables, not all rows. ie keys(row_to_slckj)
-            # slck_all = b_sub_int - m.A_sub_cont * soln_sub
-            #
-            # for (i, j) in row_to_slck
-            #     soln_mip[j] = slck_all[i]
-            # end
-            #
-            # #also need slack values here
-            # if m.mip_solver_drives
-            #     # Add (partial) heuristic MIP solution
-            #     push!(m.queue_heur, ....)
-            # else
-            #     # Warm-start the MIP by constructing full MIP solution
-            #     use_mip_soln!(m, ....)
-            # end
+            if m.mip_solver_drives
+                push!(m.queue_heur, (soln_int, soln_sub, b_sub_int))
+            else
+                # Set values of original variables
+                for (val, var) in zip(soln_int, m.x_mip[m.cols_int])
+                    setvalue(var, val)
+                end
+                for (val, var) in zip(soln_sub, m.x_mip[m.cols_cont])
+                    setvalue(var, val)
+                end
+
+                # Set values of MIP-added slacks and helper and disaggregated variables for nonlinear cones
+                slck_sub = b_sub_int - m.A_sub_cont * soln_sub
+                for n in 1:m.num_cone_nlnr
+                    set_cone_soln(m, m.map_spec[n], m.map_dim[n], m.map_vars[n], m.map_isnew[n], slck_sub[m.map_rows_sub[n]], _)
+                end
+            end
         end
-    end
 
     # Free the conic model
     if applicable(MathProgBase.freemodel!, model_conic)
@@ -1022,57 +1030,77 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
     end
 end
 
-# Construct solution to MIP variables and add heuristic solution or warm-start
-#TODO may be easier to construct only when use. so call this constructor when warm starting, and call it when heuristic solution call is made, only save basic data for heuristic call
-# function use_mip_soln!(m::PajaritoConicModel, soln::Vector{Float64}, logs::Dict{Symbol,Real})
-#     tic()
-#
-#     if m.mip_solver_drives
-#         push!(m.queue_heur, m.soln_best)
-#     else
-#         for (val, var) in zip(soln_mip, m.x_mip)
-#             setvalue(var, val)
-#         end
-#     end
-#
-#
-#
-#
-#
-#     for (j, k) in slck_to_dagg
-#         soln_mip[k] =
-#
-#         if vals[1] == 0.
-#             return zeros(length(vals) - 1)
-#         else
-#             return (vals[2:end]).^2 ./ vals[1]
-#         end
-#
-#     end
-#
-#     for (j, k) in slck_to_help
-#         soln_mip[k] =
-#
-#         if spec == :SOCRotated
-#             return [2 * vals[2]]
-#
-#         elseif spec == :SDP
-#             nSD = round(Int, sqrt(1/4 + 2 * length(vals)) - 1/2)
-#             help_cone = Vector{Float64}(nSD)
-#             kSD = 1
-#             for jSD in 1:nSD, iSD in jSD:nSD
-#                 if jSD == iSD
-#                     help_cone[jSD] = vals[kSD] * sqrt(2)
-#                 end
-#                 kSD += 1
-#             end
-#         end
-#     end
-#
-#
-#
-#     logs[:use_soln] += toq()
-# end
+# Construct MIP solution on nonlinear cone variables and warm-start
+function set_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vector{JuMP.AffExpr}, isnew::Vector{Bool}, slck::Vector{Float64})
+    # Set MIP-added slack variable values
+    for ind in 1:dim
+        if isnew[ind]
+            setvalue(vars[ind], slck[ind])
+        end
+    end
+
+    # Set helper variable values and disaggregated variable values
+    if (spec == :SOC) && m.disagg_soc && (dim > 2)
+        if slck[1] == 0.
+            for var in vars[(dim + 1):end]
+                setvalue(var, 0.)
+            end
+        else
+            for (ind, var) in enumerate(vars[(dim + 1):end])
+                setvalue(var, (slck[(ind + 1)]^2 / slck[1]))
+            end
+        end
+
+    elseif (spec == :SOCRotated) && m._soc_in_mip
+        setvalue(vars[(dim + 1)], (2 * slck[2]))
+
+    elseif (spec == :SDP) && (m._sdp_init_soc || m._sdp_soc)
+        vars_smat = reshape(vars[(dim * (dim + 1) / 2 + 1):end], dim, dim)
+        kSD = 1
+        for jSD in 1:dim, iSD in jSD:dim
+            if jSD == iSD
+                setvalue(vars_smat[iSD, jSD], (slck[kSD] * sqrt(2)))
+            end
+            kSD += 1
+        end
+    end
+end
+
+# Construct MIP solution on nonlinear cone variables and add heuristic solution
+function add_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vector{JuMP.AffExpr}, isnew::Vector{Bool}, slck::Vector{Float64}, cb::JuMP.HeuristicCallback)
+    # Set MIP-added slack variable values
+    for ind in 1:dim
+        if isnew[ind]
+            setsolutionvalue(cb, vars[ind], slck[ind])
+        end
+    end
+
+    # Set helper variable values and disaggregated variable values
+    if (spec == :SOC) && m.disagg_soc && (dim > 2)
+        if slck[1] == 0.
+            for var in vars[(dim + 1):end]
+                setsolutionvalue(cb, var, 0.)
+            end
+        else
+            for (ind, var) in enumerate(vars[(dim + 1):end])
+                setsolutionvalue(cb, var, (slck[(ind + 1)]^2 / slck[1]))
+            end
+        end
+
+    elseif (spec == :SOCRotated) && m._soc_in_mip
+        setsolutionvalue(cb, vars[(dim + 1)], (2 * slck[2]))
+
+    elseif (spec == :SDP) && (m._sdp_init_soc || m._sdp_soc)
+        vars_smat = reshape(vars[(dim * (dim + 1) / 2 + 1):end], dim, dim)
+        kSD = 1
+        for jSD in 1:dim, iSD in jSD:dim
+            if jSD == iSD
+                setsolutionvalue(cb, vars_smat[iSD, jSD], (slck[kSD] * sqrt(2)))
+            end
+            kSD += 1
+        end
+    end
+end
 
 # Reset all summary values for all cones in preparation for next iteration
 function reset_cone_summary!(m::PajaritoConicModel)
@@ -1159,14 +1187,14 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
                 dual = vcat(norm(dual[2:end]), dual[2:end])
             end
 
-            if length(vars) == dim
-                # Nondisaggregated cuts
-                add_linear_cut!(m, spec_summ, vars, dual)
-            else
+            if m.disagg_soc && (length(dual) > 2)
                 # Disaggregated cuts
                 for ind in 2:dim
                     add_linear_cut!(m, spec_summ, [vars[1], vars[dim - 1 + ind], vars[ind]], [(dual[ind] / dual[1])^2, 1., (2 * dual[ind] / dual[1])])
                 end
+            else
+                # Nondisaggregated cuts
+                add_linear_cut!(m, spec_summ, vars, dual)
             end
         end
 
@@ -1179,7 +1207,7 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
                 dual = vcat((dual[1:2] * (norm(dual[3:end]) / sqrt(2 * dual[1] * dual[2]))), dual[3:end])
             end
 
-            add_linear_cut!(m, spec_summ, vars, dual)
+            add_linear_cut!(m, spec_summ, vars[1:dim], dual)
         end
 
     elseif spec == :ExpPrimal
