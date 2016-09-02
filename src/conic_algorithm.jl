@@ -94,7 +94,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     map_spec::Vector{Symbol}    # Species of nonlinear cone
     map_rows::Vector{Vector{Int}} # Row indices in MIP for nonlinear cone
     map_dim::Vector{Int}        # Dimension of nonlinear cone
-    map_vars::Vector{Vector{Vector{JuMP.Variable}}} # JuMP variables associated with slacks of nonlinear cone
+    map_vars::Vector{Vector{Vector{JuMP.Variable}}} # map_vars[i][j][k] is the kth variable of the slacks (j=1) or the disaggregated variables (j=2) of the ith nonlinear cone
     map_coefs::Vector{Vector{Float64}} # Coefficients associated with slacks of nonlinear cone (possibly not 1 for original slacks)
     map_isnew::Vector{Vector{Bool}} # Vector of bools indicating which variables in map_vars were added to the MIP
 
