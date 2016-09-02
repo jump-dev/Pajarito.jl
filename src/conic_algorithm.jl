@@ -396,6 +396,7 @@ MathProgBase.numconstr(m::PajaritoConicModel) = m.num_con_orig
 MathProgBase.numvar(m::PajaritoConicModel) = m.num_var_orig
 MathProgBase.status(m::PajaritoConicModel) = m.status
 MathProgBase.getobjval(m::PajaritoConicModel) = m.obj_best
+MathProgBase.getobjbound(m::PajaritoConicModel) = m.obj_mip
 MathProgBase.getsolution(m::PajaritoConicModel) = m.soln_best
 
 
@@ -909,7 +910,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     function callback_heur(cb)
         # Take each heuristic solution vector and add as a solution to the MIP
         tic()
-        while !isempty(m.queue_heur)
+        if !isempty(m.queue_heur)
             # Get solution information
             (soln_int, soln_sub, b_sub_int) = pop!(m.queue_heur)
 
