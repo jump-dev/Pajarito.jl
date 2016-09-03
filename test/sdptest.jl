@@ -18,7 +18,7 @@ function runsdptests(mip_solver_drives, mip_solver, sdp_solver)
                                 x^2 <= 4,
                                 y >= z[2,2])
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=sdp_solver, log_level=1))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=sdp_solver, log_level=2))
 
             @fact problem.optval --> roughly(8.0, TOL)
         end
