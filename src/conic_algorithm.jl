@@ -230,10 +230,6 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     # Check variable cones
     inds_var = zeros(Int, num_var_orig)
     for (spec, inds) in cone_var
-        if spec == :Zero
-            error("A cone $spec is in the variable cones\n")
-        end
-
         if any(inds .> num_var_orig)
             error("Some indices in a variable cone do not correspond to indices of vector c\n")
         end
