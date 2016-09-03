@@ -249,7 +249,11 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
         conic_spec = MathProgBase.supportedcones(m.cont_solver)
         for (spec, inds) in vcat(cone_con, cone_var)
             if !(spec in conic_spec)
-                error("Cones $spec are not supported by the specified conic solver\n")
+                if (spec == :SOCRotated) && (:SOC in conic_spec)
+                    nothing
+                else
+                    error("Cones $spec are not supported by the specified conic solver\n")
+                end
             end
         end
     end
@@ -896,8 +900,10 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         reset_cone_summary!(m)
         calc_inf_outer!(m, logs)
 
+        println("before conic")
         # Solve conic subproblem given integer solution, add lazy cuts to MIP, calculate cut and dual infeasibilities, add solution to heuristic queue vectors if best objective
         process_conic!(m, getvalue(m.x_mip[m.cols_int]), logs)
+        println("after conic")
 
         # Print cone infeasibilities
         print_inf(m)
@@ -908,6 +914,8 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     function callback_heur(cb)
         # Take each heuristic solution vector and add as a solution to the MIP
         tic()
+        println("getting heur")
+
         if !isempty(m.queue_heur)
             # Get solution information
             (soln_int, soln_sub, b_sub_int) = pop!(m.queue_heur)
@@ -1007,8 +1015,12 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
         end
     end
 
+    println("starting conic")
+
     # Calculate new subproblem b vector using fixing values of int vars
     b_sub_int = m.b_sub - m.A_sub_int * soln_int
+
+    println("after make b")
 
     # Instantiate and solve the conic model
     model_conic = MathProgBase.ConicModel(m.cont_solver)
@@ -1017,6 +1029,8 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
     status_conic = MathProgBase.status(model_conic)
     logs[:conic_solve] += toq()
     logs[:n_conic] += 1
+
+    println("solved conic")
 
     # Only proceed if status is infeasible, optimal or suboptimal
     if status_conic == :Unbounded
@@ -1035,6 +1049,8 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
         end
     end
 
+    println("before cuts")
+
     # Add dynamic cuts for each cone and calculate infeasibilities for cuts and duals
     tic()
     dual_con = MathProgBase.getdual(model_conic)
@@ -1043,18 +1059,24 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
     end
     logs[:conic_cuts] += toq()
 
+    println("after cuts")
+
     # If feasible, check if new objective is best
     if status_conic != :Infeasible
+        println("before get sol")
+
         soln_sub = MathProgBase.getsolution(model_conic)
         soln_new = zeros(m.num_var_new)
         soln_new[m.cols_int] = soln_int
         soln_new[m.cols_cont] = soln_sub
         obj_new = dot(m.c_new, soln_new)
+        println("after get sol")
 
         # If new objective is best, store new objective and solution, and add heuristic solution or warm-start MIP
         if obj_new <= m.obj_best
             m.obj_best = obj_new
             m.soln_best[m.keep_cols] = soln_new
+            println("before make sol")
 
             if m.mip_solver_drives
                 push!(m.queue_heur, Vector{Float64}[soln_int, soln_sub, b_sub_int])
@@ -1075,6 +1097,9 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
             end
         end
     end
+
+    println("after make sol")
+
 
     # Free the conic model
     if applicable(MathProgBase.freemodel!, model_conic)
