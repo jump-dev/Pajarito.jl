@@ -51,9 +51,9 @@ for mip_solver_drives in [true, false], mip in solvers_mip
 end
 
 # SDP conic models tests in sdptest.jl
-include("sdptest.jl")
-for mip_solver_drives in [true, false], mip in solvers_mip, sdp in solvers_sdp
-    runsdptests(mip_solver_drives, mip, sdp)
-end
+# include("sdptest.jl")
+# for mip_solver_drives in [true, false], mip in solvers_mip, sdp in solvers_sdp
+#     runsdptests(mip_solver_drives, mip, sdp)
+# end
 
 FactCheck.exitstatus()

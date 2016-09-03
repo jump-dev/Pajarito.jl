@@ -76,7 +76,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                 3x + 2y <= 10,
                                 exp(x) <= 10)
 
-           Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver,log_level=0))
+           Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver,log_level=2))
 
            @fact problem.optval --> roughly(8.0, TOL)
            @fact problem.status --> :Optimal
