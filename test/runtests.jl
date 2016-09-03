@@ -26,29 +26,29 @@ solvers_sdp = mos ? [Mosek.MosekSolver(LOG=0)] : []
 # Set fact check tolerance
 TOL = 1e-3
 
-# # Nonlinear models tests in nlptest.jl
-# include("nlptest.jl")
-# for mip_solver_drives in [false, true], mip in solvers_mip, nlnr in solvers_nlnr
-#     runnonlineartests(mip_solver_drives, mip, nlnr)
-# end
-#
-# # Conic models test in conictest.jl
-# include("conictest.jl")
-#
-# # Default solvers test for OA only
-# runconicdefaulttests(false)
-#
-# for mip_solver_drives in [false, true], mip in solvers_mip
-#     # Conic model with conic solvers
-#     for conic in solvers_conic
-#         runconictests(mip_solver_drives, mip, conic)
-#     end
-#
-#     # Conic model with nonlinear solvers
-#     for nlnr in solvers_nlnr
-#         runconictests(mip_solver_drives, mip, nlnr)
-#     end
-# end
+# Nonlinear models tests in nlptest.jl
+include("nlptest.jl")
+for mip_solver_drives in [false, true], mip in solvers_mip, nlnr in solvers_nlnr
+    runnonlineartests(mip_solver_drives, mip, nlnr)
+end
+
+# Conic models test in conictest.jl
+include("conictest.jl")
+
+# Default solvers test for OA only
+runconicdefaulttests(false)
+
+for mip_solver_drives in [false, true], mip in solvers_mip
+    # Conic model with conic solvers
+    for conic in solvers_conic
+        runconictests(mip_solver_drives, mip, conic)
+    end
+
+    # Conic model with nonlinear solvers
+    for nlnr in solvers_nlnr
+        runconictests(mip_solver_drives, mip, nlnr)
+    end
+end
 
 # SDP conic models tests in sdptest.jl
 include("sdptest.jl")
