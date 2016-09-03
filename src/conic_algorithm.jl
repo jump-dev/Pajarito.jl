@@ -16,15 +16,13 @@ http://mathprogbasejl.readthedocs.org/en/latest/conic.html
 TODO issues
 - some infeasible solutions from heuristic callback? maybe want to project the primal solutions onto primal cones (can reuse code from dual projections)
 - maybe give MIP solvers command to run gap to 0 (otherwise may cycle if not goes to 0)
-- stop 0 = 0 constraints being added
 - MPB issue - can't call supportedcones on defaultConicsolver
+- does partial warm-start work? maybe need to extend to full MIP solution
 
 TODO features
 - when JuMP can handle anonymous variables without errors, use that syntax
 - use new JuMP MPB time limit parameter for solver
-- does partial warm-start work? maybe need to extend to full MIP solution
 - add initial LINEAR sdp cuts (redundant with initial SOC cuts) -2m_ij <= m_ii + m_jj, 2m_ij <= m_ii + m_jj, all i,j
-- update for 0.5
 - replace "for i in 1:..."
 - want to be able to query logs information etc
 - use option for JP updated SOC disagg_soc with half as many cuts, use abs value variable
@@ -71,8 +69,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     b_orig::Vector{Float64}     # Initial constraint right hand side
     cone_con_orig::Vector{Tuple{Symbol,Vector{Int}}} # Initial constraint cones vector (cone, index)
     cone_var_orig::Vector{Tuple{Symbol,Vector{Int}}} # Initial variable cones vector (cone, index)
-
-    # Mutable variable data
     var_types::Vector{Symbol}   # Variable types vector on original variables (only :Bin, :Cont, :Int)
     var_start::Vector{Float64}  # Variable warm start vector on original variables
 
@@ -84,9 +80,10 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     b_new::Vector{Float64}      # Subvector of b containing full rows
     c_new::Vector{Float64}      # Objective coefficient subvector for continuous variables
     A_new::SparseMatrixCSC{Float64,Int64} # Submatrix of A containing full rows and continuous variable columns
+    keep_cols::Vector{Int}      # Indices of variables in original problem that remain after removing zeros
+    num_cone_nlnr::Int          # Number of nonlinear cones
     row_to_slckj::Dict{Int,Int} # Dictionary from row index in MIP to slack column index if slack exists
     row_to_slckv::Dict{Int,Float64} # Dictionary from row index in MIP to slack coefficient if slack exists
-    num_cone_nlnr::Int          # Number of nonlinear cones
 
     # MIP constructed data
     model_mip::JuMP.Model       # JuMP MIP (outer approximation) model
@@ -108,7 +105,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     A_sub_int::SparseMatrixCSC{Float64,Int64} # Submatrix of A containing full rows and integer variable columns
     b_sub::Vector{Float64}      # Subvector of b containing full rows
     c_sub_cont::Vector{Float64} # Subvector of c for continuous variables
-    c_sub_int::Vector{Float64}  # Subvector of c for integer variables
 
     # Dynamic solve data
     summary::Dict{Symbol,Dict{Symbol,Real}} # Infeasibilities (outer, cut, dual) of each cone species at current iteration
@@ -413,18 +409,23 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     cone_var_new = Tuple{Symbol,Vector{Int}}[]
     b_new = m.b_orig
     num_con_new = m.num_con_orig
-    num_var_new = m.num_var_orig
+    num_var_new = 0
     (A_I, A_J, A_V) = findnz(m.A_orig)
+    old_new_col = zeros(Int, m.num_var_orig)
 
     for (spec, cols) in m.cone_var_orig
         if spec == :Zero
-            error("Decide what to do with zero cone variables")
+            nothing
         elseif spec in (:Free, :NonNeg, :NonPos)
-            push!(cone_var_new, (spec, cols))
+            old_new_col[cols] = collect((num_var_new + 1):(num_var_new + length(cols)))
+            push!(cone_var_new, (spec, old_new_col[cols]))
+            num_var_new += length(cols)
         else
-            push!(cone_var_new, (:Free, cols))
+            old_new_col[cols] = collect((num_var_new + 1):(num_var_new + length(cols)))
+            push!(cone_var_new, (:Free, old_new_col[cols]))
+            num_var_new += length(cols)
             push!(cone_con_new, (spec, collect((num_con_new + 1):(num_con_new + length(cols)))))
-            for j in cols
+            for j in old_new_col[cols]
                 num_con_new += 1
                 push!(A_I, num_con_new)
                 push!(A_J, j)
@@ -433,6 +434,10 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             end
         end
     end
+
+    A_zeros = sparse(A_I, A_J, A_V, num_con_new, m.num_var_orig)
+    keep_cols = find(old_new_col)
+    (A_I, A_J, A_V) = findnz(A_zeros[:, keep_cols])
 
     # Convert SOCRotated cones to SOC cones
     # (y,z,x) in RSOC <=> (y+z,y-z,sqrt(2)*x) in SOC
@@ -467,16 +472,6 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 A_V[ind] = sqrt(2) * A_V[ind]
             end
         end
-
-        # row_y = A_new[rows[1], :]
-        # row_z = A_new[rows[2], :]
-        # rows_x = A_new[rows[3:end], :]
-        #
-        # A_new[rows[1], :] = row_y .+ row_z
-        # A_new[rows[2], :] = row_y .- row_z
-        # A_new[rows[3:end], :] = sqrt(2) .* rows_x
-        #
-        # cone_con_new[n_cone] = (:SOC, rows)
     end
 
     # Detect existing slack variables in nonlinear cone rows with b=0, corresponding to isolated row nonzeros equal to -1
@@ -497,8 +492,8 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     slack_tol = 0.1 # TODO maybe make this an option; may also want upper bound
 
     summary = Dict{Symbol,Dict{Symbol,Real}}()
-
     num_cone_nlnr = 0
+
     for (spec, rows) in cone_con_new
         if !(spec in (:Free, :Zero, :NonNeg, :NonPos))
             num_cone_nlnr += 1
@@ -533,13 +528,15 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     m.cone_var_new = cone_var_new
     m.num_con_new = num_con_new
     m.num_var_new = num_var_new
+    m.c_new = m.c_orig[keep_cols]
+    m.keep_cols = keep_cols
     m.b_new = b_new
-    m.c_new = m.c_orig
     m.A_new = sparse(A_I, A_J, A_V, num_con_new, num_var_new)
     m.row_to_slckj = row_to_slckj
     m.row_to_slckv = row_to_slckv
     m.num_cone_nlnr = num_cone_nlnr
     m.summary = summary
+    m.soln_best = zeros(Int, m.num_var_orig)
 
     logs[:trans_data] += toq()
 end
@@ -554,13 +551,13 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     x_mip = @variable(model_mip, [1:m.num_var_new])
 
     for j in 1:m.num_var_new
-        setcategory(x_mip[j], m.var_types[j])
+        setcategory(x_mip[j], m.var_types[m.keep_cols][j])
     end
 
     # TODO warm start entire algorithm
     # if !isempty(m.var_start)
     #     for j in 1:m.num_var_new
-    #         setvalue(x_mip[j], m.var_start[j])
+    #         setvalue(x_mip[j], m.var_start[m.keep_cols][j])
     #     end
     # end
 
@@ -813,7 +810,6 @@ function create_conic_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     m.A_sub_int = m.A_new[rows_full, cols_int]
     m.b_sub = m.b_new[rows_full]
     m.c_sub_cont = m.c_new[cols_cont]
-    m.c_sub_int = m.c_new[cols_int]
 
     logs[:conic_data] += toq()
 end
@@ -1054,13 +1050,15 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
     # If feasible, check if new objective is best
     if status_conic != :Infeasible
         soln_sub = MathProgBase.getsolution(model_conic)
-        obj_new = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_sub)
+        soln_new = zeros(m.num_var_new)
+        soln_new[m.cols_int] = soln_int
+        soln_new[m.cols_cont] = soln_sub
+        obj_new = dot(m.c_new, soln_new)
 
         # If new objective is best, store new objective and solution, and add heuristic solution or warm-start MIP
         if obj_new <= m.obj_best
             m.obj_best = obj_new
-            m.soln_best[m.cols_int] = soln_int
-            m.soln_best[m.cols_cont] = soln_sub
+            m.soln_best[m.keep_cols] = soln_new
 
             if m.mip_solver_drives
                 push!(m.queue_heur, Vector{Float64}[soln_int, soln_sub, b_sub_int])
