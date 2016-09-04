@@ -35,8 +35,9 @@ end
 # Conic models test in conictest.jl
 include("conictest.jl")
 
-# Default solvers test for OA only
+# Default solvers test
 runconicdefaulttests(false)
+runconicdefaulttests(true)
 
 for mip_solver_drives in [false, true], mip in solvers_mip
     # Conic model with conic solvers

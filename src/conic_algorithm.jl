@@ -747,7 +747,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     m.map_isnew = map_isnew
 
     logs[:mip_data] += toq()
-    println(model_mip)
+    # println(model_mip)
 end
 
 # Create conic subproblem data by removing integer variable columns and rows without continuous variables
@@ -905,16 +905,12 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
     # Add lazy cuts callback to solve the conic subproblem, add lazy cuts, and save a heuristic solution if conic solution is best
     function callback_lazy(cb)
-        println("start lazy")
         # Save callback reference so can use to adding lazy cuts
         m.model_mip.ext[:cb] = cb
 
         # Reset cones summary values and calculate outer infeasibility of MIP solution
         reset_cone_summary!(m)
         calc_inf_outer!(m, logs)
-
-        @show getvalue(m.x_mip)
-        println("ready to conic")
 
         # Solve conic subproblem given integer solution, add lazy cuts to MIP, calculate cut and dual infeasibilities, add solution to heuristic queue vectors if best objective
         process_conic!(m, getvalue(m.x_mip[m.cols_int]), logs)
@@ -929,7 +925,6 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         # Take each heuristic solution vector and add as a solution to the MIP
         tic()
 
-        println("start heur")
         if !isempty(m.queue_heur)
             # Get solution information
             (soln_int, soln_sub, b_sub_int) = pop!(m.queue_heur)
@@ -972,8 +967,6 @@ end
 # Solve the initial conic relaxation model
 function process_relax!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     tic()
-
-    @show(m.c_new, m.A_new, m.b_new, m.cone_con_new, m.cone_var_new)
 
     # Instantiate and solve the conic relaxation model
     model_relax = MathProgBase.ConicModel(m.cont_solver)
@@ -1030,22 +1023,13 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
         end
     end
 
-    println("calc b")
-
     # Calculate new subproblem b vector using fixing values of int vars
     b_sub_int = m.b_sub - m.A_sub_int * soln_int
 
-    println("create mod")
-
     # Instantiate and solve the conic model
     model_conic = MathProgBase.ConicModel(m.cont_solver)
-    println("before load")
     MathProgBase.loadproblem!(model_conic, m.c_sub_cont, m.A_sub_cont, b_sub_int, m.cone_con_sub, m.cone_var_sub)
-
-    println("after load")
     MathProgBase.optimize!(model_conic)
-    println("after opt")
-
     status_conic = MathProgBase.status(model_conic)
     logs[:conic_solve] += toq()
     logs[:n_conic] += 1
