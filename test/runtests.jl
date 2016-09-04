@@ -37,7 +37,6 @@ include("conictest.jl")
 
 # Default solvers test
 runconicdefaulttests(false)
-runconicdefaulttests(true)
 
 for mip_solver_drives in [false, true], mip in solvers_mip
     # Conic model with conic solvers

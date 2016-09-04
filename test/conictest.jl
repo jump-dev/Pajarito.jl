@@ -18,31 +18,6 @@ function runconicdefaulttests(mip_solver_drives)
             @fact problem.status --> :Optimal
         end
     end
-
-    facts("Rotated SOC problem") do
-        context("With $(mip_solver_drives ? "BC" : "OA"), defaulting to $(typeof(MathProgBase.defaultMIPsolver)) and $(typeof(MathProgBase.defaultConicsolver))") do
-            problem = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=0))
-
-            c = [-3.0, 0.0, 0.0, 0.0]
-            A = zeros(4,4)
-            A[1,1] = 1.0
-            A[2,2] = 1.0
-            A[3,3] = 1.0
-            A[4,1] = 1.0
-            A[4,4] = -1.0
-            b = [10.0, 1.5, 3.0, 0.0]
-
-            constr_cones = Any[(:NonNeg,[1,2,3]),(:Zero,[4])]
-            var_cones = Any[(:SOCRotated,[2,3,1]),(:Free,[4])]
-            vartypes = [:Cont, :Cont, :Cont, :Int]
-
-            MathProgBase.loadproblem!(problem, c, A, b, constr_cones, var_cones)
-            MathProgBase.setvartype!(problem, vartypes)
-            MathProgBase.optimize!(problem)
-
-            @fact MathProgBase.getobjval(problem) --> roughly(-9.0, TOL)
-        end
-    end
 end
 
 function runconictests(mip_solver_drives, mip_solver, conic_solver)
@@ -211,5 +186,32 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
             @fact vals[4] --> roughly(0.0, TOL)
             @fact vals[5] --> roughly(1.0/sqrt(2.0), TOL)
        end
+    end
+
+    if conic_solver in solvers_conic
+        facts("Rotated SOC problem") do
+            context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
+                problem = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=0))
+
+                c = [-3.0, 0.0, 0.0, 0.0]
+                A = zeros(4,4)
+                A[1,1] = 1.0
+                A[2,2] = 1.0
+                A[3,3] = 1.0
+                A[4,1] = 1.0
+                A[4,4] = -1.0
+                b = [10.0, 1.5, 3.0, 0.0]
+
+                constr_cones = Any[(:NonNeg,[1,2,3]),(:Zero,[4])]
+                var_cones = Any[(:SOCRotated,[2,3,1]),(:Free,[4])]
+                vartypes = [:Cont, :Cont, :Cont, :Int]
+
+                MathProgBase.loadproblem!(problem, c, A, b, constr_cones, var_cones)
+                MathProgBase.setvartype!(problem, vartypes)
+                MathProgBase.optimize!(problem)
+
+                @fact MathProgBase.getobjval(problem) --> roughly(-9.0, TOL)
+            end
+        end
     end
 end
