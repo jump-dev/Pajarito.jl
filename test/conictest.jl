@@ -20,7 +20,7 @@ function runconicdefaulttests(mip_solver_drives)
     end
 
     facts("Rotated SOC problem") do
-        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
+        context("With $(mip_solver_drives ? "BC" : "OA"), defaulting to $(typeof(MathProgBase.defaultMIPsolver)) and $(typeof(MathProgBase.defaultConicsolver))") do
             problem = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=0))
 
             c = [-3.0, 0.0, 0.0, 0.0]
