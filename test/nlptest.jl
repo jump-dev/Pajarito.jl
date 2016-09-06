@@ -7,66 +7,74 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
     algorithm = mip_solver_drives ? "BC" : "OA"
 
     facts("Sparse matrix bug test") do
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
-        @variable(m, x >= 0, start = 1, Int)
-        @variable(m, y >= 0, start = 1)
+            @variable(m, x >= 0, start = 1, Int)
+            @variable(m, y >= 0, start = 1)
 
-        @objective(m, Min, -3x - y)
+            @objective(m, Min, -3x - y)
 
-        @constraint(m, 3x + 10 <= 20)
-        @NLconstraint(m, y^2 <= 10)
+            @constraint(m, 3x + 10 <= 20)
+            @NLconstraint(m, y^2 <= 10)
 
-        @fact solve(m) --> :Optimal
+            @fact solve(m) --> :Optimal
+        end
     end
 
     facts("Convex constraint with LB and UB test") do
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
-        @variable(m, x >= 0, start = 1, Int)
-        @variable(m, y >= 0, start = 1)
+            @variable(m, x >= 0, start = 1, Int)
+            @variable(m, y >= 0, start = 1)
 
-        @objective(m, Min, -3x - y)
+            @objective(m, Min, -3x - y)
 
-        @constraint(m, 3x + 2y + 10 <= 20)
-        @NLconstraint(m, 8 <= x^2 <= 10)
+            @constraint(m, 3x + 2y + 10 <= 20)
+            @NLconstraint(m, 8 <= x^2 <= 10)
 
-        @fact_throws ErrorException solve(m)
+            @fact_throws ErrorException solve(m)
+        end
     end
 
     facts("Infeasible NLP problem") do
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
-        @variable(m, x >= 0, start = 1, Int)
-        @variable(m, y >= 0, start = 1)
+            @variable(m, x >= 0, start = 1, Int)
+            @variable(m, y >= 0, start = 1)
 
-        @objective(m, Min, -3x - y)
+            @objective(m, Min, -3x - y)
 
-        @constraint(m, 3x + 2y + 10 <= 20)
-        @NLconstraint(m, x^2 >= 9)
-        @NLconstraint(m, exp(y) + x <= 2)
+            @constraint(m, 3x + 2y + 10 <= 20)
+            @NLconstraint(m, x^2 >= 9)
+            @NLconstraint(m, exp(y) + x <= 2)
 
-        status = solve(m)
+            status = solve(m)
 
-        @fact status --> :Infeasible
+            @fact status --> :Infeasible
+        end
     end
 
     facts("Infeasible MIP problem") do
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
 
-        @variable(m, x >= 0, start = 1, Int)
-        @variable(m, y >= 0, start = 1)
+            @variable(m, x >= 0, start = 1, Int)
+            @variable(m, y >= 0, start = 1)
 
-        @objective(m, Min, -3x - y)
+            @objective(m, Min, -3x - y)
 
-        @constraint(m, 3x + 2y + 10 <= 20)
-        @constraint(m, 6x + 5y >= 30)
-        @NLconstraint(m, x^2 >= 8)
-        @NLconstraint(m, exp(y) + x <= 7)
+            @constraint(m, 3x + 2y + 10 <= 20)
+            @constraint(m, 6x + 5y >= 30)
+            @NLconstraint(m, x^2 >= 8)
+            @NLconstraint(m, exp(y) + x <= 7)
 
-        status = solve(m)
+            status = solve(m)
 
-        @fact status --> :Infeasible
+            @fact status --> :Infeasible
+        end
     end
 
     facts("Solver test") do
