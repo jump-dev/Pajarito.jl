@@ -14,7 +14,7 @@ http://mathprogbasejl.readthedocs.org/en/latest/conic.html
 
 
 TODO issues
-- some infeasible solutions from heuristic callback? maybe want to project the primal solutions onto primal cones (can reuse code from dual projections)
+- some infeasible solutions from heuristic callback? maybe this is the fault of conic solvers having too large a primal feasibility tolerance. maybe want to project the primal solutions onto primal cones (can reuse code from dual projections)
 - maybe give MIP solvers command to run gap to 0 (otherwise may cycle if not goes to 0)
 - MPB issue - can't call supportedcones on defaultConicsolver
 - does partial warm-start work? maybe need to extend to full MIP solution
@@ -22,11 +22,9 @@ TODO issues
 TODO features
 - if initial conic solve gives feasible integer solution, return immediately
 - when JuMP can handle anonymous variables without errors, use that syntax
-- use new JuMP MPB time limit parameter for solver
 - add initial LINEAR sdp cuts (redundant with initial SOC cuts) -2m_ij <= m_ii + m_jj, 2m_ij <= m_ii + m_jj, all i,j
 - replace "for i in 1:..."
 - want to be able to query logs information etc
-- use option for JP updated SOC disagg_soc with half as many cuts, use abs value variable
 - have option to only add violated cuts (especially for SDP, where each SOC cut slows down mip and we have many SOC cuts)
 - print cone info to one file and gap info to another file
 - what to do if experience conic problem strong duality failure? could use a no-good cut on that integer solution and proceed, but that could cut off optimal sol?
@@ -863,7 +861,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         soln_int_curr = round(Int, soln_int)
         if soln_int_prev == soln_int_curr
             # Check if converged
-            m.gap_rel_opt = abs(m.obj_mip - m.obj_best) / (abs(m.obj_best) + 1e-5)
+            m.gap_rel_opt = (m.obj_best - m.obj_mip) / (abs(m.obj_best) + 1e-5) 
             if m.gap_rel_opt < m.rel_gap
                 m.status = :Optimal
             else
@@ -878,7 +876,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         process_conic!(m, soln_int, logs)
 
         # Calculate relative outer approximation gap, print gap and infeasibility statistics, finish if satisfy optimality gap condition
-        m.gap_rel_opt = abs(m.obj_mip - m.obj_best) / (abs(m.obj_best) + 1e-5)
+        m.gap_rel_opt = (m.obj_best - m.obj_mip) / (abs(m.obj_best) + 1e-5)
         print_gap(m, logs)
         print_inf(m)
         if m.gap_rel_opt < m.rel_gap
@@ -955,7 +953,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     logs[:mip_solve] = time()
     m.status = solve(m.model_mip)
     m.obj_mip = getobjectivevalue(m.model_mip)
-    m.gap_rel_opt = abs(m.obj_mip - m.obj_best) / (abs(m.obj_best) + 1e-5)
+    m.gap_rel_opt = (m.obj_best - m.obj_mip) / (abs(m.obj_best) + 1e-5)
     logs[:mip_solve] = time() - logs[:mip_solve]
 end
 
