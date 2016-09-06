@@ -853,9 +853,13 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         if status_mip in (:Infeasible, :InfeasibleOrUnbounded)
             m.status = :Infeasible
             break
-        end
-        if status_mip == :Unbounded
+        elseif status_mip == :Unbounded
             error("MIP solver returned status $status_mip, which could indicate that the cuts added were too weak\n")
+        elseif status_mip == :UserLimit
+            m.status = :UserLimit
+            break
+        elseif status_mip != :Optimal
+            error("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue on GitHub)\n")
         end
         m.obj_mip = getobjectivevalue(m.model_mip)
 
@@ -868,7 +872,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         soln_int_curr = round(Int, soln_int)
         if soln_int_prev == soln_int_curr
             # Check if converged
-            m.gap_rel_opt = abs(m.obj_mip - m.obj_best) / (abs(m.obj_best) + 1e-5)
+            m.gap_rel_opt = (m.obj_best - m.obj_mip) / (abs(m.obj_best) + 1e-5)
             if m.gap_rel_opt < m.rel_gap
                 m.status = :Optimal
             else
@@ -883,7 +887,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         process_conic!(m, soln_int, logs)
 
         # Calculate relative outer approximation gap, print gap and infeasibility statistics, finish if satisfy optimality gap condition
-        m.gap_rel_opt = abs(m.obj_mip - m.obj_best) / (abs(m.obj_best) + 1e-5)
+        m.gap_rel_opt = (m.obj_best - m.obj_mip) / (abs(m.obj_best) + 1e-5)
         print_gap(m, logs)
         print_inf(m)
         if m.gap_rel_opt < m.rel_gap
@@ -960,7 +964,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     logs[:mip_solve] = time()
     m.status = solve(m.model_mip)
     m.obj_mip = getobjectivevalue(m.model_mip)
-    m.gap_rel_opt = abs(m.obj_mip - m.obj_best) / (abs(m.obj_best) + 1e-5)
+    m.gap_rel_opt = (m.obj_best - m.obj_mip) / (abs(m.obj_best) + 1e-5)
     logs[:mip_solve] = time() - logs[:mip_solve]
 end
 
