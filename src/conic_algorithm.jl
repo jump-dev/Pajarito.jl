@@ -14,7 +14,7 @@ http://mathprogbasejl.readthedocs.org/en/latest/conic.html
 
 
 TODO issues
-- some infeasible solutions from heuristic callback? maybe want to project the primal solutions onto primal cones (can reuse code from dual projections)
+- some infeasible solutions from heuristic callback? maybe this is the fault of conic solvers having too large a primal feasibility tolerance. maybe want to project the primal solutions onto primal cones (can reuse code from dual projections)
 - maybe give MIP solvers command to run gap to 0 (otherwise may cycle if not goes to 0)
 - MPB issue - can't call supportedcones on defaultConicsolver
 - does partial warm-start work? maybe need to extend to full MIP solution
@@ -25,7 +25,6 @@ TODO features
 - add initial LINEAR sdp cuts (redundant with initial SOC cuts) -2m_ij <= m_ii + m_jj, 2m_ij <= m_ii + m_jj, all i,j
 - replace "for i in 1:..."
 - want to be able to query logs information etc
-- use option for JP updated SOC disagg_soc with half as many cuts, use abs value variable
 - have option to only add violated cuts (especially for SDP, where each SOC cut slows down mip and we have many SOC cuts)
 - print cone info to one file and gap info to another file
 - what to do if experience conic problem strong duality failure? could use a no-good cut on that integer solution and proceed, but that could cut off optimal sol?
