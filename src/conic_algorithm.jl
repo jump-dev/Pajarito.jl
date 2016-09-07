@@ -346,7 +346,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     logs = create_logs()
 
     # Generate model data and instantiate MIP model
-    logs[:total_setup] = time()
+    logs[:total] = time()
+    logs[:setup] = time()
     trans_data!(m, logs)
     print_cones(m, m.summary)
     create_mip_data!(m, logs)
@@ -356,7 +357,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     # Solve relaxed conic problem, if feasible, add initial cuts to MIP model and use algorithm
     if process_relax!(m, logs)
         print_inf_dual(m)
-        logs[:total_setup] = time() - logs[:total_setup]
+        logs[:setup] = time() - logs[:setup]
 
         # Solve the transformed model with specified algorithm
         logs[:oa_alg] = time()
@@ -369,10 +370,11 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
         logs[:oa_alg] = time() - logs[:oa_alg]
     else
-        logs[:total_setup] = time() - logs[:total_setup]
+        logs[:setup] = time() - logs[:setup]
     end
 
     # Print summary
+    logs[:total] = time() - logs[:total]
     print_finish(m, logs)
 end
 
@@ -558,7 +560,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     tic()
 
     # Initialize JuMP model for MIP outer approximation problem
-    model_mip = JuMP.Model(solver = m.mip_solver)
+    model_mip = JuMP.Model(solver=m.mip_solver)
 
     x_mip = @variable(model_mip, [1:m.num_var_new])
 
@@ -839,16 +841,24 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     soln_int_prev = fill(NaN, length(m.cols_int))
 
     while true
-        # Solve MIP model, finish if infeasible or unbounded, get objective
+        # Set remaining time limit for MIP solver, solve MIP model, finish if infeasible or unbounded, get objective
         tic()
+        if applicable(MathProgBase.setparameters!, m.mip_solver)
+            MathProgBase.setparameters!(m.mip_solver, Silent=(m.log_level <= 1), TimeLimit=(m.timeout - (time() - logs[:total])))
+            setsolver(m.model_mip, m.mip_solver)
+        end
         status_mip = solve(m.model_mip)
         logs[:mip_solve] += toq()
         if status_mip in (:Infeasible, :InfeasibleOrUnbounded)
             m.status = :Infeasible
             break
-        end
-        if status_mip == :Unbounded
+        elseif status_mip == :Unbounded
             error("MIP solver returned status $status_mip, which could indicate that the cuts added were too weak\n")
+        elseif status_mip == :UserLimit
+            m.status = :UserLimit
+            break
+        elseif status_mip != :Optimal
+            error("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue on GitHub)\n")
         end
         m.obj_mip = getobjectivevalue(m.model_mip)
 
@@ -861,7 +871,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         soln_int_curr = round(Int, soln_int)
         if soln_int_prev == soln_int_curr
             # Check if converged
-            m.gap_rel_opt = (m.obj_best - m.obj_mip) / (abs(m.obj_best) + 1e-5) 
+            m.gap_rel_opt = (m.obj_best - m.obj_mip) / (abs(m.obj_best) + 1e-5)
             if m.gap_rel_opt < m.rel_gap
                 m.status = :Optimal
             else
@@ -1424,10 +1434,11 @@ function create_logs()
     logs = Dict{Symbol,Real}()
 
     # Timers
+    logs[:total] = 0. # Performing total optimize algorithm
     logs[:trans_data] = 0.  # Transforming data
     logs[:conic_data] = 0.  # Generating conic data
     logs[:mip_data] = 0.    # Generating MIP data
-    logs[:total_setup] = 0. # Performing total optimize algorithm
+    logs[:setup] = 0. # Performing setup and adding initial conic relax cuts
     logs[:relax_solve] = 0. # Solving initial conic relaxation model
     logs[:relax_cuts] = 0.  # Adding cuts for initial relaxation model
     logs[:conic_solve] = 0. # Solving conic subproblem model
@@ -1512,7 +1523,7 @@ end
 #
 #         out_file = open("output.txt", "a")
 #
-#         write(out_file, "$(m.path):\n$(m.status)\n$(logs[:n_conic])\n$(logs[:total_setup]) $(logs[:oa_alg]) $(logs[:mip_solve]) $(logs[:conic_solve])\n$(m.obj_best) $(m.obj_mip) $(m.gap_rel_opt)\n$(m.soln_best)\n")
+#         write(out_file, "$(m.path):\n$(m.status)\n$(logs[:n_conic])\n$(logs[:setup]) $(logs[:oa_alg]) $(logs[:mip_solve]) $(logs[:conic_solve])\n$(m.obj_best) $(m.obj_mip) $(m.gap_rel_opt)\n$(m.soln_best)\n")
 #
 #         close(out_file)
 #
@@ -1529,7 +1540,7 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     else
         @printf "\nFinished iterative outer approximation algorithm:\n"
     end
-    @printf " - Total time (s)       = %14.2e\n" (logs[:total_setup] + logs[:oa_alg])
+    @printf " - Total time (s)       = %14.2e\n" logs[:total]
     @printf " - Status               = %14s\n" m.status
     @printf " - Best feasible obj.   = %+14.6e\n" m.obj_best
     @printf " - Final OA obj. bound  = %+14.6e\n" m.obj_mip
@@ -1543,7 +1554,7 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
 
         @printf "\nTimers (s):\n"
-        @printf " - Setup                = %14.2e\n" logs[:total_setup]
+        @printf " - Setup                = %14.2e\n" logs[:setup]
         if m.log_level > 1
             @printf " -- Transform data      = %14.2e\n" logs[:trans_data]
             @printf " -- Create MIP data     = %14.2e\n" logs[:mip_data]
