@@ -11,9 +11,7 @@ using Pajarito
 include(Pkg.dir("JuMP", "test", "solvers.jl"))
 
 # Define solvers using JuMP/test/solvers.jl
-# solvers_mip = lazy_solvers
-using Gurobi
-solvers_mip = [GurobiSolver(OutputFlag=1)]
+solvers_mip = lazy_solvers
 solvers_nlnr = []
 ipt && push!(solvers_nlnr, Ipopt.IpoptSolver(print_level=0))
 kni && push!(solvers_nlnr, KNITRO.KnitroSolver(objrange=1e16,outlev=0,maxit=100000))
@@ -55,7 +53,7 @@ end
 
 # SDP conic models tests in sdptest.jl
 include("sdptest.jl")
-for mip_solver_drives in [false], mip in solvers_mip, sdp in solvers_sdp
+for mip_solver_drives in [false, true], mip in solvers_mip, sdp in solvers_sdp
     runsdptests(mip_solver_drives, mip, sdp)
 end
 
