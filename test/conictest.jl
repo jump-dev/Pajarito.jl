@@ -20,7 +20,7 @@ function runconicdefaulttests(mip_solver_drives)
     end
 end
 
-function runconictests(mip_solver_drives, mip_solver, conic_solver)
+function runconictests(mip_solver_drives, mip_solver, conic_solver, log)
     algorithm = mip_solver_drives ? "BC" : "OA"
 
     facts("Infeasible conic problem") do
@@ -31,7 +31,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                 x >= 4,
                                 x^2 <= 9)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=0))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
 
             @fact problem.status --> :Infeasible
         end
@@ -45,7 +45,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                 x <= 10,
                                 x^2 <= 9)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=0))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
 
             @fact problem.optval --> roughly(9.0, TOL)
             @fact problem.status --> :Optimal
@@ -62,7 +62,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                 3x + 2y <= 10,
                                 exp(x) <= 10)
 
-           @fact_throws ErrorException Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=0))
+           @fact_throws ErrorException Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
        end
     end
 
@@ -76,7 +76,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                 3x + 2y <= 10,
                                 exp(x) <= 10)
 
-           Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=0))
+           Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
 
            @fact problem.optval --> roughly(8.0, TOL)
            @fact problem.status --> :Optimal
@@ -95,7 +95,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                x^2 <= 5,
                                exp(y) + x <= 7)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=0))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
 
             @fact problem.status --> :Optimal
             @fact Convex.evaluate(x) --> roughly(2.0, TOL)
@@ -114,7 +114,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                x^2 <= 5,
                                exp(y) + x <= 7)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, disagg_soc=false, mip_solver=mip_solver, cont_solver=conic_solver, log_level=0))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, disagg_soc=false, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
 
             @fact problem.status --> :Optimal
             @fact Convex.evaluate(x) --> roughly(2.0, TOL)
@@ -131,7 +131,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
                                3x + 2y <= 30,
                                exp(y^2) + x <= 7)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=0, rel_gap=1e-4))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log, rel_gap=1e-4))
 
             @fact problem.status --> :Optimal
             @fact Convex.evaluate(x) --> roughly(6.0, TOL)
@@ -140,7 +140,11 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
 
     facts("Variable not in zero cone problem") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
-            m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=0))
+            # max  y + z
+            # st   x == 1
+            #     (x,y,z) in SOC
+            #      x in {0,1}
+            m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
             MathProgBase.loadproblem!(m,
             [ 0.0, -1.0, -1.0],
             [ 1.0  0.0  0.0;
@@ -164,7 +168,8 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
 
     facts("Variable in zero cone problem") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
-            m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=0))
+            # Same as "Variable not in zero cone problem" but with variables 2 and 4 added and in zero cones
+            m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
             MathProgBase.loadproblem!(m,
             [ 0.0, 0.0, -1.0, 1.0, -1.0],
             [ 1.0  1.0  0.0  0.0  0.0;
@@ -191,7 +196,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver)
     if conic_solver in solvers_conic
         facts("Rotated SOC problem") do
             context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
-                problem = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=0))
+                problem = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
 
                 c = [-3.0, 0.0, 0.0, 0.0]
                 A = zeros(4,4)

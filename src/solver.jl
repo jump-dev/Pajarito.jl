@@ -31,7 +31,7 @@ end
 
 
 function PajaritoSolver(;
-    log_level = 2,
+    log_level = 3,
     mip_solver_drives = false,
     soc_in_mip = false,
     disagg_soc = true,

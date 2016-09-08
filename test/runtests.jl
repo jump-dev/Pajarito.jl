@@ -11,7 +11,9 @@ using Pajarito
 include(Pkg.dir("JuMP", "test", "solvers.jl"))
 
 # Define solvers using JuMP/test/solvers.jl
-solvers_mip = lazy_solvers
+# solvers_mip = lazy_solvers
+using Gurobi
+solvers_mip = [GurobiSolver(OutputFlag=1)]
 solvers_nlnr = []
 ipt && push!(solvers_nlnr, Ipopt.IpoptSolver(print_level=0))
 kni && push!(solvers_nlnr, KNITRO.KnitroSolver(objrange=1e16,outlev=0,maxit=100000))
@@ -27,10 +29,10 @@ solvers_sdp = mos ? [Mosek.MosekSolver(LOG=0)] : []
 TOL = 1e-3
 
 # Nonlinear models tests in nlptest.jl
-include("nlptest.jl")
-for mip_solver_drives in [false, true], mip in solvers_mip, nlnr in solvers_nlnr
-    runnonlineartests(mip_solver_drives, mip, nlnr)
-end
+# include("nlptest.jl")
+# for mip_solver_drives in [false, true], mip in solvers_mip, nlnr in solvers_nlnr
+#     runnonlineartests(mip_solver_drives, mip, nlnr)
+# end
 
 # Conic models test in conictest.jl
 include("conictest.jl")
@@ -38,16 +40,17 @@ include("conictest.jl")
 # Default solvers test
 runconicdefaulttests(false)
 
+log = 3
 for mip_solver_drives in [false, true], mip in solvers_mip
     # Conic model with conic solvers
     for conic in solvers_conic
-        runconictests(mip_solver_drives, mip, conic)
+        runconictests(mip_solver_drives, mip, conic, log)
     end
 
-    # Conic model with nonlinear solvers
-    for nlnr in solvers_nlnr
-        runconictests(mip_solver_drives, mip, nlnr)
-    end
+    # # Conic model with nonlinear solvers
+    # for nlnr in solvers_nlnr
+    #     runconictests(mip_solver_drives, mip, nlnr, log)
+    # end
 end
 
 # SDP conic models tests in sdptest.jl
