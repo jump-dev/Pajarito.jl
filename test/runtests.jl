@@ -38,21 +38,22 @@ include("conictest.jl")
 # Default solvers test
 runconicdefaulttests(false)
 
+log = 0
 for mip_solver_drives in [false, true], mip in solvers_mip
     # Conic model with conic solvers
     for conic in solvers_conic
-        runconictests(mip_solver_drives, mip, conic)
+        runconictests(mip_solver_drives, mip, conic, log)
     end
 
     # Conic model with nonlinear solvers
     for nlnr in solvers_nlnr
-        runconictests(mip_solver_drives, mip, nlnr)
+        runconictests(mip_solver_drives, mip, nlnr, log)
     end
 end
 
 # SDP conic models tests in sdptest.jl
 include("sdptest.jl")
-for mip_solver_drives in [false], mip in solvers_mip, sdp in solvers_sdp
+for mip_solver_drives in [false, true], mip in solvers_mip, sdp in solvers_sdp
     runsdptests(mip_solver_drives, mip, sdp)
 end
 

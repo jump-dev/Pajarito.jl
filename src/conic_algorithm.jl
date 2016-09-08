@@ -14,10 +14,8 @@ http://mathprogbasejl.readthedocs.org/en/latest/conic.html
 
 
 TODO issues
-- some infeasible solutions from heuristic callback? maybe this is the fault of conic solvers having too large a primal feasibility tolerance. maybe want to project the primal solutions onto primal cones (can reuse code from dual projections)
-- maybe give MIP solvers command to run gap to 0 (otherwise may cycle if not goes to 0)
 - MPB issue - can't call supportedcones on defaultConicsolver
-- does partial warm-start work? maybe need to extend to full MIP solution
+- for warm-start pajarito, use set_best_soln!
 
 TODO features
 - if initial conic solve gives feasible integer solution, return immediately
@@ -38,6 +36,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # Solver parameters
     log_level::Int              # Verbosity flag: 1 for minimal OA iteration and solve statistics, 2 for including cone summary information, 3 for running commentary
     mip_solver_drives::Bool     # Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
+    pass_mip_sols::Bool         # Give best feasible solutions constructed from conic subproblem solution to MIP
     soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
     disagg_soc::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
     drop_dual_infeas::Bool      # (Conic only) Do not add cuts from dual cone infeasible dual vectors
@@ -104,23 +103,28 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     A_sub_int::SparseMatrixCSC{Float64,Int64} # Submatrix of A containing full rows and integer variable columns
     b_sub::Vector{Float64}      # Subvector of b containing full rows
     c_sub_cont::Vector{Float64} # Subvector of c for continuous variables
+    c_sub_int::Vector{Float64}  # Subvector of c for integer variables
 
     # Dynamic solve data
     summary::Dict{Symbol,Dict{Symbol,Real}} # Infeasibilities (outer, cut, dual) of each cone species at current iteration
-    bc_started::Bool            # Bool for whether MIP-driven solve has begun
+    oa_started::Bool            # Bool for whether MIP-driven solve has begun
     status::Symbol              # Current solve status
-    obj_mip::Float64            # Latest MIP (outer approx) objective value
-    obj_best::Float64           # Best conic (feasible) objective value
-    gap_rel_opt::Float64        # Relative optimality gap = |obj_mip - obj_best|/|obj_best|
-    soln_best::Vector{Float64}  # Best original solution vector (corresponding to best objective)
-    queue_heur::Vector{Vector{Vector{Float64}}} # Heuristic queue for MIP solutions (if mip_solver_drives)
+    mip_obj::Float64            # Latest MIP (outer approx) objective value
+    best_obj::Float64           # Best feasible objective value
+    best_int::Vector{Float64}   # Best feasible integer solution
+    best_sub::Vector{Float64}   # Best feasible continuous solution
+    slck_sub::Vector{Float64}   # Slack vector of best feasible solution
+    gap_rel_opt::Float64        # Relative optimality gap = |mip_obj - best_obj|/|best_obj|
+    cb_heur                     # Heuristic callback reference (MIP-driven only)
+    cb_lazy                     # Lazy callback reference (MIP-driven only)
 
     # Model constructor
-    function PajaritoConicModel(log_level, mip_solver_drives, soc_in_mip, disagg_soc, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, soc_in_mip, disagg_soc, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         m = new()
 
         m.log_level = log_level
         m.mip_solver_drives = mip_solver_drives
+        m.pass_mip_sols = pass_mip_sols
         m.soc_in_mip = soc_in_mip
         m.disagg_soc = disagg_soc
         m.drop_dual_infeas = drop_dual_infeas
@@ -166,9 +170,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
             m._sdp_soc = false
         end
 
-        # TODO automatically pass as options to MIP solver
         if m.mip_solver_drives
-            warn("For the MIP-solver-driven algorithm, time limit and optimality tolerance must be specified as MIP solver options, not Pajarito options\n")
+            warn("For the MIP-solver-driven algorithm, optimality tolerance must be specified as MIP solver option, not Pajarito option\n")
         end
 
         if m.drop_dual_infeas && m.proj_dual_infeas
@@ -178,11 +181,12 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         # Initialize data
         m.var_types = Symbol[]
         m.var_start = Float64[]
-        m.bc_started = false
+        m.oa_started = false
         m.num_var_orig = 0
         m.num_con_orig = 0
-        m.obj_best = Inf
-        m.soln_best = Float64[]
+        m.best_obj = Inf
+        m.best_int = Float64[]
+        m.best_sub = Float64[]
         m.status = :NotLoaded
 
         return m
@@ -298,7 +302,6 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     m.b_orig = b
     m.cone_con_orig = Tuple{Symbol,Vector{Int}}[(spec, collect(inds)) for (spec, inds) in cone_con]
     m.cone_var_orig = Tuple{Symbol,Vector{Int}}[(spec, collect(inds)) for (spec, inds) in cone_var]
-    m.soln_best = fill(NaN, m.num_var_orig)
     m.status = :Loaded
 end
 
@@ -347,7 +350,6 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     # Generate model data and instantiate MIP model
     logs[:total] = time()
-    logs[:setup] = time()
     trans_data!(m, logs)
     print_cones(m, m.summary)
     create_mip_data!(m, logs)
@@ -356,11 +358,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     # Solve relaxed conic problem, if feasible, add initial cuts to MIP model and use algorithm
     if process_relax!(m, logs)
-        print_inf_dual(m)
-        logs[:setup] = time() - logs[:setup]
-
         # Solve the transformed model with specified algorithm
         logs[:oa_alg] = time()
+        m.oa_started = true
         if m.mip_solver_drives
             # MIP solver driven outer approximation algorithm
             solve_mip_driven!(m, logs)
@@ -369,8 +369,6 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             solve_iterative!(m, logs)
         end
         logs[:oa_alg] = time() - logs[:oa_alg]
-    else
-        logs[:setup] = time() - logs[:setup]
     end
 
     # Print summary
@@ -378,13 +376,24 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     print_finish(m, logs)
 end
 
-# Redefine MathProgBase functions for getting model information
 MathProgBase.numconstr(m::PajaritoConicModel) = m.num_con_orig
+
 MathProgBase.numvar(m::PajaritoConicModel) = m.num_var_orig
+
 MathProgBase.status(m::PajaritoConicModel) = m.status
-MathProgBase.getobjval(m::PajaritoConicModel) = m.obj_best
-MathProgBase.getobjbound(m::PajaritoConicModel) = m.obj_mip
-MathProgBase.getsolution(m::PajaritoConicModel) = m.soln_best
+
+MathProgBase.getobjval(m::PajaritoConicModel) = m.best_obj
+
+MathProgBase.getobjbound(m::PajaritoConicModel) = min(m.mip_obj, m.best_obj)
+
+function MathProgBase.getsolution(m::PajaritoConicModel)
+    soln = zeros(m.num_var_orig)
+    soln_new = zeros(m.num_var_new)
+    soln_new[m.cols_int] = m.best_int
+    soln_new[m.cols_cont] = m.best_sub
+    soln[m.keep_cols] = soln_new
+    return soln
+end
 
 
 #=========================================================
@@ -550,7 +559,6 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     m.row_to_slckv = row_to_slckv
     m.num_cone_nlnr = num_cone_nlnr
     m.summary = summary
-    m.soln_best = zeros(Int, m.num_var_orig)
 
     logs[:trans_data] += toq()
 end
@@ -640,7 +648,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     coefs[ind] = - m.row_to_slckv[i]
                     isnew[ind] = false
                 else
-                    vars[ind] = @variable(model_mip, _, basename="s$(i)_c$(n_cone)", start=0.)
+                    vars[ind] = @variable(model_mip, _, basename="s$(i)_c$(n_cone)")
                     @constraint(model_mip, lhs_expr[i] - vars[ind] == 0.)
                     isnew[ind] = true
                 end
@@ -659,13 +667,38 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     setupperbound(vars[1], 0.)
                 end
 
+                # if m.soc_init_lin
+                    # # Create helper variables for absolute values of SOC variables
+                    # ypi = @variable(model_mip, [j in 1:(len - 1)], lowerbound=0., basename="yp$(n_cone)SOC")
+                    # yni = @variable(model_mip, [j in 1:(len - 1)], lowerbound=0., basename="yn$(n_cone)SOC")
+                    # for j in 2:len
+                    #     @constraint(model_mip, vars[j] == ypi[j - 1] - yni[j - 1])
+                    # end
+                    #
+                    # # Add initial L_inf SOC cuts (for now, on all y_i whether free or not)
+                    # @constraint(model_mip, sqrt(len - 1) * vars[1] >= sum(ypi) + sum(yni))
+                    #
+                    # # Add initial L_1 SOC cuts (for now, on all y_i whether free or not)
+                    # for j in 2:len
+                    #     # @constraint(model_mip, vars[1] >= vars[j])
+                    #     # @constraint(model_mip, vars[1] >= -vars[j])
+                    #     @constraint(model_mip, vars[1] >= ypi[j - 1] + yni[j - 1])
+                    # end
+                # end
+
+                # # Add initial L_1 SOC cuts (for now, on all y_i whether free or not)
+                # for j in 2:len
+                #     @constraint(model_mip, vars[1] >= vars[j])
+                #     @constraint(model_mip, vars[1] >= -vars[j])
+                # end
+
                 if m._soc_in_mip
                     #TODO use norm, fix jump issue 784 so that warm start works
                     error("SOC in MIP is currently broken; terminating Pajarito")
                     # @constraint(model_mip, norm2{coefs[j] .* vars[j], j in 2:len} <= coefs[1] * vars[1])
 
                 elseif m.disagg_soc && (len > 2)
-                    dagg = @variable(model_mip, [j in 1:(len - 1)], lowerbound=0., basename="d$(n_cone)SOC", start=0.)
+                    dagg = @variable(model_mip, [j in 1:(len - 1)], lowerbound=0., basename="d$(n_cone)SOC")
                     @constraint(model_mip, coefs[1] * vars[1] - sum(dagg) >= 0.)
                     push!(map_vars[n_cone], dagg)
                 end
@@ -711,7 +744,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     error("SOC in MIP is currently broken; terminating Pajarito")
 
                     # # Set up smat space variable array and add optional SDP initial SOC and dynamic SOC cuts
-                    # help = @variable(model_mip, [j in 1:nSD], lowerbound=0., basename="h$(n_cone)SDhelp", start=0.)
+                    # help = @variable(model_mip, [j in 1:nSD], lowerbound=0., basename="h$(n_cone)SDhelp")
                     # smat = Array{JuMP.AffExpr,2}(nSD, nSD)
                     # kSD = 1
                     # for jSD in 1:nSD, iSD in jSD:nSD
@@ -824,6 +857,7 @@ function create_conic_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     m.A_sub_int = m.A_new[rows_full, cols_int]
     m.b_sub = m.b_new[rows_full]
     m.c_sub_cont = m.c_new[cols_cont]
+    m.c_sub_int = m.c_new[cols_int]
 
     logs[:conic_data] += toq()
 end
@@ -860,7 +894,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         elseif status_mip != :Optimal
             error("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue on GitHub)\n")
         end
-        m.obj_mip = getobjectivevalue(m.model_mip)
+        m.mip_obj = getobjectivevalue(m.model_mip)
 
         # Reset cones summary values and calculate outer infeasibility of MIP solution
         reset_cone_summary!(m)
@@ -871,7 +905,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         soln_int_curr = round(Int, soln_int)
         if soln_int_prev == soln_int_curr
             # Check if converged
-            m.gap_rel_opt = (m.obj_best - m.obj_mip) / (abs(m.obj_best) + 1e-5)
+            m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
             if m.gap_rel_opt < m.rel_gap
                 m.status = :Optimal
             else
@@ -886,7 +920,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         process_conic!(m, soln_int, logs)
 
         # Calculate relative outer approximation gap, print gap and infeasibility statistics, finish if satisfy optimality gap condition
-        m.gap_rel_opt = (m.obj_best - m.obj_mip) / (abs(m.obj_best) + 1e-5)
+        m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
         print_gap(m, logs)
         print_inf(m)
         if m.gap_rel_opt < m.rel_gap
@@ -899,71 +933,65 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             m.status = :UserLimit
             break
         end
+
+        if m.pass_mip_sols
+            # Give the best feasible solution to the MIP as a warm-start
+            set_best_soln!(m)
+        end
     end
 end
 
 # Solve the MIP model using MIP-solver-driven callback algorithm
 function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
-    # Initialize heuristic solution queue vectors, set bool to stop adding SOC cuts during MIP driven solve
     if m.log_level > 0
         @printf "\nStarting MIP-solver-driven outer approximation algorithm:\n"
     end
-    m.bc_started = true
-    m.queue_heur = Vector{Vector{Float64}}[]
+    m.best_int = fill(NaN, length(m.cols_int))
+    m.best_sub = fill(NaN, length(m.cols_cont))
+    m.slck_sub = fill(NaN, length(m.b_sub))
 
-    # Add lazy cuts callback to solve the conic subproblem, add lazy cuts, and save a heuristic solution if conic solution is best
+    # Add lazy cuts callback, to solve the conic subproblem and add lazy cuts
     function callback_lazy(cb)
-        # Save callback reference so can use to adding lazy cuts
-        m.model_mip.ext[:cb] = cb
-
         # Reset cones summary values and calculate outer infeasibility of MIP solution
         reset_cone_summary!(m)
         calc_inf_outer!(m, logs)
 
         # Solve conic subproblem given integer solution, add lazy cuts to MIP, calculate cut and dual infeasibilities, add solution to heuristic queue vectors if best objective
+        m.cb_lazy = cb
         process_conic!(m, getvalue(m.x_mip[m.cols_int]), logs)
 
         # Print cone infeasibilities
         print_inf(m)
     end
+
     addlazycallback(m.model_mip, callback_lazy)
 
-    # Add heuristic callback to add each feasible solution from the current heuristic queue
-    function callback_heur(cb)
-        # Take each heuristic solution vector and add as a solution to the MIP
-        tic()
+    if m.pass_mip_sols
+        # Add heuristic callback, to add best MIP feasible solution
+        function callback_heur(cb)
+            tic()
 
-        if !isempty(m.queue_heur)
-            # Get solution information
-            (soln_int, soln_sub, b_sub_int) = pop!(m.queue_heur)
-
-            # Set values of original variables
-            for (val, var) in zip(soln_int, m.x_mip[m.cols_int])
-                setsolutionvalue(cb, var, val)
-            end
-            for (val, var) in zip(soln_sub, m.x_mip[m.cols_cont])
-                setsolutionvalue(cb, var, val)
-            end
-
-            # Set values of MIP-added slacks and helper and disaggregated variables for nonlinear cones
-            slck_sub = b_sub_int - m.A_sub_cont * soln_sub
-            for n in 1:m.num_cone_nlnr
-                add_cone_soln!(m, m.map_spec[n], m.map_dim[n], m.map_vars[n], m.map_isnew[n], slck_sub[m.map_rows_sub[n]], cb)
-            end
-
+            # Set MIP solution to best solution
+            m.cb_heur = cb
+            set_best_soln!(m)
             addsolution(cb)
-            logs[:n_sol_heur] += 1
+
+            logs[:cb_heur] += toq()
+            logs[:n_cb_heur] += 1
         end
-        logs[:cb_heur] += toq()
-        logs[:n_cb_heur] += 1
+
+        addheuristiccallback(m.model_mip, callback_heur)
     end
-    addheuristiccallback(m.model_mip, callback_heur)
 
     # Start MIP solver
     logs[:mip_solve] = time()
+    if applicable(MathProgBase.setparameters!, m.mip_solver)
+        MathProgBase.setparameters!(m.mip_solver, Silent=(m.log_level <= 1), TimeLimit=(m.timeout - (time() - logs[:total])))
+        setsolver(m.model_mip, m.mip_solver)
+    end
     m.status = solve(m.model_mip)
-    m.obj_mip = getobjectivevalue(m.model_mip)
-    m.gap_rel_opt = (m.obj_best - m.obj_mip) / (abs(m.obj_best) + 1e-5)
+    m.mip_obj = getobjectivevalue(m.model_mip)
+    m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
     logs[:mip_solve] = time() - logs[:mip_solve]
 end
 
@@ -974,9 +1002,8 @@ end
 
 # Solve the initial conic relaxation model
 function process_relax!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
-    tic()
-
     # Instantiate and solve the conic relaxation model
+    tic()
     model_relax = MathProgBase.ConicModel(m.cont_solver)
     MathProgBase.loadproblem!(model_relax, m.c_new, m.A_new, m.b_new, m.cone_con_new, m.cone_var_new)
     MathProgBase.optimize!(model_relax)
@@ -1019,8 +1046,6 @@ end
 
 # Solve a conic subproblem given some solution to the integer variables
 function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::Dict{Symbol,Real})
-    tic()
-
     # Check if integer solution vector is valid
     if any(isnan, soln_int)
         if m.mip_solver_drives
@@ -1031,10 +1056,9 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
         end
     end
 
-    # Calculate new subproblem b vector using fixing values of int vars
-    b_sub_int = m.b_sub - m.A_sub_int * soln_int
-
     # Instantiate and solve the conic model
+    tic()
+    b_sub_int = m.b_sub - m.A_sub_int * soln_int
     model_conic = MathProgBase.ConicModel(m.cont_solver)
     MathProgBase.loadproblem!(model_conic, m.c_sub_cont, m.A_sub_cont, b_sub_int, m.cone_con_sub, m.cone_var_sub)
     MathProgBase.optimize!(model_conic)
@@ -1067,36 +1091,14 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
     end
     logs[:conic_cuts] += toq()
 
-    # If feasible, check if new objective is best
+    # If feasible, check if new objective is best, if so, store new objective and solution
     if status_conic != :Infeasible
-        soln_sub = MathProgBase.getsolution(model_conic)
-        soln_new = zeros(m.num_var_new)
-        soln_new[m.cols_int] = soln_int
-        soln_new[m.cols_cont] = soln_sub
-        obj_new = dot(m.c_new, soln_new)
-
-        # If new objective is best, store new objective and solution, and add heuristic solution or warm-start MIP
-        if obj_new <= m.obj_best
-            m.obj_best = obj_new
-            m.soln_best[m.keep_cols] = soln_new
-
-            if m.mip_solver_drives
-                push!(m.queue_heur, Vector{Float64}[soln_int, soln_sub, b_sub_int])
-            else
-                # Set values of original variables
-                for (val, var) in zip(soln_int, m.x_mip[m.cols_int])
-                    setvalue(var, val)
-                end
-                for (val, var) in zip(soln_sub, m.x_mip[m.cols_cont])
-                    setvalue(var, val)
-                end
-
-                # Set values of MIP-added slacks and helper and disaggregated variables for nonlinear cones
-                slck_sub = b_sub_int - m.A_sub_cont * soln_sub
-                for n in 1:m.num_cone_nlnr
-                    set_cone_soln!(m, m.map_spec[n], m.map_dim[n], m.map_vars[n], m.map_isnew[n], slck_sub[m.map_rows_sub[n]])
-                end
-            end
+        obj_new = dot(m.c_sub_int, soln_int) + MathProgBase.getobjval(model_conic)
+        if obj_new <= m.best_obj
+            m.best_obj = obj_new
+            m.best_int = soln_int
+            m.best_sub = MathProgBase.getsolution(model_conic)
+            m.slck_sub = b_sub_int - m.A_sub_cont * m.best_sub
         end
     end
 
@@ -1106,47 +1108,71 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
     end
 end
 
-# Construct MIP solution on nonlinear cone variables and warm-start
-function set_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vector{Vector{JuMP.Variable}}, isnew::Vector{Bool}, slck::Vector{Float64})
-    # Set MIP-added slack variable values
-    for ind in 1:dim
-        if isnew[ind]
-            setvalue(vars[1][ind], slck[ind])
+# Construct and warm-start MIP solution using best solution
+function set_best_soln!(m::PajaritoConicModel)
+    if m.mip_solver_drives
+        for (val, var) in zip(m.best_int, m.x_mip[m.cols_int])
+            setsolutionvalue(m.cb_heur, var, val)
         end
-    end
-
-    # Set helper variable values and disaggregated variable values
-    if (spec == :SOC) && m.disagg_soc && (dim > 2)
-        if slck[1] == 0.
-            for var in vars[2]
-                setvalue(var, 0.)
-            end
-        else
-            for (ind, var) in enumerate(vars[2])
-                setvalue(var, (slck[(ind + 1)]^2 / slck[1]))
-            end
+        for (val, var) in zip(m.best_sub, m.x_mip[m.cols_cont])
+            setsolutionvalue(m.cb_heur, var, val)
+        end
+        for n in 1:m.num_cone_nlnr
+            set_cone_soln!(m, m.map_spec[n], m.map_dim[n], m.map_vars[n], m.map_isnew[n], m.slck_sub[m.map_rows_sub[n]])
+        end
+    else
+        for (val, var) in zip(m.best_int, m.x_mip[m.cols_int])
+            setvalue(var, val)
+        end
+        for (val, var) in zip(m.best_sub, m.x_mip[m.cols_cont])
+            setvalue(var, val)
+        end
+        for n in 1:m.num_cone_nlnr
+            set_cone_soln!(m, m.map_spec[n], m.map_dim[n], m.map_vars[n], m.map_isnew[n], m.slck_sub[m.map_rows_sub[n]])
         end
     end
 end
 
-# Construct MIP solution on nonlinear cone variables and add heuristic solution
-function add_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vector{Vector{JuMP.Variable}}, isnew::Vector{Bool}, slck::Vector{Float64}, cb)
-    # Set MIP-added slack variable values
-    for ind in 1:dim
-        if isnew[ind]
-            setsolutionvalue(cb, vars[1][ind], slck[ind])
-        end
-    end
-
-    # Set helper variable values and disaggregated variable values
-    if (spec == :SOC) && m.disagg_soc && (dim > 2)
-        if slck[1] == 0.
-            for var in vars[2]
-                setsolutionvalue(cb, var, 0.)
+# Construct and warm-start MIP solution on nonlinear cone variables
+function set_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vector{Vector{JuMP.Variable}}, isnew::Vector{Bool}, slck::Vector{Float64})
+    if m.mip_solver_drives
+        # Set MIP-added slack variable values
+        for ind in 1:dim
+            if isnew[ind]
+                setsolutionvalue(m.cb_heur, vars[1][ind], slck[ind])
             end
-        else
-            for (ind, var) in enumerate(vars[2])
-                setsolutionvalue(cb, var, (slck[(ind + 1)]^2 / slck[1]))
+        end
+
+        # Set disaggregated variable values
+        if (spec == :SOC) && m.disagg_soc && (dim > 2)
+            if slck[1] == 0.
+                for var in vars[2]
+                    setsolutionvalue(m.cb_heur, var, 0.)
+                end
+            else
+                for (ind, var) in enumerate(vars[2])
+                    setsolutionvalue(m.cb_heur, var, (slck[(ind + 1)]^2 / slck[1]))
+                end
+            end
+        end
+    else
+        # Set MIP-added slack variable values
+        for ind in 1:dim
+            if isnew[ind]
+                setvalue(vars[1][ind], slck[ind])
+            end
+        end
+
+        # Set disaggregated variable values
+        if (spec == :SOC) && m.disagg_soc && (dim > 2)
+            if slck[1] == 0.
+                for var in vars[2]
+                    setvalue(var, 0.)
+                end
+            else
+                for (ind, var) in enumerate(vars[2])
+                    setvalue(var, (slck[(ind + 1)]^2 / slck[1]))
+                end
             end
         end
     end
@@ -1184,7 +1210,6 @@ function calc_inf_outer!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 inf_outer = sumabs2(soln[2:end]) - soln[1]^2
 
             elseif spec == :ExpPrimal
-                # TODO consider other case?
                 inf_outer = soln[2] * exp(soln[1] / soln[2]) - soln[3]
 
             elseif spec == :SDP
@@ -1288,7 +1313,7 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
 
             if size(Vdual, 2) > 0
                 # Cannot add SOC cuts during MIP solve
-                # if m._sdp_soc && !m.bc_started
+                # if m._sdp_soc && !(m.mip_solver_drives && m.oa_started)
                 # TODO broken because of coefs
                 #     add_sdp_soc_cuts!(m, spec_summ, reshape(vars[(n_svec + 1):end], dim, dim), coefs, Vdual)
                 # else
@@ -1325,14 +1350,14 @@ end
 # Add a single linear cut and calculate cut infeasibility
 function add_linear_cut!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, slcks::Vector{JuMP.AffExpr}, cut::Vector{Float64})
     # Add cut (lazy cut if using MIP driven solve)
-    if haskey(m.model_mip.ext, :cb)
-        @lazyconstraint(m.model_mip.ext[:cb], dot(cut, slcks) >= 0.)
+    if m.mip_solver_drives && m.oa_started
+        @lazyconstraint(m.cb_lazy, dot(cut, slcks) >= 0.)
     else
         @constraint(m.model_mip, dot(cut, slcks) >= 0.)
     end
 
     # Update cut infeasibility
-    if m.log_level > 1
+    if (m.log_level > 1) && m.oa_started
         inf_cut = -dot(cut, getvalue(slcks))
         if inf_cut > 0.
             spec_summ[:cut_max_n] += 1
@@ -1434,11 +1459,10 @@ function create_logs()
     logs = Dict{Symbol,Real}()
 
     # Timers
-    logs[:total] = 0. # Performing total optimize algorithm
+    logs[:total] = 0.       # Performing total optimize algorithm
     logs[:trans_data] = 0.  # Transforming data
     logs[:conic_data] = 0.  # Generating conic data
     logs[:mip_data] = 0.    # Generating MIP data
-    logs[:setup] = 0. # Performing setup and adding initial conic relax cuts
     logs[:relax_solve] = 0. # Solving initial conic relaxation model
     logs[:relax_cuts] = 0.  # Adding cuts for initial relaxation model
     logs[:conic_solve] = 0. # Solving conic subproblem model
@@ -1450,7 +1474,6 @@ function create_logs()
 
     # Iteration counters
     logs[:n_conic] = 0      # Number of conic subproblem solves
-    logs[:n_sol_heur] = 0   # Total number of heuristic solutions added to MIP
     logs[:n_cb_heur] = 0    # Number of times heuristic callback is called
 
     return logs
@@ -1469,19 +1492,19 @@ function print_cones(m::PajaritoConicModel, summary::Dict{Symbol,Dict{Symbol,Rea
     end
 end
 
-# Print dual infeasibility only
-function print_inf_dual(m::PajaritoConicModel)
-    if m.log_level > 1
-        @printf "\n%-10s | %-32s\n" "Species" "Dual cone infeas"
-        @printf "%-10s | %-6s %-8s  %-6s %-8s\n" "" "Inf" "Worst" "Feas" "Worst"
-        for (spec, spec_summ) in m.summary
-            @printf "%10s | %5d  %8.2e  %5d  %8.2e\n" spec spec_summ[:dual_max_n] spec_summ[:dual_max] spec_summ[:dual_min_n] spec_summ[:dual_min]
-        end
-
-        @printf "\n"
-        flush(STDOUT)
-    end
-end
+# # Print dual infeasibility only
+# function print_inf_dual(m::PajaritoConicModel)
+#     if m.log_level > 1
+#         @printf "\n%-10s | %-32s\n" "Species" "Dual cone infeas"
+#         @printf "%-10s | %-6s %-8s  %-6s %-8s\n" "" "Inf" "Worst" "Feas" "Worst"
+#         for (spec, spec_summ) in m.summary
+#             @printf "%10s | %5d  %8.2e  %5d  %8.2e\n" spec spec_summ[:dual_max_n] spec_summ[:dual_max] spec_summ[:dual_min_n] spec_summ[:dual_min]
+#         end
+#
+#         @printf "\n"
+#         flush(STDOUT)
+#     end
+# end
 
 # Print cones infeasibilities
 function print_inf(m::PajaritoConicModel)
@@ -1505,32 +1528,16 @@ function print_gap(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
 
         if m.gap_rel_opt < 1000
-            @printf "%4d | %+14.6e | %+14.6e | %11.3e | %11.3e\n" logs[:n_conic] m.obj_best m.obj_mip m.gap_rel_opt (time() - logs[:oa_alg])
+            @printf "%4d | %+14.6e | %+14.6e | %11.3e | %11.3e\n" logs[:n_conic] m.best_obj m.mip_obj m.gap_rel_opt (time() - logs[:oa_alg])
         elseif isnan(m.gap_rel_opt)
-            @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" logs[:n_conic] m.obj_best m.obj_mip "Inf" (time() - logs[:oa_alg])
+            @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" logs[:n_conic] m.best_obj m.mip_obj "Inf" (time() - logs[:oa_alg])
         else
-            @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" logs[:n_conic] m.obj_best m.obj_mip ">1000" (time() - logs[:oa_alg])
+            @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" logs[:n_conic] m.best_obj m.mip_obj ">1000" (time() - logs[:oa_alg])
         end
 
         flush(STDOUT)
     end
 end
-
-# Save solution data to file
-# function save_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
-#     if !isempty(m.path)
-#         @printf "\nWriting results to file %s... " m.path
-#
-#         out_file = open("output.txt", "a")
-#
-#         write(out_file, "$(m.path):\n$(m.status)\n$(logs[:n_conic])\n$(logs[:setup]) $(logs[:oa_alg]) $(logs[:mip_solve]) $(logs[:conic_solve])\n$(m.obj_best) $(m.obj_mip) $(m.gap_rel_opt)\n$(m.soln_best)\n")
-#
-#         close(out_file)
-#
-#         @printf "save complete.\n\n"
-#         flush(STDOUT)
-#     end
-# end
 
 # Print after finish
 function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
@@ -1542,19 +1549,18 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     end
     @printf " - Total time (s)       = %14.2e\n" logs[:total]
     @printf " - Status               = %14s\n" m.status
-    @printf " - Best feasible obj.   = %+14.6e\n" m.obj_best
-    @printf " - Final OA obj. bound  = %+14.6e\n" m.obj_mip
+    @printf " - Best feasible obj.   = %+14.6e\n" m.best_obj
+    @printf " - Final OA obj. bound  = %+14.6e\n" m.mip_obj
     @printf " - Relative opt. gap    = %14.3e\n" m.gap_rel_opt
     @printf " - Conic iter. count    = %14d\n" logs[:n_conic]
 
     if m.log_level > 1
         if m.mip_solver_drives
             @printf " - Heur. callback count = %14d\n" logs[:n_cb_heur]
-            @printf " - Heur. solution count = %14d\n" logs[:n_sol_heur]
         end
 
         @printf "\nTimers (s):\n"
-        @printf " - Setup                = %14.2e\n" logs[:setup]
+        @printf " - Setup                = %14.2e\n" (logs[:total] - logs[:oa_alg])
         if m.log_level > 1
             @printf " -- Transform data      = %14.2e\n" logs[:trans_data]
             @printf " -- Create MIP data     = %14.2e\n" logs[:mip_data]

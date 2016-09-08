@@ -4,7 +4,7 @@
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
-    algorithm = mip_solver_drives ? "BC" : "OA"
+    algorithm = mip_solver_drives ? "MIP-driven" : "Iterative"
 
     facts("Sparse matrix bug test") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
