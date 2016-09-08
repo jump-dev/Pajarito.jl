@@ -15,11 +15,8 @@ immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     pass_mip_sols::Bool         # Give best feasible solutions constructed from conic subproblem solution to MIP
     soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
     disagg_soc::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
-<<<<<<< HEAD
-=======
     soc_ell_one::Bool           # (Conic only) Start with disaggregated L_1 outer approximation cuts for SOCs (if disagg_soc)
     soc_ell_inf::Bool           # (Conic only) Start with disaggregated L_inf outer approximation cuts for SOCs (if disagg_soc)
->>>>>>> socinitialcuts
     drop_dual_infeas::Bool      # (Conic only) Do not add cuts from dual cone infeasible dual vectors
     proj_dual_infeas::Bool      # (Conic only) Project dual cone infeasible dual vectors onto dual cone boundaries
     proj_dual_feas::Bool        # (Conic only) Project dual cone strictly feasible dual vectors onto dual cone boundaries
