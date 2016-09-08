@@ -39,6 +39,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     pass_mip_sols::Bool         # Give best feasible solutions constructed from conic subproblem solution to MIP
     soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
     disagg_soc::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
+    soc_ell_one::Bool           # (Conic only) Start with disaggregated L_1 outer approximation cuts for SOCs (if disagg_soc)
+    soc_ell_inf::Bool           # (Conic only) Start with disaggregated L_inf outer approximation cuts for SOCs (if disagg_soc)
     drop_dual_infeas::Bool      # (Conic only) Do not add cuts from dual cone infeasible dual vectors
     proj_dual_infeas::Bool      # (Conic only) Project dual cone infeasible dual vectors onto dual cone boundaries
     proj_dual_feas::Bool        # (Conic only) Project dual cone strictly feasible dual vectors onto dual cone boundaries
@@ -119,7 +121,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cb_lazy                     # Lazy callback reference (MIP-driven only)
 
     # Model constructor
-    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, soc_in_mip, disagg_soc, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         m = new()
 
         m.log_level = log_level
@@ -127,6 +129,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.pass_mip_sols = pass_mip_sols
         m.soc_in_mip = soc_in_mip
         m.disagg_soc = disagg_soc
+        m.soc_ell_one = soc_ell_one
+        m.soc_ell_inf = soc_ell_inf
         m.drop_dual_infeas = drop_dual_infeas
         m.proj_dual_infeas = proj_dual_infeas
         m.proj_dual_feas = proj_dual_feas
@@ -667,26 +671,22 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     setupperbound(vars[1], 0.)
                 end
 
-                # if m.soc_init_lin
-                    # # Create helper variables for absolute values of SOC variables
-                    # ypi = @variable(model_mip, [j in 1:(len - 1)], lowerbound=0., basename="yp$(n_cone)SOC")
-                    # yni = @variable(model_mip, [j in 1:(len - 1)], lowerbound=0., basename="yn$(n_cone)SOC")
-                    # for j in 2:len
-                    #     @constraint(model_mip, vars[j] == ypi[j - 1] - yni[j - 1])
-                    # end
-                    #
-                    # # Add initial L_inf SOC cuts (for now, on all y_i whether free or not)
-                    # @constraint(model_mip, sqrt(len - 1) * vars[1] >= sum(ypi) + sum(yni))
-                    #
-                    # # Add initial L_1 SOC cuts (for now, on all y_i whether free or not)
-                    # for j in 2:len
-                    #     # @constraint(model_mip, vars[1] >= vars[j])
-                    #     # @constraint(model_mip, vars[1] >= -vars[j])
-                    #     @constraint(model_mip, vars[1] >= ypi[j - 1] + yni[j - 1])
-                    # end
+                # # Create helper variables for absolute values of SOC variables
+                # ypi = @variable(model_mip, [j in 1:(len - 1)], lowerbound=0., basename="yp$(n_cone)SOC")
+                # yni = @variable(model_mip, [j in 1:(len - 1)], lowerbound=0., basename="yn$(n_cone)SOC")
+                # for j in 2:len
+                #     @constraint(model_mip, vars[j] == ypi[j - 1] - yni[j - 1])
+                # end
+                #
+                # # Add initial L_inf SOC cut (for now, on all y_i whether free or not)
+                # @constraint(model_mip, sqrt(len - 1) * vars[1] >= sum(ypi) + sum(yni))
+                #
+                # # Add initial L_1 SOC cuts (for now, on all y_i whether free or not)
+                # for j in 2:len
+                #     @constraint(model_mip, vars[1] >= ypi[j - 1] + yni[j - 1])
                 # end
 
-                # # Add initial L_1 SOC cuts (for now, on all y_i whether free or not)
+                # Add initial L_1 SOC cuts (for now, on all y_i whether free or not)
                 # for j in 2:len
                 #     @constraint(model_mip, vars[1] >= vars[j])
                 #     @constraint(model_mip, vars[1] >= -vars[j])
@@ -701,6 +701,28 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     dagg = @variable(model_mip, [j in 1:(len - 1)], lowerbound=0., basename="d$(n_cone)SOC")
                     @constraint(model_mip, coefs[1] * vars[1] - sum(dagg) >= 0.)
                     push!(map_vars[n_cone], dagg)
+
+                    if m.soc_ell_one
+                        # Add initial L_1 SOC cuts
+                        # d_i >= 2/sqrt(len - 1) * |y_i| - 1/(len - 1) * x
+                        # for all i, implies sqrt(len - 1) * x >= sum_i |y_i|
+                        # linearize y_i^2/x at x = 1, y_i = 1/sqrt(len - 1) for all i
+                        for j in 2:len
+                            @constraint(model_mip, dagg[j - 1] >= 2. / sqrt(len - 1) * coefs[j] * vars[j] - 1. / (len - 1) * coefs[1] * vars[1])
+                            @constraint(model_mip, dagg[j - 1] >= -2. / sqrt(len - 1) * coefs[j] * vars[j] - 1. / (len - 1) * coefs[1] * vars[1])
+                        end
+                    end
+
+                    if m.soc_ell_inf
+                        # Add initial L_inf SOC cuts
+                        # d_i >= 2|y_i| - x
+                        # implies x >= |y_i|, for all i
+                        # linearize y_i^2/x at x = 1, y_i = 1 for each i (y_j = 0 for j != i)
+                        for j in 2:len
+                            @constraint(model_mip, dagg[j - 1] >= 2. * coefs[j] * vars[j] - coefs[1] * vars[1])
+                            @constraint(model_mip, dagg[j - 1] >= -2. * coefs[j] * vars[j] - coefs[1] * vars[1])
+                        end
+                    end
                 end
 
             elseif spec == :ExpPrimal
