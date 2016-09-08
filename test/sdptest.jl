@@ -4,7 +4,7 @@
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 function runsdptests(mip_solver_drives, mip_solver, sdp_solver)
-    algorithm = mip_solver_drives ? "BC" : "OA"
+    algorithm = mip_solver_drives ? "MIP-driven" : "Iterative"
 
     facts("Maximization problem") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(sdp_solver))") do

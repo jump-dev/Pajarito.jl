@@ -5,7 +5,7 @@
 
 function runconicdefaulttests(mip_solver_drives)
     facts("Default solvers test") do
-        context("With $(mip_solver_drives ? "BC" : "OA"), defaulting to $(typeof(MathProgBase.defaultMIPsolver)) and $(typeof(MathProgBase.defaultConicsolver))") do
+        context("With $(mip_solver_drives ? "MIP-driven" : "Iterative"), defaulting to $(typeof(MathProgBase.defaultMIPsolver)) and $(typeof(MathProgBase.defaultConicsolver))") do
             x = Convex.Variable(1,:Int)
 
             problem = Convex.maximize(3x,
@@ -21,7 +21,7 @@ function runconicdefaulttests(mip_solver_drives)
 end
 
 function runconictests(mip_solver_drives, mip_solver, conic_solver, log)
-    algorithm = mip_solver_drives ? "BC" : "OA"
+    algorithm = mip_solver_drives ? "MIP-driven" : "Iterative"
 
     facts("Infeasible conic problem") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do

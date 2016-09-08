@@ -948,6 +948,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     end
     m.best_int = fill(NaN, length(m.cols_int))
     m.best_sub = fill(NaN, length(m.cols_cont))
+    m.slck_sub = fill(NaN, length(m.b_sub))
 
     # Add lazy cuts callback, to solve the conic subproblem and add lazy cuts
     function callback_lazy(cb)
