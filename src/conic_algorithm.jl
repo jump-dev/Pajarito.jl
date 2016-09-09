@@ -647,7 +647,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     coefs[ind] = - m.row_to_slckv[i]
                     isnew[ind] = false
                 else
-                    vars[ind] = @variable(model_mip, basename="s$(i)_c$(n_cone)")
+                    vars[ind] = @variable(model_mip, _, basename="s$(i)_c$(n_cone)")
                     @constraint(model_mip, lhs_expr[i] - vars[ind] == 0.)
                     isnew[ind] = true
                 end
