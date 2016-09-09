@@ -19,15 +19,17 @@ TODO issues
 
 TODO features
 - if initial conic solve gives feasible integer solution, return immediately
-- when JuMP can handle anonymous variables without errors, use that syntax
-- add initial LINEAR sdp cuts (redundant with initial SOC cuts) -2m_ij <= m_ii + m_jj, 2m_ij <= m_ii + m_jj, all i,j
 - replace "for i in 1:..."
 - want to be able to query logs information etc
 - have option to only add violated cuts (especially for SDP, where each SOC cut slows down mip and we have many SOC cuts)
 - print cone info to one file and gap info to another file
-- what to do if experience conic problem strong duality failure? could use a no-good cut on that integer solution and proceed, but that could cut off optimal sol?
+- what to do if experience conic problem (apparent) strong duality failure? could use a no-good cut on that integer solution and proceed, but that could cut off optimal sol?
 - dual cone projection - implement multiple heuristic projections and optimal euclidean projection
+
+TODO SDP
+- add initial LINEAR sdp cuts (redundant with initial SOC cuts) -2m_ij <= m_ii + m_jj, 2m_ij <= m_ii + m_jj, all i,j
 - currently all SDP sanitized eigvecs have norm 1, but may want to multiply V by say 100 (or perhaps largest eigenvalue) before removing zeros, to get more significant digits
+
 =========================================================#
 
 using JuMP
@@ -580,13 +582,6 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         setcategory(x_mip[j], m.var_types[m.keep_cols][j])
     end
 
-    # TODO warm start entire algorithm
-    # if !isempty(m.var_start)
-    #     for j in 1:m.num_var_new
-    #         setvalue(x_mip[j], m.var_start[m.keep_cols][j])
-    #     end
-    # end
-
     @objective(model_mip, :Min, dot(m.c_new, x_mip))
 
     # Add variable cones to MIP
@@ -718,6 +713,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                         # d_i >= 2|y_i| - x
                         # implies x >= |y_i|, for all i
                         # linearize y_i^2/x at x = 1, y_i = 1 for each i (y_j = 0 for j != i)
+                        # equivalent to standard 3-dim rotated SOC linearizations x + d_i >= 2|y_i|
                         for j in 2:len
                             @constraint(model_mip, dagg[j - 1] >= 2. * coefs[j] * vars[j] - coefs[1] * vars[1])
                             @constraint(model_mip, dagg[j - 1] >= -2. * coefs[j] * vars[j] - coefs[1] * vars[1])
