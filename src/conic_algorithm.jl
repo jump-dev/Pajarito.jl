@@ -27,7 +27,6 @@ TODO features
 - dual cone projection - implement multiple heuristic projections and optimal euclidean projection
 
 TODO SDP
-- add initial LINEAR sdp cuts (redundant with initial SOC cuts) -2m_ij <= m_ii + m_jj, 2m_ij <= m_ii + m_jj, all i,j
 - currently all SDP sanitized eigvecs have norm 1, but may want to multiply V by say 100 (or perhaps largest eigenvalue) before removing zeros, to get more significant digits
 
 =========================================================#
@@ -51,7 +50,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
     rel_gap::Float64            # Relative optimality gap termination condition
     zero_tol::Float64           # (Conic only) Tolerance for setting small absolute values in duals to zeros
-    # sdp_init_lin::Bool          # (Conic SDP only) Use SDP initial linear cuts
+    sdp_init_lin::Bool          # (Conic SDP only) Use SDP initial linear cuts
     sdp_init_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
     sdp_eig::Bool               # (Conic SDP only) Use SDP eigenvector-derived cuts
     sdp_soc::Bool               # (Conic SDP only) Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
@@ -124,7 +123,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cb_lazy                     # Lazy callback reference (MIP-driven only)
 
     # Model constructor
-    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         m = new()
 
         m.log_level = log_level
@@ -142,6 +141,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.timeout = timeout
         m.rel_gap = rel_gap
         m.zero_tol = zero_tol
+        m.sdp_init_lin = sdp_init_lin
         m.sdp_init_soc = sdp_init_soc
         m.sdp_eig = sdp_eig
         m.sdp_soc = sdp_soc
@@ -729,12 +729,14 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                         else
                             setupperbound(vars[kSD], 0.)
                         end
+                    elseif m.sdp_init_lin
+                        # Add initial SDP linear cuts based on linearization of 3-dim rotated SOCs that enforce 2x2 principal submatrix PSDness
+                        # 2|m_ij| <= m_ii + m_jj, where m_kk is scaled by sqrt(2) in smat space
+                        @constraint(model_mip, coefs[iSD] * vars[iSD] + coefs[kSD] * vars[kSD] >= sqrt(2) * coefs[kSD] * vars[kSD])
+                        @constraint(model_mip, coefs[iSD] * vars[iSD] + coefs[kSD] * vars[kSD] >= -sqrt(2) * coefs[kSD] * vars[kSD])
                     end
                     kSD += 1
                 end
-
-                # Add initial SDP linear cuts
-                # TODO
 
                 # Set up helper variables and initial SDP SOC cuts
                 # TODO rethink helper and smat variables
