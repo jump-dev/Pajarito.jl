@@ -17,9 +17,6 @@ TODO issues
 - MPB issue - can't call supportedcones on defaultConicsolver
 - maybe let subopt mip solve time be calculated as a fraction of most recent full mip solve time
 
-- use option for slack tolerance upper/lower
-- maybe should throw errors if options can't be satisfied, rather than defaulting to available methods
-
 TODO features
 - for warm-start pajarito, use set_best_soln!
 - query logs information etc
@@ -52,6 +49,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver (conic or nonlinear)
     timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
     rel_gap::Float64            # Relative optimality gap termination condition
+    detect_slacks::Bool         # (Conic only) Use automatic slack variable detection for cuts (may reduce number of variables in MIP)
+    slack_tol_order::Float64    # (Conic only) Order of magnitude tolerance for abs of coefficient on auto-detected slack variables (negative: -1 only, zero: -1 or 1, positive: order of magnitude)
     zero_tol::Float64           # (Conic only) Tolerance for setting small absolute values in duals to zeros
     sdp_init_lin::Bool          # (Conic SDP only) Use SDP initial linear cuts
     sdp_init_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
@@ -121,7 +120,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cb_lazy                     # Lazy callback reference (MIP-driven only)
 
     # Model constructor
-    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, mip_subopt_count, mip_subopt_time, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, mip_subopt_count, mip_subopt_time, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         m = new()
 
         m.log_level = log_level
@@ -140,6 +139,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.cont_solver = cont_solver
         m.timeout = timeout
         m.rel_gap = rel_gap
+        m.detect_slacks = detect_slacks
+        m.slack_tol_order = slack_tol_order
         m.zero_tol = zero_tol
         m.sdp_init_lin = sdp_init_lin
         m.sdp_init_soc = sdp_init_soc
@@ -490,7 +491,7 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     A_new = sparse(A_I, A_J, A_V, num_con_new, num_var_new)
     (A_I, A_J, A_V) = findnz(A_new)
 
-    # Detect existing slack variables in nonlinear cone rows with b=0, corresponding to isolated row nonzeros equal to -1
+    # Set up for detecting existing slack variables in nonlinear cone rows with b=0, corresponding to isolated row nonzeros
     row_slck_count = zeros(Int, num_con_new)
     for (ind, i) in enumerate(A_I)
         if (b_new[i] == 0.) && (A_V[ind] != 0.)
@@ -504,9 +505,6 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
     row_to_slckj = Dict{Int,Int}()
     row_to_slckv = Dict{Int,Float64}()
-
-    slack_tol = 0.1 # TODO maybe make this an option; may also want upper bound
-
     summary = Dict{Symbol,Dict{Symbol,Real}}()
     num_cone_nlnr = 0
 
@@ -526,13 +524,37 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 end
             end
 
-            # Use a tolerance for abs of the coefficient; if too small, cannot use as a slack variable
-            for i in rows
-                if row_slck_count[i] > 0
-                    if abs(A_V[row_slck_count[i]]) > slack_tol
-                    # if A_V[row_slck_count[i]] == -1.
-                        row_to_slckj[i] = A_J[row_slck_count[i]]
-                        row_to_slckv[i] = A_V[row_slck_count[i]]
+            # If option to detect slacks is true, auto-detect slacks depending on order of magnitude tolerance for abs of the coefficient
+            if m.detect_slacks
+                if m.slack_tol_order < 0.
+                    # Negative slack tol order means only choose -1 coefficients
+                    for i in rows
+                        if row_slck_count[i] > 0
+                            if A_V[row_slck_count[i]] == -1.
+                                row_to_slckj[i] = A_J[row_slck_count[i]]
+                                row_to_slckv[i] = A_V[row_slck_count[i]]
+                            end
+                        end
+                    end
+                elseif m.slack_tol_order == 0.
+                    # Zero slack tol order means only choose -1, +1 coefficients
+                    for i in rows
+                        if row_slck_count[i] > 0
+                            if abs(A_V[row_slck_count[i]]) == 1.
+                                row_to_slckj[i] = A_J[row_slck_count[i]]
+                                row_to_slckv[i] = A_V[row_slck_count[i]]
+                            end
+                        end
+                    end
+                else
+                    # Positive slack tol order means choose coefficients with abs in order of magnitude range
+                    for i in rows
+                        if row_slck_count[i] > 0
+                            if abs(log10(abs(A_V[row_slck_count[i]]))) <= m.slack_tol_order
+                                row_to_slckj[i] = A_J[row_slck_count[i]]
+                                row_to_slckv[i] = A_V[row_slck_count[i]]
+                            end
+                        end
                     end
                 end
             end
