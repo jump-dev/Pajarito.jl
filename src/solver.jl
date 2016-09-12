@@ -17,6 +17,7 @@ immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     disagg_soc::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
     soc_ell_one::Bool           # (Conic only) Start with disaggregated L_1 outer approximation cuts for SOCs (if disagg_soc)
     soc_ell_inf::Bool           # (Conic only) Start with disaggregated L_inf outer approximation cuts for SOCs (if disagg_soc)
+    exp_init::Bool              # (Conic only) Start with several outer approximation cuts on the exponential cones
     drop_dual_infeas::Bool      # (Conic only) Do not add cuts from dual cone infeasible dual vectors
     proj_dual_infeas::Bool      # (Conic only) Project dual cone infeasible dual vectors onto dual cone boundaries
     proj_dual_feas::Bool        # (Conic only) Project dual cone strictly feasible dual vectors onto dual cone boundaries
@@ -42,6 +43,7 @@ function PajaritoSolver(;
     disagg_soc = true,
     soc_ell_one = true,
     soc_ell_inf = true,
+    exp_init = true,
     drop_dual_infeas = false,
     proj_dual_infeas = true,
     proj_dual_feas = false,
@@ -57,14 +59,14 @@ function PajaritoSolver(;
     sdp_tol_eigval = 1e-10
     )
 
-    PajaritoSolver(log_level, mip_solver_drives, pass_mip_sols, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    PajaritoSolver(log_level, mip_solver_drives, pass_mip_sols, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
 end
 
 
 # Create Pajarito conic model: can solve with either conic algorithm or nonlinear algorithm wrapped with ConicNonlinearBridge
 function MathProgBase.ConicModel(s::PajaritoSolver)
     if applicable(MathProgBase.ConicModel, s.cont_solver)
-        return PajaritoConicModel(s.log_level, s.mip_solver_drives, s.pass_mip_sols, s.soc_in_mip, s.disagg_soc, s.soc_ell_one, s.soc_ell_inf, s.drop_dual_infeas, s.proj_dual_infeas, s.proj_dual_feas, s.mip_solver, s.cont_solver, s.timeout, s.rel_gap, s.zero_tol, s.sdp_init_soc, s.sdp_eig, s.sdp_soc, s.sdp_tol_eigvec, s.sdp_tol_eigval)
+        return PajaritoConicModel(s.log_level, s.mip_solver_drives, s.pass_mip_sols, s.soc_in_mip, s.disagg_soc, s.soc_ell_one, s.soc_ell_inf, s.exp_init, s.drop_dual_infeas, s.proj_dual_infeas, s.proj_dual_feas, s.mip_solver, s.cont_solver, s.timeout, s.rel_gap, s.zero_tol, s.sdp_init_soc, s.sdp_eig, s.sdp_soc, s.sdp_tol_eigvec, s.sdp_tol_eigval)
 
     elseif applicable(MathProgBase.NonlinearModel, s.cont_solver)
         return MathProgBase.ConicModel(ConicNonlinearBridge.ConicNLPWrapper(nlp_solver=s))
