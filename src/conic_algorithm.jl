@@ -60,11 +60,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     sdp_tol_eigvec::Float64     # (Conic SDP only) Tolerance for setting small values in SDP eigenvectors to zeros (for cut sanitation)
     sdp_tol_eigval::Float64     # (Conic SDP only) Tolerance for ignoring eigenvectors corresponding to small (positive) eigenvalues
 
-    # Internal switches
-    _soc_in_mip::Bool           # Only if using MIP solver supporting MISOCP
-    _sdp_init_soc::Bool         # Only if using MIP solver supporting MISOCP
-    _sdp_soc::Bool              # Only if using MIP solver supporting MISOCP (cannot add SOCs during MIP-driven solve)
-
     # Initial conic data
     num_var_orig::Int           # Initial number of variables
     num_con_orig::Int           # Initial number of constraints
@@ -651,7 +646,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     setupperbound(vars[1], 0.)
                 end
 
-                if m._soc_in_mip
+                if m.soc_in_mip
                     #TODO use norm, fix jump issue 784 so that warm start works
                     error("SOC in MIP is currently broken; terminating Pajarito")
                     # @constraint(model_mip, norm2{coefs[j] .* vars[j], j in 2:len} <= coefs[1] * vars[1])
@@ -730,7 +725,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 # Set up helper variables and initial SDP SOC cuts
                 # TODO rethink helper and smat variables
                 # TODO not using coefs properly
-                if m._sdp_init_soc || m._sdp_soc
+                if m.sdp_init_soc || m.sdp_soc
                     error("SOC in MIP is currently broken; terminating Pajarito")
 
                     # # Set up smat space variable array and add optional SDP initial SOC and dynamic SOC cuts
@@ -744,7 +739,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     #         smat[jSD, iSD] = help[jSD]
                     #     else
                     #         smat[jSD, iSD] = smat[iSD, jSD] = coefs[kSD] * vars[kSD]
-                    #         if m._sdp_init_soc
+                    #         if m.sdp_init_soc
                     #             # Add initial rotated SOC for off-diagonal element to enforce 2x2 principal submatrix PSDness
                     #             # TODO this won't work: not intepreted as rsoc, may need manual SOC transformation, norm maybe?
                     #             @constraint(model_mip, help[jSD] * help[iSD] >= (coefs[kSD] * vars[kSD])^2)
@@ -1208,7 +1203,7 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
 
             if size(Vdual, 2) > 0
                 # Cannot add SOC cuts during MIP solve
-                # if m._sdp_soc && !(m.mip_solver_drives && m.oa_started)
+                # if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
                 # TODO broken because of coefs
                 #     add_sdp_soc_cuts!(m, spec_summ, reshape(vars[(n_svec + 1):end], dim, dim), coefs, Vdual)
                 # else
