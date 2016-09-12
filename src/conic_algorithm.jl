@@ -43,6 +43,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     disagg_soc::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
     soc_ell_one::Bool           # (Conic only) Start with disaggregated L_1 outer approximation cuts for SOCs (if disagg_soc)
     soc_ell_inf::Bool           # (Conic only) Start with disaggregated L_inf outer approximation cuts for SOCs (if disagg_soc)
+    exp_init::Bool              # (Conic only) Start with several outer approximation cuts on the exponential cones
     drop_dual_infeas::Bool      # (Conic only) Do not add cuts from dual cone infeasible dual vectors
     proj_dual_infeas::Bool      # (Conic only) Project dual cone infeasible dual vectors onto dual cone boundaries
     proj_dual_feas::Bool        # (Conic only) Project dual cone strictly feasible dual vectors onto dual cone boundaries
@@ -123,7 +124,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cb_lazy                     # Lazy callback reference (MIP-driven only)
 
     # Model constructor
-    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         m = new()
 
         m.log_level = log_level
@@ -133,6 +134,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.disagg_soc = disagg_soc
         m.soc_ell_one = soc_ell_one
         m.soc_ell_inf = soc_ell_inf
+        m.exp_init = exp_init
         m.drop_dual_infeas = drop_dual_infeas
         m.proj_dual_infeas = proj_dual_infeas
         m.proj_dual_feas = proj_dual_feas
@@ -733,6 +735,16 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     setlowerbound(vars[3], 0.)
                 else
                     setupperbound(vars[3], 0.)
+                end
+
+                if m.exp_init
+                    # TODO maybe pick more evenly spaced linearization points
+                    # Add initial exp cuts using dual exp cone linearizations
+                    # Dual exp cone is  e * z >= -x * exp(y / x), z >= 0, x < 0
+                    # at x = -1; y = -1, -1/2, -1/5, 0, 1/5, 1/2, 1; z = exp(-y) / e = exp(-y - 1)
+                    for yval in [-1., -0.5, -0.2, 0., 0.2, 0.5, 1.]
+                        @constraint(model_mip, -coefs[1] * vars[1] + yval * coefs[1] * vars[1] + exp(-yval - 1.) * coefs[3] * vars[3] >= 0)
+                    end
                 end
 
             elseif spec == :SDP
