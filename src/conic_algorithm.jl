@@ -118,6 +118,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     best_int::Vector{Float64}   # Best feasible integer solution
     best_sub::Vector{Float64}   # Best feasible continuous solution
     slck_sub::Vector{Float64}   # Slack vector of best feasible solution
+    used_soln::Bool             # Bool for whether the current best feasible solution has already been given as a warm-start or heuristic solution
     gap_rel_opt::Float64        # Relative optimality gap = |mip_obj - best_obj|/|best_obj|
     cb_heur                     # Heuristic callback reference (MIP-driven only)
     cb_lazy                     # Lazy callback reference (MIP-driven only)
@@ -193,6 +194,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.best_obj = Inf
         m.best_int = Float64[]
         m.best_sub = Float64[]
+        m.used_soln = true
         m.status = :NotLoaded
 
         return m
@@ -666,27 +668,6 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     setupperbound(vars[1], 0.)
                 end
 
-                # # Create helper variables for absolute values of SOC variables
-                # ypi = @variable(model_mip, [j in 1:(len - 1)], lowerbound=0., basename="yp$(n_cone)SOC")
-                # yni = @variable(model_mip, [j in 1:(len - 1)], lowerbound=0., basename="yn$(n_cone)SOC")
-                # for j in 2:len
-                #     @constraint(model_mip, vars[j] == ypi[j - 1] - yni[j - 1])
-                # end
-                #
-                # # Add initial L_inf SOC cut (for now, on all y_i whether free or not)
-                # @constraint(model_mip, sqrt(len - 1) * vars[1] >= sum(ypi) + sum(yni))
-                #
-                # # Add initial L_1 SOC cuts (for now, on all y_i whether free or not)
-                # for j in 2:len
-                #     @constraint(model_mip, vars[1] >= ypi[j - 1] + yni[j - 1])
-                # end
-
-                # Add initial L_1 SOC cuts (for now, on all y_i whether free or not)
-                # for j in 2:len
-                #     @constraint(model_mip, vars[1] >= vars[j])
-                #     @constraint(model_mip, vars[1] >= -vars[j])
-                # end
-
                 if m._soc_in_mip
                     #TODO use norm, fix jump issue 784 so that warm start works
                     error("SOC in MIP is currently broken; terminating Pajarito")
@@ -987,15 +968,16 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     if m.pass_mip_sols
         # Add heuristic callback, to add best MIP feasible solution
         function callback_heur(cb)
-            tic()
-
-            # Set MIP solution to best solution
-            m.cb_heur = cb
-            set_best_soln!(m)
-            addsolution(cb)
-
-            logs[:cb_heur] += toq()
-            logs[:n_cb_heur] += 1
+            if !m.used_soln
+                # Set MIP solution to best solution
+                tic()
+                m.cb_heur = cb
+                set_best_soln!(m)
+                addsolution(cb)
+                logs[:cb_heur] += toq()
+                logs[:n_cb_heur] += 1
+                m.used_soln = true
+            end
         end
 
         addheuristiccallback(m.model_mip, callback_heur)
@@ -1117,132 +1099,13 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
             m.best_int = soln_int
             m.best_sub = MathProgBase.getsolution(model_conic)
             m.slck_sub = b_sub_int - m.A_sub_cont * m.best_sub
+            m.used_soln = false
         end
     end
 
     # Free the conic model
     if applicable(MathProgBase.freemodel!, model_conic)
         MathProgBase.freemodel!(model_conic)
-    end
-end
-
-# Construct and warm-start MIP solution using best solution
-function set_best_soln!(m::PajaritoConicModel)
-    if m.mip_solver_drives
-        for (val, var) in zip(m.best_int, m.x_mip[m.cols_int])
-            setsolutionvalue(m.cb_heur, var, val)
-        end
-        for (val, var) in zip(m.best_sub, m.x_mip[m.cols_cont])
-            setsolutionvalue(m.cb_heur, var, val)
-        end
-        for n in 1:m.num_cone_nlnr
-            set_cone_soln!(m, m.map_spec[n], m.map_dim[n], m.map_vars[n], m.map_isnew[n], m.slck_sub[m.map_rows_sub[n]])
-        end
-    else
-        for (val, var) in zip(m.best_int, m.x_mip[m.cols_int])
-            setvalue(var, val)
-        end
-        for (val, var) in zip(m.best_sub, m.x_mip[m.cols_cont])
-            setvalue(var, val)
-        end
-        for n in 1:m.num_cone_nlnr
-            set_cone_soln!(m, m.map_spec[n], m.map_dim[n], m.map_vars[n], m.map_isnew[n], m.slck_sub[m.map_rows_sub[n]])
-        end
-    end
-end
-
-# Construct and warm-start MIP solution on nonlinear cone variables
-function set_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vector{Vector{JuMP.Variable}}, isnew::Vector{Bool}, slck::Vector{Float64})
-    if m.mip_solver_drives
-        # Set MIP-added slack variable values
-        for ind in 1:dim
-            if isnew[ind]
-                setsolutionvalue(m.cb_heur, vars[1][ind], slck[ind])
-            end
-        end
-
-        # Set disaggregated variable values
-        if (spec == :SOC) && m.disagg_soc && (dim > 2)
-            if slck[1] == 0.
-                for var in vars[2]
-                    setsolutionvalue(m.cb_heur, var, 0.)
-                end
-            else
-                for (ind, var) in enumerate(vars[2])
-                    setsolutionvalue(m.cb_heur, var, (slck[(ind + 1)]^2 / slck[1]))
-                end
-            end
-        end
-    else
-        # Set MIP-added slack variable values
-        for ind in 1:dim
-            if isnew[ind]
-                setvalue(vars[1][ind], slck[ind])
-            end
-        end
-
-        # Set disaggregated variable values
-        if (spec == :SOC) && m.disagg_soc && (dim > 2)
-            if slck[1] == 0.
-                for var in vars[2]
-                    setvalue(var, 0.)
-                end
-            else
-                for (ind, var) in enumerate(vars[2])
-                    setvalue(var, (slck[(ind + 1)]^2 / slck[1]))
-                end
-            end
-        end
-    end
-end
-
-# Reset all summary values for all cones in preparation for next iteration
-function reset_cone_summary!(m::PajaritoConicModel)
-    if m.log_level > 1
-        for spec_summ in values(m.summary)
-            spec_summ[:outer_max_n] = 0
-            spec_summ[:outer_max] = 0.
-            spec_summ[:outer_min_n] = 0
-            spec_summ[:outer_min] = 0.
-            spec_summ[:dual_max_n] = 0
-            spec_summ[:dual_max] = 0.
-            spec_summ[:dual_min_n] = 0
-            spec_summ[:dual_min] = 0.
-            spec_summ[:cut_max_n] = 0
-            spec_summ[:cut_max] = 0.
-            spec_summ[:cut_min_n] = 0
-            spec_summ[:cut_min] = 0.
-        end
-    end
-end
-
-# Calculate outer approximation infeasibilities for all nonlinear cones
-function calc_inf_outer!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
-    if m.log_level > 1
-        tic()
-        for n in 1:m.num_cone_nlnr
-            spec = m.map_spec[n]
-            soln = m.map_coefs[n] .* getvalue(m.map_vars[n][1])
-
-            if spec == :SOC
-                inf_outer = sumabs2(soln[2:end]) - soln[1]^2
-
-            elseif spec == :ExpPrimal
-                inf_outer = soln[2] * exp(soln[1] / soln[2]) - soln[3]
-
-            elseif spec == :SDP
-                inf_outer = -eigmin(make_smat(soln))
-            end
-
-            if inf_outer > 0.
-                m.summary[spec][:outer_max_n] += 1
-                m.summary[spec][:outer_max] = max(inf_outer, m.summary[spec][:outer_max])
-            elseif inf_outer < 0.
-                m.summary[spec][:outer_min_n] += 1
-                m.summary[spec][:outer_min] = max(-inf_outer, m.summary[spec][:outer_min])
-            end
-        end
-        logs[:outer_inf] += toq()
     end
 end
 
@@ -1432,6 +1295,126 @@ end
 #=========================================================
  Algorithm utilities
 =========================================================#
+
+# Construct and warm-start MIP solution using best solution
+function set_best_soln!(m::PajaritoConicModel)
+    if m.mip_solver_drives
+        for (val, var) in zip(m.best_int, m.x_mip[m.cols_int])
+            setsolutionvalue(m.cb_heur, var, val)
+        end
+        for (val, var) in zip(m.best_sub, m.x_mip[m.cols_cont])
+            setsolutionvalue(m.cb_heur, var, val)
+        end
+        for n in 1:m.num_cone_nlnr
+            set_cone_soln!(m, m.map_spec[n], m.map_dim[n], m.map_vars[n], m.map_isnew[n], m.slck_sub[m.map_rows_sub[n]])
+        end
+    else
+        for (val, var) in zip(m.best_int, m.x_mip[m.cols_int])
+            setvalue(var, val)
+        end
+        for (val, var) in zip(m.best_sub, m.x_mip[m.cols_cont])
+            setvalue(var, val)
+        end
+        for n in 1:m.num_cone_nlnr
+            set_cone_soln!(m, m.map_spec[n], m.map_dim[n], m.map_vars[n], m.map_isnew[n], m.slck_sub[m.map_rows_sub[n]])
+        end
+    end
+end
+
+# Construct and warm-start MIP solution on nonlinear cone variables
+function set_cone_soln!(m::PajaritoConicModel, spec::Symbol, dim::Int, vars::Vector{Vector{JuMP.Variable}}, isnew::Vector{Bool}, slck::Vector{Float64})
+    if m.mip_solver_drives
+        # Set MIP-added slack variable values
+        for ind in 1:dim
+            if isnew[ind]
+                setsolutionvalue(m.cb_heur, vars[1][ind], slck[ind])
+            end
+        end
+
+        # Set disaggregated variable values
+        if (spec == :SOC) && m.disagg_soc && (dim > 2)
+            if slck[1] == 0.
+                for var in vars[2]
+                    setsolutionvalue(m.cb_heur, var, 0.)
+                end
+            else
+                for (ind, var) in enumerate(vars[2])
+                    setsolutionvalue(m.cb_heur, var, (slck[(ind + 1)]^2 / slck[1]))
+                end
+            end
+        end
+    else
+        # Set MIP-added slack variable values
+        for ind in 1:dim
+            if isnew[ind]
+                setvalue(vars[1][ind], slck[ind])
+            end
+        end
+
+        # Set disaggregated variable values
+        if (spec == :SOC) && m.disagg_soc && (dim > 2)
+            if slck[1] == 0.
+                for var in vars[2]
+                    setvalue(var, 0.)
+                end
+            else
+                for (ind, var) in enumerate(vars[2])
+                    setvalue(var, (slck[(ind + 1)]^2 / slck[1]))
+                end
+            end
+        end
+    end
+end
+
+# Reset all summary values for all cones in preparation for next iteration
+function reset_cone_summary!(m::PajaritoConicModel)
+    if m.log_level > 1
+        for spec_summ in values(m.summary)
+            spec_summ[:outer_max_n] = 0
+            spec_summ[:outer_max] = 0.
+            spec_summ[:outer_min_n] = 0
+            spec_summ[:outer_min] = 0.
+            spec_summ[:dual_max_n] = 0
+            spec_summ[:dual_max] = 0.
+            spec_summ[:dual_min_n] = 0
+            spec_summ[:dual_min] = 0.
+            spec_summ[:cut_max_n] = 0
+            spec_summ[:cut_max] = 0.
+            spec_summ[:cut_min_n] = 0
+            spec_summ[:cut_min] = 0.
+        end
+    end
+end
+
+# Calculate outer approximation infeasibilities for all nonlinear cones
+function calc_inf_outer!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
+    if m.log_level > 1
+        tic()
+        for n in 1:m.num_cone_nlnr
+            spec = m.map_spec[n]
+            soln = m.map_coefs[n] .* getvalue(m.map_vars[n][1])
+
+            if spec == :SOC
+                inf_outer = sumabs2(soln[2:end]) - soln[1]^2
+
+            elseif spec == :ExpPrimal
+                inf_outer = soln[2] * exp(soln[1] / soln[2]) - soln[3]
+
+            elseif spec == :SDP
+                inf_outer = -eigmin(make_smat(soln))
+            end
+
+            if inf_outer > 0.
+                m.summary[spec][:outer_max_n] += 1
+                m.summary[spec][:outer_max] = max(inf_outer, m.summary[spec][:outer_max])
+            elseif inf_outer < 0.
+                m.summary[spec][:outer_min_n] += 1
+                m.summary[spec][:outer_min] = max(-inf_outer, m.summary[spec][:outer_min])
+            end
+        end
+        logs[:outer_inf] += toq()
+    end
+end
 
 # Transform an svec form into an smat form
 function make_smat(svec::Vector{Float64})
