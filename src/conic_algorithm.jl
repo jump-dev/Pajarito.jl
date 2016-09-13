@@ -15,22 +15,18 @@ http://mathprogbasejl.readthedocs.org/en/latest/conic.html
 
 TODO issues
 - MPB issue - can't call supportedcones on defaultConicsolver
-- use option for slack tolerance upper/lower
-- maybe should throw errors if options can't be satisfied, rather than defaulting to available methods
 - maybe let subopt mip solve time be calculated as a fraction of most recent full mip solve time
 
 TODO features
 - for warm-start pajarito, use set_best_soln!
-- if initial conic solve gives feasible integer solution, return immediately
-- replace "for i in 1:..."
-- want to be able to query logs information etc
-- have option to only add violated cuts (especially for SDP, where each SOC cut slows down mip and we have many SOC cuts)
+- query logs information etc
+- option to only add violated cuts (especially for SDP, where each SOC cut slows down mip and we have many SOC cuts)
 - print cone info to one file and gap info to another file
 - what to do if experience conic problem (apparent) strong duality failure? could use a no-good cut on that integer solution and proceed, but that could cut off optimal sol?
 
 TODO SDP
+- fix soc in mip: if using SOC in mip, can only detect slacks with coef -1 (or sqrt(2)?)
 - currently all SDP sanitized eigvecs have norm 1, but may want to multiply V by say 100 (or perhaps largest eigenvalue) before removing zeros, to get more significant digits
-- if using SOC in mip, can only detect slacks with coef -1 (or sqrt(2)?)
 =========================================================#
 
 using JuMP
@@ -47,13 +43,14 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     soc_ell_one::Bool           # (Conic only) Start with disaggregated L_1 outer approximation cuts for SOCs (if disagg_soc)
     soc_ell_inf::Bool           # (Conic only) Start with disaggregated L_inf outer approximation cuts for SOCs (if disagg_soc)
     exp_init::Bool              # (Conic only) Start with several outer approximation cuts on the exponential cones
-    drop_dual_infeas::Bool      # (Conic only) Do not add cuts from dual cone infeasible dual vectors
     proj_dual_infeas::Bool      # (Conic only) Project dual cone infeasible dual vectors onto dual cone boundaries
     proj_dual_feas::Bool        # (Conic only) Project dual cone strictly feasible dual vectors onto dual cone boundaries
     mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver (MILP or MISOCP)
     cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver (conic or nonlinear)
     timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
     rel_gap::Float64            # Relative optimality gap termination condition
+    detect_slacks::Bool         # (Conic only) Use automatic slack variable detection for cuts (may reduce number of variables in MIP)
+    slack_tol_order::Float64    # (Conic only) Order of magnitude tolerance for abs of coefficient on auto-detected slack variables (negative: -1 only, zero: -1 or 1, positive: order of magnitude)
     zero_tol::Float64           # (Conic only) Tolerance for setting small absolute values in duals to zeros
     sdp_init_lin::Bool          # (Conic SDP only) Use SDP initial linear cuts
     sdp_init_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
@@ -61,11 +58,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     sdp_soc::Bool               # (Conic SDP only) Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
     sdp_tol_eigvec::Float64     # (Conic SDP only) Tolerance for setting small values in SDP eigenvectors to zeros (for cut sanitation)
     sdp_tol_eigval::Float64     # (Conic SDP only) Tolerance for ignoring eigenvectors corresponding to small (positive) eigenvalues
-
-    # Internal switches
-    _soc_in_mip::Bool           # Only if using MIP solver supporting MISOCP
-    _sdp_init_soc::Bool         # Only if using MIP solver supporting MISOCP
-    _sdp_soc::Bool              # Only if using MIP solver supporting MISOCP (cannot add SOCs during MIP-driven solve)
 
     # Initial conic data
     num_var_orig::Int           # Initial number of variables
@@ -128,7 +120,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cb_lazy                     # Lazy callback reference (MIP-driven only)
 
     # Model constructor
-    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, mip_subopt_count, mip_subopt_time, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, drop_dual_infeas, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, mip_subopt_count, mip_subopt_time, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         m = new()
 
         m.log_level = log_level
@@ -141,13 +133,14 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.soc_ell_one = soc_ell_one
         m.soc_ell_inf = soc_ell_inf
         m.exp_init = exp_init
-        m.drop_dual_infeas = drop_dual_infeas
         m.proj_dual_infeas = proj_dual_infeas
         m.proj_dual_feas = proj_dual_feas
         m.mip_solver = mip_solver
         m.cont_solver = cont_solver
         m.timeout = timeout
         m.rel_gap = rel_gap
+        m.detect_slacks = detect_slacks
+        m.slack_tol_order = slack_tol_order
         m.zero_tol = zero_tol
         m.sdp_init_lin = sdp_init_lin
         m.sdp_init_soc = sdp_init_soc
@@ -156,51 +149,30 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.sdp_tol_eigvec = sdp_tol_eigvec
         m.sdp_tol_eigval = sdp_tol_eigval
 
-        @printf "\n\n"
-
         # If using suboptimal MIP solves in iterative alg, check that solver allows time limit
         if m.mip_subopt_count > 0
             if !applicable(MathProgBase.setparameters!, m.mip_solver)
-                error("MIP solver specified does not support time limits for suboptimal solves")
+                error("MIP solver specified does not support time limits for suboptimal solves\n")
             end
-            if m.mip_subopt_time < 2.
-                error("MIP solver needs more time for suboptimal solves")
+            if m.mip_subopt_time < 5.
+                error("MIP solver needs more time for suboptimal solves\n")
             end
         end
 
-        # Determine whether to use MISOCP outer approximation MIP
-        if m.soc_in_mip
+        # If using MISOCP outer approximation, check MIP solver handles MISOCP
+        if m.soc_in_mip || m.sdp_init_soc || m.sdp_soc
             mip_spec = MathProgBase.supportedcones(m.mip_solver)
-            if ((:SOC in mip_spec) && (:SOCRotated in mip_spec))
-                m._soc_in_mip = true
-            else
-                warn("MIP solver specified does not support MISOCP; defaulting to MILP outer approximation model\n")
-                m._soc_in_mip = false
+            if !(:SOC in mip_spec)
+                error("MIP solver specified does not support MISOCP\n")
             end
-        else
-            m._soc_in_mip = false
         end
 
-        # Determine which SOC cuts to use for SDPs
-        if m._soc_in_mip
-            m._sdp_init_soc = m.sdp_init_soc
-            if m.sdp_soc
-                if m.mip_solver_drives
-                    warn("Rotated-SOC cuts for SDP cones cannot be added during the MIP-solver-driven algorithm, but will be used for initial cuts\n")
-                end
-                m._sdp_soc = true
-            end
-        else
-            m._sdp_init_soc = false
-            m._sdp_soc = false
+        # Warnings
+        if m.sdp_soc && m.mip_solver_drives
+            warn("SOC cuts for SDP cones cannot be added during the MIP-solver-driven algorithm, but initial SOC cuts may be used\n")
         end
-
         if m.mip_solver_drives
             warn("For the MIP-solver-driven algorithm, optimality tolerance must be specified as MIP solver option, not Pajarito option\n")
-        end
-
-        if m.drop_dual_infeas && m.proj_dual_infeas
-            warn("Cannot both drop and project dual cone infeasible cuts; defaulting to keeping and projecting\n")
         end
 
         # Initialize data
@@ -519,7 +491,7 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     A_new = sparse(A_I, A_J, A_V, num_con_new, num_var_new)
     (A_I, A_J, A_V) = findnz(A_new)
 
-    # Detect existing slack variables in nonlinear cone rows with b=0, corresponding to isolated row nonzeros equal to -1
+    # Set up for detecting existing slack variables in nonlinear cone rows with b=0, corresponding to isolated row nonzeros
     row_slck_count = zeros(Int, num_con_new)
     for (ind, i) in enumerate(A_I)
         if (b_new[i] == 0.) && (A_V[ind] != 0.)
@@ -533,9 +505,6 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
     row_to_slckj = Dict{Int,Int}()
     row_to_slckv = Dict{Int,Float64}()
-
-    slack_tol = 0.1 # TODO maybe make this an option; may also want upper bound
-
     summary = Dict{Symbol,Dict{Symbol,Real}}()
     num_cone_nlnr = 0
 
@@ -555,13 +524,37 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 end
             end
 
-            # Use a tolerance for abs of the coefficient; if too small, cannot use as a slack variable
-            for i in rows
-                if row_slck_count[i] > 0
-                    if abs(A_V[row_slck_count[i]]) > slack_tol
-                    # if A_V[row_slck_count[i]] == -1.
-                        row_to_slckj[i] = A_J[row_slck_count[i]]
-                        row_to_slckv[i] = A_V[row_slck_count[i]]
+            # If option to detect slacks is true, auto-detect slacks depending on order of magnitude tolerance for abs of the coefficient
+            if m.detect_slacks
+                if m.slack_tol_order < 0.
+                    # Negative slack tol order means only choose -1 coefficients
+                    for i in rows
+                        if row_slck_count[i] > 0
+                            if A_V[row_slck_count[i]] == -1.
+                                row_to_slckj[i] = A_J[row_slck_count[i]]
+                                row_to_slckv[i] = A_V[row_slck_count[i]]
+                            end
+                        end
+                    end
+                elseif m.slack_tol_order == 0.
+                    # Zero slack tol order means only choose -1, +1 coefficients
+                    for i in rows
+                        if row_slck_count[i] > 0
+                            if abs(A_V[row_slck_count[i]]) == 1.
+                                row_to_slckj[i] = A_J[row_slck_count[i]]
+                                row_to_slckv[i] = A_V[row_slck_count[i]]
+                            end
+                        end
+                    end
+                else
+                    # Positive slack tol order means choose coefficients with abs in order of magnitude range
+                    for i in rows
+                        if row_slck_count[i] > 0
+                            if abs(log10(abs(A_V[row_slck_count[i]]))) <= m.slack_tol_order
+                                row_to_slckj[i] = A_J[row_slck_count[i]]
+                                row_to_slckv[i] = A_V[row_slck_count[i]]
+                            end
+                        end
                     end
                 end
             end
@@ -675,7 +668,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     setupperbound(vars[1], 0.)
                 end
 
-                if m._soc_in_mip
+                if m.soc_in_mip
                     #TODO use norm, fix jump issue 784 so that warm start works
                     error("SOC in MIP is currently broken; terminating Pajarito")
                     # @constraint(model_mip, norm2{coefs[j] .* vars[j], j in 2:len} <= coefs[1] * vars[1])
@@ -754,7 +747,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 # Set up helper variables and initial SDP SOC cuts
                 # TODO rethink helper and smat variables
                 # TODO not using coefs properly
-                if m._sdp_init_soc || m._sdp_soc
+                if m.sdp_init_soc || m.sdp_soc
                     error("SOC in MIP is currently broken; terminating Pajarito")
 
                     # # Set up smat space variable array and add optional SDP initial SOC and dynamic SOC cuts
@@ -768,7 +761,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     #         smat[jSD, iSD] = help[jSD]
                     #     else
                     #         smat[jSD, iSD] = smat[iSD, jSD] = coefs[kSD] * vars[kSD]
-                    #         if m._sdp_init_soc
+                    #         if m.sdp_init_soc
                     #             # Add initial rotated SOC for off-diagonal element to enforce 2x2 principal submatrix PSDness
                     #             # TODO this won't work: not intepreted as rsoc, may need manual SOC transformation, norm maybe?
                     #             @constraint(model_mip, help[jSD] * help[iSD] >= (coefs[kSD] * vars[kSD])^2)
@@ -1174,54 +1167,52 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
     if spec == :SOC
         inf_dual = sumabs2(dual[2:end]) - dual[1]^2
 
-        if (dual[1] > 0.) && (!m.drop_dual_infeas || (inf_dual <= 0.))
+        if dual[1] > 0.
+            # Project dual if infeasible and proj_dual_infeas or if strictly feasible and proj_dual_feas
             if ((inf_dual > 0.) && m.proj_dual_infeas) || ((inf_dual < 0.) && m.proj_dual_feas)
-                # Epigraph variable equals norm
+                # Project: epigraph variable equals norm
                 dual = vcat(norm(dual[2:end]), dual[2:end])
             end
 
-            if m.disagg_soc && (length(dual) > 2)
-                # Disaggregated cuts
+            if m.disagg_soc && (dim > 2)
+                # Add disaggregated cuts
                 for ind in 2:dim
                     add_linear_cut!(m, spec_summ, [(coefs[1] * vars[1][1]), vars[2][ind - 1], (coefs[ind] * vars[1][ind])], [(dual[ind] / dual[1])^2, 1., (2 * dual[ind] / dual[1])])
                 end
             else
-                # Nondisaggregated cuts
+                # Add nondisaggregated cut
                 add_linear_cut!(m, spec_summ, (coefs .* vars[1]), dual)
             end
         end
 
     elseif spec == :ExpPrimal
-        # Do not add cuts for dual[1] >= 0 because these simply enforce the nonnegativity of x[2] and x[3] in ExpPrimal
-        # Do not add cuts for dual[3] < 0 because can't project onto dual[3] = 0
         if dual[1] == 0.
+            # Do not add cuts for dual[1] >= 0 because these simply enforce the nonnegativity of x[2] and x[3] in ExpPrimal
             if (dual[2] >= 0.) && (dual[3] >= 0.)
                 inf_dual = -max(dual[2], dual[3])
             elseif (dual[2] < 0.) || (dual[3] < 0.)
                 inf_dual = max(-dual[2], -dual[3])
             end
-
         elseif dual[1] > 0.
             inf_dual = dual[1]
-
         elseif dual[3] < 0.
+            # Do not add cuts for dual[3] < 0 because can't project onto dual[3] = 0
             inf_dual = -dual[3]
-
         else
             inf_dual = -dual[1] * exp(dual[2] / dual[1]) - e * dual[3]
 
-            if !m.drop_dual_infeas || (inf_dual <= 0.)
-                if ((inf_dual > 0.) && m.proj_dual_infeas) || ((inf_dual < 0.) && m.proj_dual_feas)
-                    # Epigraph variable equals LHS
-                    dual = vcat(dual[1], dual[2], (-dual[1] * exp(dual[2] / dual[1])) / e)
-                end
-
-                add_linear_cut!(m, spec_summ, (coefs .* vars[1]), dual)
+            # Project dual if infeasible and proj_dual_infeas or if strictly feasible and proj_dual_feas
+            if ((inf_dual > 0.) && m.proj_dual_infeas) || ((inf_dual < 0.) && m.proj_dual_feas)
+                # Project: epigraph variable equals LHS
+                dual = vcat(dual[1], dual[2], (-dual[1] * exp(dual[2] / dual[1])) / e)
             end
+
+            # Add cut
+            add_linear_cut!(m, spec_summ, (coefs .* vars[1]), dual)
         end
 
     elseif spec == :SDP
-        # Get eigendecomposition
+        # Get eigendecomposition of smat space dual
         (eigvals_dual, eigvecs_dual) = eig(make_smat(dual))
         inf_dual = -minimum(eigvals_dual)
         n_svec = dim * (dim + 1) / 2
@@ -1234,7 +1225,7 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
 
             if size(Vdual, 2) > 0
                 # Cannot add SOC cuts during MIP solve
-                # if m._sdp_soc && !(m.mip_solver_drives && m.oa_started)
+                # if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
                 # TODO broken because of coefs
                 #     add_sdp_soc_cuts!(m, spec_summ, reshape(vars[(n_svec + 1):end], dim, dim), coefs, Vdual)
                 # else
@@ -1245,7 +1236,7 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
                 # end
             end
 
-        elseif any(eigvals_dual .>= 0.) && (!m.drop_dual_infeas || (inf_dual <= 0.))
+        elseif any(eigvals_dual .>= 0.)
             if (inf_dual > 0.) && m.proj_dual_infeas
                 # Project by taking sum of nonnegative eigenvalues times outer products of corresponding eigenvectors
                 eigvals_dual[eigvals_dual .<= 0.] = 0.
