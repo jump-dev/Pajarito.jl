@@ -18,7 +18,7 @@ TODO issues
 - maybe let subopt mip solve time be calculated as a fraction of most recent full mip solve time
 
 TODO features
-- for warm-start pajarito, use set_best_soln!
+- implement warm-start pajarito: use set_best_soln!
 - query logs information etc
 - option to only add violated cuts (especially for SDP, where each SOC cut slows down mip and we have many SOC cuts)
 - print cone info to one file and gap info to another file
@@ -301,15 +301,16 @@ end
 
 # Store warm-start vector on original variables in Pajarito model
 function MathProgBase.setwarmstart!(m::PajaritoConicModel, var_start::Vector{Real})
-    # Check if vector can be loaded
-    if m.status != :Loaded
-        error("Must specify warm start right after loading problem\n")
-    end
-    if length(var_start) != m.num_var_orig
-        error("Warm start vector length ($(length(var_start))) does not match number of variables ($(m.num_var_orig))\n")
-    end
-
-    m.var_start = var_start
+    error("Warm-starts are not currently implemented in Pajarito; please submit an issue\n")
+    # # Check if vector can be loaded
+    # if m.status != :Loaded
+    #     error("Must specify warm start right after loading problem\n")
+    # end
+    # if length(var_start) != m.num_var_orig
+    #     error("Warm start vector length ($(length(var_start))) does not match number of variables ($(m.num_var_orig))\n")
+    # end
+    #
+    # m.var_start = var_start
 end
 
 # Store variable type vector on original variables in Pajarito model
