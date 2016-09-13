@@ -35,9 +35,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     mip_solver_drives::Bool     # Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
     pass_mip_sols::Bool         # (Conic only) Give best feasible solutions constructed from conic subproblem solution to MIP
     mip_subopt_count::Int       # (Conic only) Number of times to solve MIP suboptimally with time limit between zero gap solves
-    mip_subopt_time::Float64    # (Conic only) Time limit for suboptimal MIP solves (in seconds) as absolute time (mip_subopt_frac must be 0)
-    mip_subopt_frac::Float64    # (Conic only) Time limit for suboptimal MIP solves as fraction of last full MIP solve time (mip_subopt_time must be 0)
-    cbc_subopt_gap::Float64     # (Conic only) For CBC MIP solver only: optimality gap tolerance for suboptimal MIP solves (mip_subopt_frac and mip_subopt_time must be 0)
+    mip_subopt_solver::MathProgBase.AbstractMathProgSolver # MIP solver for suboptimal solves, with appropriate options (gap or timeout) specified directly
     soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
     disagg_soc::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
     soc_ell_one::Bool           # (Conic only) Start with disaggregated L_1 outer approximation cuts for SOCs (if disagg_soc)
@@ -120,16 +118,14 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cb_lazy                     # Lazy callback reference (MIP-driven only)
 
     # Model constructor
-    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, mip_subopt_count, mip_subopt_time, mip_subopt_frac, cbc_subopt_gap, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         m = new()
 
         m.log_level = log_level
         m.mip_solver_drives = mip_solver_drives
         m.pass_mip_sols = pass_mip_sols
         m.mip_subopt_count = mip_subopt_count
-        m.mip_subopt_time = mip_subopt_time
-        m.mip_subopt_frac = mip_subopt_frac
-        m.cbc_subopt_gap = cbc_subopt_gap
+        m.mip_subopt_solver = mip_subopt_solver
         m.soc_in_mip = soc_in_mip
         m.disagg_soc = disagg_soc
         m.soc_ell_one = soc_ell_one
@@ -150,28 +146,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.sdp_soc = sdp_soc
         m.sdp_tol_eigvec = sdp_tol_eigvec
         m.sdp_tol_eigval = sdp_tol_eigval
-
-        # If using suboptimal MIP solves in iterative alg, check options are consistent
-        if m.mip_subopt_count > 0
-            if !applicable(MathProgBase.setparameters!, m.mip_solver)
-                error("MIP solver specified does not support time limits for suboptimal solves\n")
-            end
-            if (m.mip_subopt_time != 0.) && (m.mip_subopt_frac != 0.)
-                error("Must choose either MIP suboptimal time or fraction: both cannot be positive\n")
-            end
-            if (m.mip_subopt_time > 0.) && (m.mip_subopt_time < 5.)
-                error("MIP solver needs more time for suboptimal solves\n")
-            end
-            if (m.mip_subopt_frac > 1.) || (m.mip_subopt_frac < 0.)
-                error("MIP suboptimal fraction must be between 0 and 1\n")
-            end
-            if (m.mip_subopt_time >= m.timeout) || (m.mip_subopt_time < 0.)
-                error("MIP suboptimal time limit but be smaller than overall Pajarito timeout\n")
-            end
-            if (m.cbc_subopt_gap > 0.) && !isa(m.mip_solver, Cbc.CbcSolver)
-                error("If specifying CBC suboptimal solve gap tolerance, must use CBC solver as MIP solver\n")
-            end
-        end
 
         # If using MISOCP outer approximation, check MIP solver handles MISOCP
         if m.soc_in_mip || m.sdp_init_soc || m.sdp_soc
@@ -894,58 +868,27 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     if m.log_level > 0
         @printf "\nStarting iterative outer approximation algorithm:\n"
     end
-    if applicable(MathProgBase.setparameters!, m.mip_solver)
-        MathProgBase.setparameters!(m.mip_solver, Silent=(m.log_level <= 1), TimeLimit=(m.timeout - (time() - logs[:total])))
-    end
+
     count_early = m.mip_subopt_count
-    mip_full_time = NaN
     soln_int_set = Set{Vector{Float64}}()
 
     while true
         if count_early < m.mip_subopt_count
-            if isnan(mip_full_time)
-                # First MIP solve must not have been optimal
-                warn("Initial MIP solve was not optimal: aborting iterative algorithm\n")
-                m.status = :MIPFailure
-                break
-            end
-
-            # If solve is to be a suboptimal MIP solve, set appropriate MIP termination criterion
-            if m.cbc_subopt_gap > 0.
-                # Set CBC gap tolerance
-                setsolver(m.model_mip, m.mip_solver(ratioGap=m.cbc_subopt_gap))
-            elseif m.mip_subopt_frac > 0.
-                # Set time limit as fraction of last full MIP solve time
-                if applicable(MathProgBase.setparameters!, m.mip_solver)
-                    MathProgBase.setparameters!(m.mip_solver, TimeLimit=min((m.timeout - (time() - logs[:total])), (m.mip_subopt_frac * mip_full_time)))
-                    setsolver(m.model_mip, m.mip_solver)
-                end
-            else
-                # Set time limit as absolute time for subopt solves
-                if applicable(MathProgBase.setparameters!, m.mip_solver)
-                    MathProgBase.setparameters!(m.mip_solver, TimeLimit=min((m.timeout - (time() - logs[:total])), m.mip_subopt_time))
-                    setsolver(m.model_mip, m.mip_solver)
-                end
-            end
+            # Solve is a suboptimal solve: use subopt MIP solver
+            # For now, don't set time limit: trust that user has provided reasonably small time limit
+            setsolver(m.model_mip, m.mip_subopt_solver)
         else
-            # If solve is to be a full MIP solve, set appropriate MIP termination criterion
-            if m.cbc_subopt_gap > 0.
-                # Set CBC gap tolerance
-                setsolver(m.model_mip, m.mip_solver(ratioGap=0.))
-            else
-                # Set time limit as remaining time
-                if applicable(MathProgBase.setparameters!, m.mip_solver)
-                    MathProgBase.setparameters!(m.mip_solver, TimeLimit=(m.timeout - (time() - logs[:total])))
-                    setsolver(m.model_mip, m.mip_solver)
-                end
+            # Solve is a full solve: use full MIP solver with remaining time limit
+            if applicable(MathProgBase.setparameters!, m.mip_solver)
+                MathProgBase.setparameters!(m.mip_solver, TimeLimit=(m.timeout - (time() - logs[:total])))
             end
+            setsolver(m.model_mip, m.mip_solver)
         end
 
         # Solve MIP
         tic()
         status_mip = solve(m.model_mip)
-        mip_time = toq()
-        logs[:mip_solve] += mip_time
+        logs[:mip_solve] += toq()
 
         if status_mip in (:Infeasible, :InfeasibleOrUnbounded)
             # Stop if infeasible
@@ -969,7 +912,6 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             # MIP is optimal, so it gives best OA bound; reset early MIP solve count
             m.mip_obj = getobjectivevalue(m.model_mip)
             count_early = 0
-            mip_full_time = mip_time
         else
             warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue): aborting iterative algorithm\n")
             m.status = :MIPFailure
@@ -988,7 +930,6 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             break
         end
         if soln_int in soln_int_set
-            # Solution has repeated
             if count_early > 0
                 # Solve was suboptimal: don't call subproblem, run MIP to optimality next iteration
                 count_early = m.mip_subopt_count
@@ -1086,7 +1027,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     # Start MIP solver
     logs[:mip_solve] = time()
     if applicable(MathProgBase.setparameters!, m.mip_solver)
-        MathProgBase.setparameters!(m.mip_solver, Silent=(m.log_level <= 1), TimeLimit=(m.timeout - (time() - logs[:total])))
+        MathProgBase.setparameters!(m.mip_solver, TimeLimit=(m.timeout - (time() - logs[:total])))
         setsolver(m.model_mip, m.mip_solver)
     end
     logs[:mip_solve] = time() - logs[:mip_solve]
