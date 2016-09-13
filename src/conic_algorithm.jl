@@ -147,11 +147,16 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.sdp_tol_eigvec = sdp_tol_eigvec
         m.sdp_tol_eigval = sdp_tol_eigval
 
+        # Check if can perform MIP-solver-driven algorithm
+        if m.mip_solver_drives && !applicable(MathProgBase.setlazycallback!, m.mip_solver)
+            error("The MIP solver specified does not support lazy callbacks: cannot perform MIP-solver-driven algorithm\n")
+        end
+
         # If using MISOCP outer approximation, check MIP solver handles MISOCP
         if m.soc_in_mip || m.sdp_init_soc || m.sdp_soc
             mip_spec = MathProgBase.supportedcones(m.mip_solver)
             if !(:SOC in mip_spec)
-                error("MIP solver specified does not support MISOCP\n")
+                error("The MIP solver specified does not support MISOCP\n")
             end
         end
 
