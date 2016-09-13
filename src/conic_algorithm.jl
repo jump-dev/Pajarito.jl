@@ -19,10 +19,9 @@ TODO issues
 
 TODO features
 - implement warm-start pajarito: use set_best_soln!
-- query logs information etc
 - option to only add violated cuts (especially for SDP, where each SOC cut slows down mip and we have many SOC cuts)
+- query logs information etc
 - print cone info to one file and gap info to another file
-- what to do if experience conic problem (apparent) strong duality failure? could use a no-good cut on that integer solution and proceed, but that could cut off optimal sol?
 
 TODO SDP
 - fix soc in mip: if using SOC in mip, can only detect slacks with coef -1 (or sqrt(2)?)
@@ -301,7 +300,7 @@ end
 
 # Store warm-start vector on original variables in Pajarito model
 function MathProgBase.setwarmstart!(m::PajaritoConicModel, var_start::Vector{Real})
-    error("Warm-starts are not currently implemented in Pajarito; please submit an issue\n")
+    error("Warm-starts are not currently implemented in Pajarito (submit an issue)\n")
     # # Check if vector can be loaded
     # if m.status != :Loaded
     #     error("Must specify warm start right after loading problem\n")
@@ -611,7 +610,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 setname(x_mip[j], "v$(j)")
             end
         elseif spec == :Zero
-            error("Decide what to do with zero cone variables") #TODO remove
+            error("Bug: Zero cones should have been removed by transform data function (submit an issue)\n")
         end
     end
 
@@ -671,7 +670,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
                 if m.soc_in_mip
                     #TODO use norm, fix jump issue 784 so that warm start works
-                    error("SOC in MIP is currently broken; terminating Pajarito")
+                    error("SOC in MIP option is currently broken\n")
                     # @constraint(model_mip, norm2{coefs[j] .* vars[j], j in 2:len} <= coefs[1] * vars[1])
 
                 elseif m.disagg_soc && (len > 2)
@@ -749,7 +748,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 # TODO rethink helper and smat variables
                 # TODO not using coefs properly
                 if m.sdp_init_soc || m.sdp_soc
-                    error("SOC in MIP is currently broken; terminating Pajarito")
+                    error("SOC in MIP is currently broken\n")
 
                     # # Set up smat space variable array and add optional SDP initial SOC and dynamic SOC cuts
                     # help = @variable(model_mip, [j in 1:nSD], lowerbound=0., basename="h$(n_cone)SDhelp")
@@ -908,7 +907,8 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             break
         elseif status_mip == :Unbounded
             # Stop if unbounded (initial conic relax solve should detect this)
-            error("MIP solver returned status $status_mip, which could indicate that the cuts added were too weak\n")
+            warn("MIP solver returned status $status_mip, which could indicate that the initial dual cuts added were too weak: aborting iterative algorithm\n")
+            m.status = :MIPFailure
         elseif status_mip == :UserLimit
             # MIP stopped early, so check if OA bound is higher than current best bound; increment early mip solve count
             if applicable(MathProgBase.getobjbound, m.model_mip)
@@ -923,7 +923,8 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             m.mip_obj = getobjectivevalue(m.model_mip)
             count_early = 0
         else
-            error("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue on GitHub)\n")
+            warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue): aborting iterative algorithm\n")
+            m.status = :MIPFailure
         end
 
         # Reset cones summary values and calculate outer infeasibility of MIP solution
@@ -933,7 +934,8 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         # Check if integer solution has been seen before
         soln_int = getvalue(m.x_mip[m.cols_int])
         if any(isnan, soln_int)
-            error("MIP solution vector has NaN values; terminating Pajarito\n")
+            warn("MIP solution vector has NaN values: aborting iterative algorithm\n")
+            m.status = :MIPFailure
         end
         if soln_int in soln_int_set
             # Solution has repeated
@@ -946,15 +948,19 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 if m.gap_rel_opt < m.rel_gap
                     m.status = :Optimal
                 else
-                    warn("Mixed-integer solutions are cycling; terminating Pajarito\n")
+                    warn("Mixed-integer solutions are cycling before convergence tolerance is reached: aborting iterative algorithm\n")
                     m.status = :Suboptimal
                 end
                 break
             end
         else
-            # Solution is new: save it in the set, solve conic subproblem to add cuts to MIP and update best feasible solution
+            # Solution is new: save it in the set
             push!(soln_int_set, soln_int)
-            process_conic!(m, soln_int, logs)
+
+            # Solve conic subproblem to add cuts to MIP and update best feasible solution, finish if encounter conic solver failure
+            if !process_conic!(m, soln_int, logs)
+                break
+            end
         end
 
         # Calculate relative outer approximation gap, print gap and infeasibility statistics, finish if satisfy optimality gap condition
@@ -998,7 +1004,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         m.cb_lazy = cb
         soln_int = getvalue(m.x_mip[m.cols_int])
         if any(isnan, soln_int)
-            println("Current integer solution vector has NaN values; terminating Pajarito\n")
+            warn("Current integer solution vector has NaN values: aborting MIP-solver-driven algorithm\n")
             throw(CallbackAbort())
         end
         process_conic!(m, soln_int, logs)
@@ -1033,10 +1039,29 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         MathProgBase.setparameters!(m.mip_solver, Silent=(m.log_level <= 1), TimeLimit=(m.timeout - (time() - logs[:total])))
         setsolver(m.model_mip, m.mip_solver)
     end
-    m.status = solve(m.model_mip)
-    m.mip_obj = getobjectivevalue(m.model_mip)
-    m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
     logs[:mip_solve] = time() - logs[:mip_solve]
+
+    status_mip = solve(m.model_mip)
+    if status_mip in (:Infeasible, :InfeasibleOrUnbounded)
+        m.status = :Infeasible
+    elseif status_mip == :Unbounded
+        # Should not be unbounded: initial conic relax solve should detect this
+        warn("MIP solver returned status $status_mip, which could indicate that the initial dual cuts added were too weak\n")
+        m.status = :MIPFailure
+    elseif status_mip in (:UserLimit, :Optimal, :Suboptimal)
+        m.mip_obj = getobjectivevalue(m.model_mip)
+        m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
+        if m.gap_rel_opt < m.rel_gap
+            m.status = :Optimal
+        elseif status_mip == :UserLimit
+            m.status = :UserLimit
+        else
+            m.status = :Suboptimal
+        end
+    else
+        warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
+        m.status = :MIPFailure
+    end
 end
 
 
@@ -1064,7 +1089,9 @@ function process_relax!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         m.status = :InfeasibleOrUnbounded
         return false
     elseif !(status_relax in (:Optimal, :Suboptimal))
-        error("Conic solver failure with status $status_relax\n")
+        warn("Apparent conic solver failure with status $status_relax\n")
+        m.status = :ConicFailure
+        return false
     end
     if m.log_level > 0
         @printf "\nConic relaxation model solved:\n"
@@ -1101,19 +1128,14 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
     logs[:n_conic] += 1
 
     # Only proceed if status is infeasible, optimal or suboptimal
-    if status_conic == :Unbounded
+    if !(status_conic in (:Optimal, :Suboptimal, :Infeasible))
+        m.status = :ConicFailure
         if m.mip_solver_drives
-            println("Conic status was $status_conic\n")
+            warn("Apparent conic solver failure with status $status_conic: aborting MIP-solver-driven algorithm\n")
             throw(CallbackAbort())
         else
-            error("Conic status was $status_conic\n")
-        end
-    elseif !(status_conic in (:Optimal, :Suboptimal, :Infeasible))
-        if m.mip_solver_drives
-            println("Conic solver failure with status $status_conic\n")
-            throw(CallbackAbort())
-        else
-            error("Conic solver failure with status $status_conic\n")
+            warn("Apparent conic solver failure with status $status_relax: aborting iterative algorithm\n")
+            return false
         end
     end
 
@@ -1141,6 +1163,8 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
     if applicable(MathProgBase.freemodel!, model_conic)
         MathProgBase.freemodel!(model_conic)
     end
+
+    return true
 end
 
 
