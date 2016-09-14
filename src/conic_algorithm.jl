@@ -1040,8 +1040,8 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         warn("MIP solver returned status $status_mip, which could indicate that the initial dual cuts added were too weak\n")
         m.status = :MIPFailure
     elseif status_mip in (:UserLimit, :Optimal)
-        # Calculate our own gap
-        m.mip_obj = getobjectivevalue(m.model_mip)
+        m.mip_obj = getobjbound(m.model_mip)
+        m.best_obj = getobjectivevalue(m.model_mip)
         m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
         m.status = status_mip
     else
