@@ -18,7 +18,6 @@ TODO issues
 
 TODO features
 - implement warm-start pajarito: use set_best_soln!
-- option to only add violated cuts (especially for SDP, where each SOC cut slows down mip and we have many SOC cuts)
 - query logs information etc
 - print cone info to one file and gap info to another file
 
@@ -26,6 +25,8 @@ TODO SDP
 - fix soc in mip: if using SOC in mip, can only detect slacks with coef -1 (or sqrt(2)?)
 - consider whether v-semidefinite cuts can help
 - currently all SDP sanitized eigvecs have norm 1, but may want to multiply V by say 100 (or perhaps largest eigenvalue) before removing zeros, to get more significant digits
+- option to only add violated SOC cuts
+
 =========================================================#
 
 using JuMP
@@ -44,6 +45,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     exp_init::Bool              # (Conic only) Start with several outer approximation cuts on the exponential cones
     proj_dual_infeas::Bool      # (Conic only) Project dual cone infeasible dual vectors onto dual cone boundaries
     proj_dual_feas::Bool        # (Conic only) Project dual cone strictly feasible dual vectors onto dual cone boundaries
+    viol_cuts_only::Bool        # (Conic only) Only add cuts that are violated by the current MIP solution (may be useful for MSD algorithm where many cuts are added)
     mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver (MILP or MISOCP)
     cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver (conic or nonlinear)
     timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
@@ -67,7 +69,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cone_con_orig::Vector{Tuple{Symbol,Vector{Int}}} # Initial constraint cones vector (cone, index)
     cone_var_orig::Vector{Tuple{Symbol,Vector{Int}}} # Initial variable cones vector (cone, index)
     var_types::Vector{Symbol}   # Variable types vector on original variables (only :Bin, :Cont, :Int)
-    var_start::Vector{Float64}  # Variable warm start vector on original variables
+    # var_start::Vector{Float64}  # Variable warm start vector on original variables
 
     # Transformed data
     cone_con_new::Vector{Tuple{Symbol,Vector{Int}}} # Constraint cones data after converting variable cones to constraint cones
@@ -119,7 +121,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cb_lazy                     # Lazy callback reference (MIP-driven only)
 
     # Model constructor
-    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, viol_cuts_only, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         m = new()
 
         m.log_level = log_level
@@ -134,6 +136,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.exp_init = exp_init
         m.proj_dual_infeas = proj_dual_infeas
         m.proj_dual_feas = proj_dual_feas
+        m.viol_cuts_only = viol_cuts_only
         m.mip_solver = mip_solver
         m.cont_solver = cont_solver
         m.timeout = timeout
@@ -166,7 +169,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
         # Initialize data
         m.var_types = Symbol[]
-        m.var_start = Float64[]
+        # m.var_start = Float64[]
         m.oa_started = false
         m.num_var_orig = 0
         m.num_con_orig = 0
@@ -951,6 +954,8 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
             # Solve conic subproblem to add cuts to MIP and update best feasible solution, finish if encounter conic solver failure
             if !process_conic!(m, soln_int, logs)
+                m.status = :ConicFailure
+                warn("Apparent conic solver failure with status $status_relax: aborting iterative algorithm\n")
                 break
             end
         end
@@ -971,7 +976,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
 
         # Give the best feasible solution to the MIP as a warm-start
-        if m.pass_mip_sols
+        if m.pass_mip_sols && !isempty(m.best_sub)
             set_best_soln!(m)
         end
     end
@@ -999,7 +1004,11 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             warn("Current integer solution vector has NaN values: aborting MIP-solver-driven algorithm\n")
             throw(CallbackAbort())
         end
-        process_conic!(m, soln_int, logs)
+        if !process_conic!(m, soln_int, logs)
+            m.status = :ConicFailure
+            warn("Apparent conic solver failure with status $status_conic: aborting MIP-solver-driven algorithm\n")
+            throw(CallbackAbort())
+        end
 
         # Print cone infeasibilities
         print_inf(m)
@@ -1044,7 +1053,9 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         m.mip_obj = getobjbound(m.model_mip)
         m.best_obj = getobjectivevalue(m.model_mip)
         m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-        m.status = status_mip
+        if !(m.status == :ConicFailure)
+            m.status = status_mip
+        end
     else
         warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
         m.status = :MIPFailure
@@ -1116,14 +1127,7 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
 
     # Only proceed if status is infeasible, optimal or suboptimal
     if !(status_conic in (:Optimal, :Suboptimal, :Infeasible))
-        m.status = :ConicFailure
-        if m.mip_solver_drives
-            warn("Apparent conic solver failure with status $status_conic: aborting MIP-solver-driven algorithm\n")
-            throw(CallbackAbort())
-        else
-            warn("Apparent conic solver failure with status $status_relax: aborting iterative algorithm\n")
-            return false
-        end
+        return false
     end
 
     # Add dynamic cuts for each cone and calculate infeasibilities for cuts and duals
@@ -1273,16 +1277,23 @@ end
 
 # Add a single linear cut and calculate cut infeasibility
 function add_linear_cut!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, slcks::Vector{JuMP.AffExpr}, cut::Vector{Float64})
-    # Add cut (lazy cut if using MIP driven solve)
-    if m.mip_solver_drives && m.oa_started
-        @lazyconstraint(m.cb_lazy, dot(cut, slcks) >= 0.)
-    else
-        @constraint(m.model_mip, dot(cut, slcks) >= 0.)
+    # Calculate infeasibility of cut for current MIP solution
+    if m.oa_started
+        inf_cut = -dot(cut, getvalue(slcks))
+    end
+
+    # Add cut if infeasible or if not using violated cuts only option
+    if !m.viol_cuts_only || !m.oa_started || (inf_cut > 0.)
+        # Add cut (lazy cut if using MIP driven solve)
+        if m.mip_solver_drives && m.oa_started
+            @lazyconstraint(m.cb_lazy, dot(cut, slcks) >= 0.)
+        else
+            @constraint(m.model_mip, dot(cut, slcks) >= 0.)
+        end
     end
 
     # Update cut infeasibility
     if (m.log_level > 1) && m.oa_started
-        inf_cut = -dot(cut, getvalue(slcks))
         if inf_cut > 0.
             spec_summ[:cut_max_n] += 1
             spec_summ[:cut_max] = max(inf_cut, spec_summ[:cut_max])
