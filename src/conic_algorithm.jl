@@ -954,6 +954,8 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
             # Solve conic subproblem to add cuts to MIP and update best feasible solution, finish if encounter conic solver failure
             if !process_conic!(m, soln_int, logs)
+                m.status = :ConicFailure
+                warn("Apparent conic solver failure with status $status_relax: aborting iterative algorithm\n")
                 break
             end
         end
@@ -1002,7 +1004,11 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             warn("Current integer solution vector has NaN values: aborting MIP-solver-driven algorithm\n")
             throw(CallbackAbort())
         end
-        process_conic!(m, soln_int, logs)
+        if !process_conic!(m, soln_int, logs)
+            m.status = :ConicFailure
+            warn("Apparent conic solver failure with status $status_conic: aborting MIP-solver-driven algorithm\n")
+            throw(CallbackAbort())
+        end
 
         # Print cone infeasibilities
         print_inf(m)
@@ -1047,7 +1053,9 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         m.mip_obj = getobjbound(m.model_mip)
         m.best_obj = getobjectivevalue(m.model_mip)
         m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-        m.status = status_mip
+        if !(m.status == :ConicFailure)
+            m.status = status_mip
+        end
     else
         warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
         m.status = :MIPFailure
@@ -1119,14 +1127,7 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
 
     # Only proceed if status is infeasible, optimal or suboptimal
     if !(status_conic in (:Optimal, :Suboptimal, :Infeasible))
-        m.status = :ConicFailure
-        if m.mip_solver_drives
-            warn("Apparent conic solver failure with status $status_conic: aborting MIP-solver-driven algorithm\n")
-            throw(CallbackAbort())
-        else
-            warn("Apparent conic solver failure with status $status_relax: aborting iterative algorithm\n")
-            return false
-        end
+        return false
     end
 
     # Add dynamic cuts for each cone and calculate infeasibilities for cuts and duals
@@ -1282,7 +1283,7 @@ function add_linear_cut!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, sl
     end
 
     # Add cut if infeasible or if not using violated cuts only option
-    if !m.viol_cuts_only || !m.oa_started || (inf_cut > 0.) 
+    if !m.viol_cuts_only || !m.oa_started || (inf_cut > 0.)
         # Add cut (lazy cut if using MIP driven solve)
         if m.mip_solver_drives && m.oa_started
             @lazyconstraint(m.cb_lazy, dot(cut, slcks) >= 0.)
