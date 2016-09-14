@@ -367,7 +367,7 @@ MathProgBase.status(m::PajaritoConicModel) = m.status
 
 MathProgBase.getobjval(m::PajaritoConicModel) = m.best_obj
 
-MathProgBase.getobjbound(m::PajaritoConicModel) = min(m.mip_obj, m.best_obj)
+MathProgBase.getobjbound(m::PajaritoConicModel) = m.mip_obj
 
 function MathProgBase.getsolution(m::PajaritoConicModel)
     soln = zeros(m.num_var_orig)
@@ -1039,16 +1039,11 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         # Should not be unbounded: initial conic relax solve should detect this
         warn("MIP solver returned status $status_mip, which could indicate that the initial dual cuts added were too weak\n")
         m.status = :MIPFailure
-    elseif status_mip in (:UserLimit, :Optimal, :Suboptimal)
+    elseif status_mip in (:UserLimit, :Optimal)
+        # Calculate our own gap
         m.mip_obj = getobjectivevalue(m.model_mip)
         m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-        if m.gap_rel_opt < m.rel_gap
-            m.status = :Optimal
-        elseif status_mip == :UserLimit
-            m.status = :UserLimit
-        else
-            m.status = :Suboptimal
-        end
+        m.status = status_mip
     else
         warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
         m.status = :MIPFailure
