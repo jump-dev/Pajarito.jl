@@ -24,6 +24,7 @@ TODO features
 
 TODO SDP
 - fix soc in mip: if using SOC in mip, can only detect slacks with coef -1 (or sqrt(2)?)
+- consider whether v-semidefinite cuts can help
 - currently all SDP sanitized eigvecs have norm 1, but may want to multiply V by say 100 (or perhaps largest eigenvalue) before removing zeros, to get more significant digits
 =========================================================#
 
