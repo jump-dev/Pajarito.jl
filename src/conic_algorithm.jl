@@ -955,7 +955,6 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             # Solve conic subproblem to add cuts to MIP and update best feasible solution, finish if encounter conic solver failure
             if !process_conic!(m, soln_int, logs)
                 m.status = :ConicFailure
-                warn("Apparent conic solver failure with status $status_relax: aborting iterative algorithm\n")
                 break
             end
         end
@@ -1006,7 +1005,6 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
         if !process_conic!(m, soln_int, logs)
             m.status = :ConicFailure
-            warn("Apparent conic solver failure with status $status_conic: aborting MIP-solver-driven algorithm\n")
             throw(CallbackAbort())
         end
 
@@ -1127,6 +1125,11 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
 
     # Only proceed if status is infeasible, optimal or suboptimal
     if !(status_conic in (:Optimal, :Suboptimal, :Infeasible))
+        if m.mip_solver_drives
+            warn("Apparent conic solver failure with status $status_conic: aborting MIP-solver-driven algorithm\n")
+        else
+            warn("Apparent conic solver failure with status $status_conic: aborting iterative algorithm\n")
+        end
         return false
     end
 
