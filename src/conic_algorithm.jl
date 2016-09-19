@@ -729,7 +729,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                             setupperbound(vars[kSD], 0.)
                         end
                     elseif m.sdp_init_lin
-                        # Add initial SDP linear cuts based on linearization of 3-dim rotated SOCs that enforce 2x2 principal submatrix PSDness
+                        # Add initial SDP linear cuts based on linearization of 3-dim rotated SOCs that enforce 2x2 principal submatrix PSDness (essentially the dual of SDSOS)
                         # 2|m_ij| <= m_ii + m_jj, where m_kk is scaled by sqrt(2) in smat space
                         @constraint(model_mip, coefs[iSD] * vars[iSD] + coefs[kSD] * vars[kSD] >= sqrt(2) * coefs[kSD] * vars[kSD])
                         @constraint(model_mip, coefs[iSD] * vars[iSD] + coefs[kSD] * vars[kSD] >= -sqrt(2) * coefs[kSD] * vars[kSD])
@@ -1170,7 +1170,7 @@ end
 function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Symbol,Real}, dim::Int, vars::Vector{Vector{JuMP.Variable}}, coefs::Vector{Float64}, dual::Vector{Float64})
     # Rescale the dual, don't add zero vectors
     if maximum(abs(dual)) > m.zero_tol
-        dual = dual ./ maximum(abs(dual))
+        scale!(dual, maxabs(dual))
     else
         return
     end
@@ -1267,7 +1267,7 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
     end
 
     # Update dual infeasibility
-    if m.log_level > 1
+    if m.log_level > 2
         if inf_dual > 0.
             spec_summ[:dual_max_n] += 1
             spec_summ[:dual_max] = max(inf_dual, spec_summ[:dual_max])
@@ -1296,7 +1296,7 @@ function add_linear_cut!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, sl
     end
 
     # Update cut infeasibility
-    if (m.log_level > 1) && m.oa_started
+    if (m.log_level > 2) && m.oa_started
         if inf_cut > 0.
             spec_summ[:cut_max_n] += 1
             spec_summ[:cut_max] = max(inf_cut, spec_summ[:cut_max])
@@ -1334,7 +1334,7 @@ end
 #             @constraint(m.model_mip, vars[iSD, iSD] * vvX >= vx^2)
 #
 #             # Update cut infeasibility
-#             if m.log_level > 1
+#             if m.log_level > 2
 #                 inf_cut = -getvalue(vars[iSD, iSD]) * vecdot(vvj[no_i, no_i], getvalue(vars[no_i, no_i])) + (vecdot(vj[no_i], getvalue(vars[no_i, iSD])))^2
 #                 if inf_cut > 0.
 #                     spec_summ[:cut_max_n] += 1
@@ -1425,7 +1425,7 @@ end
 
 # Reset all summary values for all cones in preparation for next iteration
 function reset_cone_summary!(m::PajaritoConicModel)
-    if m.log_level > 1
+    if m.log_level > 2
         for spec_summ in values(m.summary)
             spec_summ[:outer_max_n] = 0
             spec_summ[:outer_max] = 0.
@@ -1445,7 +1445,7 @@ end
 
 # Calculate outer approximation infeasibilities for all nonlinear cones
 function calc_inf_outer!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
-    if m.log_level > 1
+    if m.log_level > 2
         tic()
         for n in 1:m.num_cone_nlnr
             spec = m.map_spec[n]
@@ -1566,7 +1566,7 @@ end
 
 # Print cones infeasibilities
 function print_inf(m::PajaritoConicModel)
-    if m.log_level > 1
+    if m.log_level > 2
         @printf "\n%-10s | %-32s | %-32s | %-32s\n" "Species" "Outer approx infeas" "Dual cone infeas" "Cut infeas"
         @printf "%-10s | %-6s %-8s  %-6s %-8s | %-6s %-8s  %-6s %-8s | %-6s %-8s  %-6s %-8s\n" "" "Inf" "Worst" "Feas" "Worst" "Inf" "Worst" "Feas" "Worst" "Inf" "Worst" "Feas" "Worst"
         for (spec, spec_summ) in m.summary
@@ -1580,7 +1580,7 @@ end
 
 # Print objective gap information
 function print_gap(m::PajaritoConicModel, logs::Dict{Symbol,Real})
-    if m.log_level > 0
+    if m.log_level > 1
         if (logs[:n_conic] == 1) || (m.log_level > 1)
             @printf "\n%-4s | %-14s | %-14s | %-11s | %-11s\n" "Iter" "Best obj" "OA obj" "Rel gap" "Time (s)"
         end
@@ -1599,12 +1599,16 @@ end
 
 # Print after finish
 function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
-    m.log_level > 0 || return
+    if m.log_level == 0
+        return
+    end
+
     if m.mip_solver_drives
         @printf "\nFinished MIP-solver-driven outer approximation algorithm:\n"
     else
         @printf "\nFinished iterative outer approximation algorithm:\n"
     end
+
     @printf " - Total time (s)       = %14.2e\n" logs[:total]
     @printf " - Status               = %14s\n" m.status
     @printf " - Best feasible obj.   = %+14.6e\n" m.best_obj
@@ -1612,34 +1616,31 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     @printf " - Relative opt. gap    = %14.3e\n" m.gap_rel_opt
     @printf " - Conic iter. count    = %14d\n" logs[:n_conic]
 
-    if m.log_level > 1
-        if m.mip_solver_drives
-            @printf " - Heur. callback count = %14d\n" logs[:n_cb_heur]
-        end
+    if m.mip_solver_drives
+        @printf " - Heur. callback count = %14d\n" logs[:n_cb_heur]
+    end
 
-        @printf "\nTimers (s):\n"
-        @printf " - Setup                = %14.2e\n" (logs[:total] - logs[:oa_alg])
-        if m.log_level > 1
-            @printf " -- Transform data      = %14.2e\n" logs[:trans_data]
-            @printf " -- Create MIP data     = %14.2e\n" logs[:mip_data]
-            @printf " -- Create conic data   = %14.2e\n" logs[:conic_data]
-            @printf " -- Solve relax         = %14.2e\n" logs[:relax_solve]
-            @printf " -- Add relax cuts      = %14.2e\n" logs[:relax_cuts]
-        end
-        if m.mip_solver_drives
-            @printf " - MIP-driven algorithm = %14.2e\n" logs[:oa_alg]
-        else
-            @printf " - Iterative algorithm  = %14.2e\n" logs[:oa_alg]
-        end
-        @printf " -- Solve MIP           = %14.2e\n" logs[:mip_solve]
-        @printf " -- Solve conic         = %14.2e\n" logs[:conic_solve]
-        if m.log_level > 1
-            @printf " -- Add conic cuts      = %14.2e\n" logs[:conic_cuts]
-            @printf " -- Calc. outer inf.    = %14.2e\n" logs[:outer_inf]
-            if m.mip_solver_drives
-                @printf " -- Use heur. callback  = %14.2e\n" logs[:cb_heur]
-            end
-        end
+    @printf "\nTimers (s):\n"
+    @printf " - Setup                = %14.2e\n" (logs[:total] - logs[:oa_alg])
+    @printf " -- Transform data      = %14.2e\n" logs[:trans_data]
+    @printf " -- Create MIP data     = %14.2e\n" logs[:mip_data]
+    @printf " -- Create conic data   = %14.2e\n" logs[:conic_data]
+    @printf " -- Solve relax         = %14.2e\n" logs[:relax_solve]
+    @printf " -- Add relax cuts      = %14.2e\n" logs[:relax_cuts]
+
+    if m.mip_solver_drives
+        @printf " - MIP-driven algorithm = %14.2e\n" logs[:oa_alg]
+    else
+        @printf " - Iterative algorithm  = %14.2e\n" logs[:oa_alg]
+    end
+
+    @printf " -- Solve MIP           = %14.2e\n" logs[:mip_solve]
+    @printf " -- Solve conic         = %14.2e\n" logs[:conic_solve]
+    @printf " -- Add conic cuts      = %14.2e\n" logs[:conic_cuts]
+    @printf " -- Calc. outer inf.    = %14.2e\n" logs[:outer_inf]
+
+    if m.mip_solver_drives
+        @printf " -- Use heur. callback  = %14.2e\n" logs[:cb_heur]
     end
 
     @printf "\n"
