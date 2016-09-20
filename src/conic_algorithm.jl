@@ -1159,7 +1159,7 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
             A_mul_B!(m.slck_sub, m.A_sub_cont, m.best_sub)
             scale!(m.slck_sub, -1)
             BLAS.axpy!(1, m.b_change, m.slck_sub)
-            
+
             # m.slck_sub = b_sub_int - m.A_sub_cont * m.best_sub
             m.used_soln = false
         end
@@ -1182,7 +1182,7 @@ end
 function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Symbol,Real}, dim::Int, vars::Vector{Vector{JuMP.Variable}}, coefs::Vector{Float64}, dual::Vector{Float64})
     # Rescale the dual, don't add zero vectors
     if maxabs(dual) > m.zero_tol
-        scale!(dual, maxabs(dual))
+        scale!(dual, 1/maxabs(dual))
     else
         return
     end
