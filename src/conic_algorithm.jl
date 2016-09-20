@@ -1176,7 +1176,11 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
     end
 
     # Sanitize rescaled dual: remove near-zeros
-    dual[abs(dual) .< m.zero_tol] = 0.
+    for ind in 1:length(dual)
+        if abs(dual[ind]) < m.zero_tol
+            dual[ind] = 0.
+        end
+    end
 
     # For primal cone species:
     # 1 - calculate dual cone infeasibility of dual vector (negative value means strictly feasible in cone, zero means on cone boundary, positive means infeasible for cone)
