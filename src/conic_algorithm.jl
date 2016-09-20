@@ -105,6 +105,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     b_sub::Vector{Float64}      # Subvector of b containing full rows
     c_sub_cont::Vector{Float64} # Subvector of c for continuous variables
     c_sub_int::Vector{Float64}  # Subvector of c for integer variables
+    b_change::Vector{Float64}   # Slack vector that we operate on in conic subproblem
 
     # Dynamic solve data
     summary::Dict{Symbol,Dict{Symbol,Real}} # Infeasibilities (outer, cut, dual) of each cone species at current iteration
@@ -865,6 +866,8 @@ function create_conic_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     m.b_sub = m.b_new[rows_full]
     m.c_sub_cont = m.c_new[cols_cont]
     m.c_sub_int = m.c_new[cols_int]
+    m.b_change = zeros(length(rows_full))
+    m.slck_sub = zeros(length(rows_full))
 
     logs[:conic_data] += toq()
 end
@@ -1115,9 +1118,13 @@ end
 function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::Dict{Symbol,Real})
     # Instantiate and solve the conic model
     tic()
-    b_sub_int = m.b_sub - m.A_sub_int * soln_int
+
+    A_mul_B!(m.b_change, m.A_sub_int, soln_int) # m.b_change = m.A_sub_int*soln_int
+    scale!(m.b_change, -1) # m.b_change = - m.b_change
+    BLAS.axpy!(1, m.b_sub, m.b_change) # m.b_change = m.b_change + m.b_sub
+
     model_conic = MathProgBase.ConicModel(m.cont_solver)
-    MathProgBase.loadproblem!(model_conic, m.c_sub_cont, m.A_sub_cont, b_sub_int, m.cone_con_sub, m.cone_var_sub)
+    MathProgBase.loadproblem!(model_conic, m.c_sub_cont, m.A_sub_cont, m.b_change, m.cone_con_sub, m.cone_var_sub)
     MathProgBase.optimize!(model_conic)
     status_conic = MathProgBase.status(model_conic)
     logs[:conic_solve] += toq()
@@ -1148,7 +1155,12 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
             m.best_obj = obj_new
             m.best_int = soln_int
             m.best_sub = MathProgBase.getsolution(model_conic)
-            m.slck_sub = b_sub_int - m.A_sub_cont * m.best_sub
+
+            A_mul_B!(m.slck_sub, m.A_sub_cont, m.best_sub)
+            scale!(m.slck_sub, -1)
+            BLAS.axpy!(1, m.b_change, m.slck_sub)
+            
+            # m.slck_sub = b_sub_int - m.A_sub_cont * m.best_sub
             m.used_soln = false
         end
     end
