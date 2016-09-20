@@ -1684,8 +1684,8 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         @printf " - MIP-driven algorithm = %14.2e\n" logs[:oa_alg]
     else
         @printf " - Iterative algorithm  = %14.2e\n" logs[:oa_alg]
+        @printf " -- Solve MIP           = %14.2e\n" logs[:mip_solve]
     end
-    @printf " -- Solve MIP           = %14.2e\n" logs[:mip_solve]
     @printf " -- Solve conic         = %14.2e\n" logs[:conic_solve]
     @printf " -- Add conic cuts      = %14.2e\n" logs[:conic_cuts]
     @printf " -- Calc. outer inf.    = %14.2e\n" logs[:outer_inf]
