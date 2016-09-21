@@ -283,6 +283,13 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
         @printf "Matrix A has %d entries smaller than zero tolerance %e; performance may be improved by first fixing small magnitudes to zero\n" A_num_zeros m.zero_tol
     end
 
+
+
+    A_sp[abs(A_sp) .< m.zero_tol] = 0.
+    A_sp = sparse(A_sp)
+
+
+
     m.num_con_orig = num_con_orig
     m.num_var_orig = num_var_orig
     m.A_orig = A_sp
@@ -729,37 +736,53 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     end
                 end
             elseif spec == :SDP
-                # Set up svec space variable vector
+                # Calculate smat space dimension
                 nSD = round(Int, sqrt(1/4 + 2 * len) - 1/2)
                 map_dim[n_cone] = nSD
+
+                # Set up smat arrays
+                vars_smat = Array{JuMP.Variable,2}(nSD, nSD)
+                coefs_smat = Array{Float64,2}(nSD, nSD)
                 kSD = 1
                 for jSD in 1:nSD, iSD in jSD:nSD
+                    vars_smat[iSD, jSD] = vars[kSD]
                     if jSD == iSD
-                        if sign(coefs[kSD]) == 1
-                            setlowerbound(vars[kSD], 0.)
+                        coefs_smat[iSD, jSD] = coefs[kSD]
+                    else
+                        if abs(coefs[kSD]) == sqrt(2)
+                            println("oh it's root 2")
+                            coefs_smat[iSD, jSD] = sign(coefs[kSD])
                         else
-                            setupperbound(vars[kSD], 0.)
+                            coefs_smat[iSD, jSD] = coefs[kSD] / sqrt(2)
                         end
-                    elseif m.sdp_init_lin
-                        # Add initial SDP linear cuts based on linearization of 3-dim rotated SOCs that enforce 2x2 principal submatrix PSDness (essentially the dual of SDSOS)
-                        # 2|m_ij| <= m_ii + m_jj, where m_kk is scaled by sqrt(2) in smat space
-                        @constraint(model_mip, coefs[iSD] * vars[iSD] + coefs[kSD] * vars[kSD] >= sqrt(2) * coefs[kSD] * vars[kSD])
-                        @constraint(model_mip, coefs[iSD] * vars[iSD] + coefs[kSD] * vars[kSD] >= -sqrt(2) * coefs[kSD] * vars[kSD])
                     end
                     kSD += 1
                 end
 
+                # Add initial SDP linear constraints
+                for jSD in 1:nSD, iSD in jSD:nSD
+                    if jSD == iSD
+                        if sign(coefs_smat[iSD, jSD]) == 1
+                            setlowerbound(vars_smat[iSD, jSD], 0.)
+                        else
+                            setupperbound(vars_smat[iSD, jSD], 0.)
+                        end
+                    elseif m.sdp_init_lin
+                        # Add initial SDP linear cuts based on linearization of 3-dim rotated SOCs that enforce 2x2 principal submatrix PSDness (essentially the dual of SDSOS)
+                        # 2|m_ij| <= m_ii + m_jj, where m_kk is scaled by sqrt(2) in smat space
+                        @constraint(model_mip, coefs_smat[iSD, iSD] * vars_smat[iSD, iSD] + coefs_smat[jSD, jSD] * vars_smat[jSD, jSD] >= 2 * coefs_smat[iSD, jSD] * vars_smat[iSD, jSD])
+                        @constraint(model_mip, coefs_smat[iSD, iSD] * vars_smat[iSD, iSD] + coefs_smat[jSD, jSD] * vars_smat[jSD, jSD] >= -2 * coefs_smat[iSD, jSD] * vars_smat[iSD, jSD])
+                    end
+                end
+
                 # Preallocate smat matrix for SDP cut functions
-                if !haskey(sdp_smat, nSD)
+                if m.sdp_eig && !haskey(sdp_smat, nSD)
                     sdp_smat[nSD] = Array{Float64,2}(nSD, nSD)
                 end
 
                 # Set up helper variables and initial SDP SOC cuts
-                # TODO rethink helper and smat variables
-                # TODO not using coefs properly
                 if m.sdp_init_soc || m.sdp_soc
                     error("SOC in MIP is currently broken\n")
-
                     # # Set up smat space variable array and add optional SDP initial SOC and dynamic SOC cuts
                     # help = @variable(model_mip, [j in 1:nSD], lowerbound=0., basename="h$(n_cone)SDhelp")
                     # smat = Array{JuMP.AffExpr,2}(nSD, nSD)
@@ -1282,30 +1305,34 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
             add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
         end
     elseif spec == :SDP
-        # Make svec dual into smat dual, store in preallocated smat matrix for that dimension
-        make_smat!(dual, m.sdp_smat[dim], dim)
+        if !m.sdp_eig
+            add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
+            inf_dual = 0.
+        else
+            # Make svec dual into smat dual, store in preallocated smat matrix for that dimension
+            make_smat!(dual, m.sdp_smat[dim], dim)
 
-        # 1 Get eigendecomposition of smat dual (use symmetric property) and calculate dual inf as negative minimum eigenvalue
-        # (m.sdp_eigvals[dim], m.sdp_eigvecs[dim]) = eig(m.sdp_smat[dim]) # requires allocation; direct lapack call doesn't
-        eigvals = LAPACK.syev!('N', 'L', m.sdp_smat[dim])
-        inf_dual = -minimum(eigvals)
+            # 1 Get eigendecomposition of smat dual (use symmetric property) and calculate dual inf as negative minimum eigenvalue
+            # (m.sdp_eigvals[dim], m.sdp_eigvecs[dim]) = eig(m.sdp_smat[dim]) # requires allocation; direct lapack call doesn't
+            eigvals = LAPACK.syev!('N', 'L', m.sdp_smat[dim])
+            inf_dual = -minimum(eigvals)
 
-        # TODO If m.sdp_eig ...
-        # Add SDP eigenvalue cuts for eigenvalues larger than tolerance
-        for jSD in 1:dim
-            if eigvals[jSD] > m.sdp_tol_eigval
-                # 2 Sanitize eigenvector jSD
-                for iSD in 1:dim
-                    if abs(m.sdp_smat[dim][iSD, jSD]) < m.sdp_tol_eigvec
-                        m.sdp_smat[dim][iSD, jSD] = 0.
+            # Add SDP eigenvalue cuts for eigenvalues larger than tolerance
+            for jSD in 1:dim
+                if eigvals[jSD] > m.sdp_tol_eigval
+                    # 2 Sanitize eigenvector jSD
+                    for iSD in 1:dim
+                        if abs(m.sdp_smat[dim][iSD, jSD]) < m.sdp_tol_eigvec
+                            m.sdp_smat[dim][iSD, jSD] = 0.
+                        end
                     end
+
+                    # 2 Make smat eigenvector jSD into svec dual
+                    make_svec_vvt!(dual, m.sdp_smat[dim], jSD, dim)
+
+                    # 3 Add linear cut
+                    add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
                 end
-
-                # 2 Make smat eigenvector jSD into svec dual
-                make_svec_vvt!(dual, m.sdp_smat[dim], jSD, dim)
-
-                # 3 Add linear cut
-                add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
             end
         end
 
