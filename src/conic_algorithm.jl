@@ -1224,10 +1224,10 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
 
             if m.disagg_soc && (dim > 2)
                 # Add disaggregated 3-dim cuts
-                add_disagg_cuts!(m, spec_summ, dim, vars[1], vars[2], coefs, dual)
+                add_disagg_cuts!(m, spec_summ, vars[1], vars[2], coefs, dual)
             else
                 # Add nondisaggregated cut
-                add_linear_cut!(m, spec_summ, dim, vars[1], coefs, dual)
+                add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
             end
         end
 
@@ -1254,48 +1254,64 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
             end
 
             # Add 3-dim cut
-            add_linear_cut!(m, spec_summ, dim, vars[1], coefs, dual)
+            add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
         end
 
     elseif spec == :SDP
-        # Get eigendecomposition of smat space dual
-        (eigvals_dual, eigvecs_dual) = eig(make_smat(dual))
-        inf_dual = -minimum(eigvals_dual)
-        # n_svec = dim * (dim + 1) / 2
+        # Make svec dual into smat dual
+        # TODO could preallocate smat before algorithm: m.sdp_smat[dim] for each different dim
+        smat = Array{Float64,2}(dim, dim)
+        make_smat!(dual, smat, dim)
 
-        # If using eigenvector cuts, add SOC or linear eig cuts, else add linear cut
-        if m.sdp_eig
-            # Get array of (orthonormal) eigenvector columns with significant nonnegative eigenvalues, and sanitize eigenvectors
-            # TODO improve speed, memory allocation here. maybe clean inside make_svec
-            Vdual = eigvecs_dual[:, (eigvals_dual .>= m.sdp_tol_eigval)]
-            Vdual[abs(Vdual) .< m.sdp_tol_eigvec] = 0.
+        # Get eigendecomposition of smat dual and calculate dual inf as negative minimum eigenvalue
+        # (m.sdp_eigvals[dim], m.sdp_eigvecs[dim]) = eig(m.sdp_smat[dim]) # requires allocation; direct lapack call doesn't
+        eigvals = LAPACK.syev!('N', 'L', smat)
 
-            # if size(Vdual, 2) > 0
-                # Cannot add SOC cuts during MIP solve
-                # if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
-                # TODO broken because of coefs
-                #     add_sdp_soc_cuts!(m, spec_summ, reshape(vars[(n_svec + 1):end], dim, dim), coefs, Vdual)
-                # else
-                    # Add linear cut for each significant eigenvector
-                    for jV in 1:size(Vdual, 2)
-                        add_linear_cut!(m, spec_summ, dim, vars[1], coefs, make_svec(Vdual[:, jV] * Vdual[:, jV]'))
-                    end
-                # end
-            # end
-
-        elseif any(eigvals_dual .>= 0.)
-            if (inf_dual > 0.) && m.proj_dual_infeas
-                # Project by taking sum of nonnegative eigenvalues times outer products of corresponding eigenvectors
-                eigvals_dual[eigvals_dual .<= 0.] = 0.
-                add_linear_cut!(m, spec_summ, dim, vars[1], coefs, make_svec(eigvecs_dual * diagm(eigvals_dual) * eigvecs_dual'))
-            else
-                add_linear_cut!(m, spec_summ, dim, vars[1], coefs, dual)
+        # TODO If m.sdp_eig
+        # Add SDP eigenvalue cuts for eigenvalues larger than tolerance
+        for ind in 1:dim
+            if eigvals[ind] > m.sdp_tol_eigval
+                # Make smat eigenvector ind into svec dual and add linear cut
+                make_svec_vvt!(dual, smat, ind, dim)
+                add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
             end
         end
+
+        # If using eigenvector cuts, add SOC or linear eig cuts, else add linear cut
+        # if m.sdp_eig
+        #     # Get array of (orthonormal) eigenvector columns with significant nonnegative eigenvalues, and sanitize eigenvectors
+        #     # TODO improve speed, memory allocation here. maybe clean inside make_svec
+        #     Vdual = eigvecs_dual[:, (eigvals_dual .>= m.sdp_tol_eigval)]
+        #     Vdual[abs(Vdual) .< m.sdp_tol_eigvec] = 0.
+        #
+        #     # if size(Vdual, 2) > 0
+        #         # Cannot add SOC cuts during MIP solve
+        #         # if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
+        #         # TODO broken because of coefs
+        #         #     add_sdp_soc_cuts!(m, spec_summ, reshape(vars[(n_svec + 1):end], dim, dim), coefs, Vdual)
+        #         # else
+        #             # Add linear cut for each significant eigenvector
+        #             for jV in 1:size(Vdual, 2)
+        #                 add_linear_cut!(m, spec_summ, dim, vars[1], coefs, make_svec(Vdual[:, jV] * Vdual[:, jV]'))
+        #             end
+        #         # end
+        #     # end
+        #
+        # elseif any(eigvals_dual .>= 0.)
+        #     if (inf_dual > 0.) && m.proj_dual_infeas
+        #         # Project by taking sum of nonnegative eigenvalues times outer products of corresponding eigenvectors
+        #         eigvals_dual[eigvals_dual .<= 0.] = 0.
+        #         add_linear_cut!(m, spec_summ, dim, vars[1], coefs, make_svec(eigvecs_dual * diagm(eigvals_dual) * eigvecs_dual'))
+        #     else
+        #         add_linear_cut!(m, spec_summ, dim, vars[1], coefs, dual)
+        #     end
+        # end
+
     end
 
     # Update dual infeasibility
     if m.log_level > 2
+        inf_dual = -minimum(m.sdp_eigvals[dim])
         if inf_dual > 0.
             spec_summ[:dual_max_n] += 1
             spec_summ[:dual_max] = max(inf_dual, spec_summ[:dual_max])
@@ -1306,9 +1322,38 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
     end
 end
 
+# Add a single linear cut and calculate cut infeasibility
+function add_linear_cut!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, slcks::Vector{JuMP.Variable}, coefs::Vector{Float64}, dual::Vector{Float64})
+    # Calculate infeasibility of cut for current MIP solution
+    if m.oa_started
+        inf_cut = -sum(dual .* coefs .* getvalue(slcks))
+    end
+
+    # Add cut if infeasible or if not using violated cuts only option
+    if !m.viol_cuts_only || !m.oa_started || (inf_cut > 0.)
+        # Add cut (lazy cut if using MIP driven solve)
+        if m.mip_solver_drives && m.oa_started
+            @lazyconstraint(m.cb_lazy, sum{dual[ind] * coefs[ind] * slcks[ind], ind in 1:length(slcks)} >= 0.)
+        else
+            @constraint(m.model_mip, sum{dual[ind] * coefs[ind] * slcks[ind], ind in 1:length(slcks)} >= 0.)
+        end
+    end
+
+    # Update cut infeasibility
+    if (m.log_level > 2) && m.oa_started
+        if inf_cut > 0.
+            spec_summ[:cut_max_n] += 1
+            spec_summ[:cut_max] = max(inf_cut, spec_summ[:cut_max])
+        elseif inf_cut < 0.
+            spec_summ[:cut_min_n] += 1
+            spec_summ[:cut_min] = max(-inf_cut, spec_summ[:cut_min])
+        end
+    end
+end
+
 # Add all disaggregated SOC cuts and calculate cut infeasibilities
-function add_disagg_cuts!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, dim::Int, slcks::Vector{JuMP.Variable}, daggs::Vector{JuMP.Variable}, coefs::Vector{Float64}, dual::Vector{Float64})
-    for ind in 2:dim
+function add_disagg_cuts!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, slcks::Vector{JuMP.Variable}, daggs::Vector{JuMP.Variable}, coefs::Vector{Float64}, dual::Vector{Float64})
+    for ind in 2:length(slcks)
         # Calculate infeasibility of cut for current MIP solution
         # (vars[1][1], vars[2][ind - 1], vars[1][ind]) .* (coefs[1], 1., coefs[ind]) .* ((dual[ind] / dual[1])^2, 1., (2 * dual[ind] / dual[1]))
         if m.oa_started
@@ -1338,34 +1383,46 @@ function add_disagg_cuts!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, d
     end
 end
 
-
-# Add a single linear cut and calculate cut infeasibility
-function add_linear_cut!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, dim::Int, slcks::Vector{JuMP.Variable}, coefs::Vector{Float64}, dual::Vector{Float64})
-    # Calculate infeasibility of cut for current MIP solution
-    if m.oa_started
-        inf_cut = -sum(dual .* coefs .* getvalue(slcks))
-    end
-
-    # Add cut if infeasible or if not using violated cuts only option
-    if !m.viol_cuts_only || !m.oa_started || (inf_cut > 0.)
-        # Add cut (lazy cut if using MIP driven solve)
-        if m.mip_solver_drives && m.oa_started
-            @lazyconstraint(m.cb_lazy, sum{dual[ind] * coefs[ind] * slcks[ind], ind in 1:dim} >= 0.)
+# Transform svec vector into symmetric smat matrix
+function make_smat!(svec::Vector{Float64}, smat::Array{Float64,2}, dim::Int)
+    kSD = 1
+    for jSD in 1:dim, iSD in jSD:dim
+        if jSD == iSD
+            smat[iSD, jSD] = svec[kSD]
         else
-            @constraint(m.model_mip, sum{dual[ind] * coefs[ind] * slcks[ind], ind in 1:dim} >= 0.)
+            smat[iSD, jSD] = smat[jSD, iSD] = svec[kSD] / sqrt(2)
         end
+        kSD += 1
     end
+    return smat
+end
 
-    # Update cut infeasibility
-    if (m.log_level > 2) && m.oa_started
-        if inf_cut > 0.
-            spec_summ[:cut_max_n] += 1
-            spec_summ[:cut_max] = max(inf_cut, spec_summ[:cut_max])
-        elseif inf_cut < 0.
-            spec_summ[:cut_min_n] += 1
-            spec_summ[:cut_min] = max(-inf_cut, spec_summ[:cut_min])
+# # Transform symmetric smat matrix into svec vector
+# function make_svec!(svec::Vector{Float64}, smat::Array{Float64,2}, dim::Int)
+#     kSD = 1
+#     for jSD in 1:dim, iSD in jSD:dim
+#         if jSD == iSD
+#             svec[kSD] = smat[iSD, jSD]
+#         else
+#             svec[kSD] = smat[iSD, jSD] * sqrt(2)
+#         end
+#         kSD += 1
+#     end
+#     return svec
+# end
+
+# Transform svec vector into outer product of eigenvector currently stored in smat data with column index ind
+function make_svec_vvt!(svec::Vector{Float64}, smat::Array{Float64,2}, ind::Int, dim::Int)
+    kSD = 1
+    for jSD in 1:dim, iSD in jSD:dim
+        if jSD == iSD
+            svec[kSD] = smat[jSD, ind] * smat[iSD, ind]
+        else
+            svec[kSD] = smat[jSD, ind] * smat[iSD, ind] * sqrt(2)
         end
+        kSD += 1
     end
+    return svec
 end
 
 # Add SDP SOC cuts (derived from Schur complement) for each eigenvector and each diagonal element
@@ -1514,60 +1571,27 @@ function calc_inf_outer!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
     tic()
     for n in 1:m.num_cone_nlnr
-        spec = m.map_spec[n]
         soln = m.map_coefs[n] .* getvalue(m.map_vars[n][1])
 
-        if spec == :SOC
+        if m.map_spec[n] == :SOC
             inf_outer = sumabs2(soln[2:end]) - soln[1]^2
-        elseif spec == :ExpPrimal
+        elseif m.map_spec[n] == :ExpPrimal
             inf_outer = soln[2] * exp(soln[1] / soln[2]) - soln[3]
-        elseif spec == :SDP
-            inf_outer = -eigmin(make_smat(soln))
+        elseif m.map_spec[n] == :SDP
+            smat = Array{Float64,2}(m.map_dim[n], m.map_dim[n])
+            make_smat!(soln, smat, m.map_dim[n])
+            inf_outer = -eigmin(smat)
         end
 
         if inf_outer > 0.
-            m.summary[spec][:outer_max_n] += 1
-            m.summary[spec][:outer_max] = max(inf_outer, m.summary[spec][:outer_max])
+            m.summary[m.map_spec[n]][:outer_max_n] += 1
+            m.summary[m.map_spec[n]][:outer_max] = max(inf_outer, m.summary[m.map_spec[n]][:outer_max])
         elseif inf_outer < 0.
-            m.summary[spec][:outer_min_n] += 1
-            m.summary[spec][:outer_min] = max(-inf_outer, m.summary[spec][:outer_min])
+            m.summary[m.map_spec[n]][:outer_min_n] += 1
+            m.summary[m.map_spec[n]][:outer_min] = max(-inf_outer, m.summary[m.map_spec[n]][:outer_min])
         end
     end
     logs[:outer_inf] += toq()
-end
-
-# Transform an svec form into an smat form
-function make_smat(svec::Vector{Float64})
-    nSD = round(Int, sqrt(1/4 + 2 * length(svec)) - 1/2)
-    smat = Array{Float64,2}(nSD, nSD)
-    kSD = 1
-    for jSD in 1:nSD, iSD in jSD:nSD
-        if jSD == iSD
-            smat[iSD, jSD] = svec[kSD]
-        else
-            smat[iSD, jSD] = smat[jSD, iSD] = svec[kSD] / sqrt(2)
-        end
-        kSD += 1
-    end
-
-    return smat
-end
-
-# Transform an smat form into an svec form
-function make_svec(smat::Array{Float64,2})
-    nSD = size(smat, 2)
-    svec = Vector{Float64}(round(Int, (nSD * (nSD + 1) / 2)))
-    kSD = 1
-    for jSD in 1:nSD, iSD in jSD:nSD
-        if jSD == iSD
-            svec[kSD] = smat[iSD, jSD]
-        else
-            svec[kSD] = smat[iSD, jSD] * sqrt(2)
-        end
-        kSD += 1
-    end
-
-    return svec
 end
 
 
