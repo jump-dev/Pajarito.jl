@@ -57,7 +57,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     sdp_init_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
     sdp_eig::Bool               # (Conic SDP only) Use SDP eigenvector-derived cuts
     sdp_soc::Bool               # (Conic SDP only) Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
-    sdp_tol_eigvec::Float64     # (Conic SDP only) Tolerance for setting small values in SDP eigenvectors to zeros (for cut sanitation)
     sdp_tol_eigval::Float64     # (Conic SDP only) Tolerance for ignoring eigenvectors corresponding to small (positive) eigenvalues
 
     # Initial conic data
@@ -93,6 +92,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     map_vars::Vector{Vector{Vector{JuMP.Variable}}} # map_vars[i][j][k] is the kth variable of the slacks (j=1) or the disaggregated variables (j=2) of the ith nonlinear cone
     map_coefs::Vector{Vector{Float64}} # Coefficients associated with slacks of nonlinear cone (possibly not 1 for original slacks)
     map_isnew::Vector{Vector{Bool}} # Vector of bools indicating which variables in map_vars were added to the MIP
+    sdp_smat::Dict{Int,Array{Float64,2}} # Preallocated array for SDP cut adding functions
 
     # Conic constructed data
     cone_con_sub::Vector{Tuple{Symbol,Vector{Int}}} # Constraint cones data in conic subproblem
@@ -122,7 +122,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cb_lazy                     # Lazy callback reference (MIP-driven only)
 
     # Model constructor
-    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, viol_cuts_only, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, viol_cuts_only, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigval)
         m = new()
 
         m.log_level = log_level
@@ -149,7 +149,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.sdp_init_soc = sdp_init_soc
         m.sdp_eig = sdp_eig
         m.sdp_soc = sdp_soc
-        m.sdp_tol_eigvec = sdp_tol_eigvec
         m.sdp_tol_eigval = sdp_tol_eigval
 
         # If using MISOCP outer approximation, check MIP solver handles MISOCP
@@ -623,6 +622,9 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     map_coefs = Vector{Vector{Float64}}(m.num_cone_nlnr)
     map_isnew = Vector{Vector{Bool}}(m.num_cone_nlnr)
 
+    # For SDP, create dict from square SDP dimension to preallocated matrix
+    sdp_smat = Dict{Int,Array{Float64,2}}()
+
     # Add constraint cones to MIP; if linear, add directly, else create slacks if necessary
     lhs_expr = m.b_new - m.A_new * x_mip
 
@@ -745,6 +747,11 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     kSD += 1
                 end
 
+                # Preallocate smat matrix for SDP cut functions
+                if !haskey(sdp_smat, nSD)
+                    sdp_smat[nSD] = Array{Float64,2}(nSD, nSD)
+                end
+
                 # Set up helper variables and initial SDP SOC cuts
                 # TODO rethink helper and smat variables
                 # TODO not using coefs properly
@@ -786,6 +793,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     m.map_vars = map_vars
     m.map_coefs = map_coefs
     m.map_isnew = map_isnew
+    m.sdp_smat = sdp_smat
 
     logs[:data_mip] += toq()
     # println(model_mip)
@@ -1193,45 +1201,53 @@ end
 
 # Process dual vector and add dual cuts to MIP
 function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Symbol,Real}, dim::Int, vars::Vector{Vector{JuMP.Variable}}, coefs::Vector{Float64}, dual::Vector{Float64})
-    # Rescale the dual, don't add zero vectors
-    if maxabs(dual) > m.zero_tol
-        scale!(dual, (1. / maxabs(dual)))
-    else
-        return
-    end
-
-    # Sanitize rescaled dual: remove near-zeros
-    for ind in 1:length(dual)
-        if abs(dual[ind]) < m.zero_tol
-            dual[ind] = 0.
-        end
-    end
-
     # For primal cone species:
+    # 0 - rescale dual vector to set maximum absolute value to 1, or return if max abs is smaller than tolerance
     # 1 - calculate dual cone infeasibility of dual vector (negative value means strictly feasible in cone, zero means on cone boundary, positive means infeasible for cone)
-    # 2 - process dual (project if necessary, depending on dual inf), dropping any trivial/zero cuts
-    # 3 - disaggregate cut(s) if necessary
-    # 4 - add dual cut(s)
+    # 2 - process dual vector: remove near zeros and project if necessary
+    # 3 - add appropriate cut(s)
     if spec == :SOC
+        # 0 Rescale
+        if maxabs(dual) > m.zero_tol
+            scale!(dual, (1. / maxabs(dual)))
+        else
+            return
+        end
+
+        # 1 Calculate dual inf
         inf_dual = sumabs2(dual[2:end]) - dual[1]^2
 
+        # 2 Sanitize
+        for ind in 1:length(dual)
+            if abs(dual[ind]) < m.zero_tol
+                dual[ind] = 0.
+            end
+        end
+
         if dual[1] > 0.
-            # Project dual if infeasible and proj_dual_infeas or if strictly feasible and proj_dual_feas
+            # 2 Project dual if infeasible and proj_dual_infeas or if strictly feasible and proj_dual_feas
             if ((inf_dual > 0.) && m.proj_dual_infeas) || ((inf_dual < 0.) && m.proj_dual_feas)
-                # Project: epigraph variable equals norm
+                # Projection: epigraph variable equals norm
                 dual[1] = norm(dual[2:end])
             end
 
             if m.disagg_soc && (dim > 2)
-                # Add disaggregated 3-dim cuts
+                # 3 Add disaggregated 3-dim cuts
                 add_disagg_cuts!(m, spec_summ, vars[1], vars[2], coefs, dual)
             else
-                # Add nondisaggregated cut
+                # 3 Add nondisaggregated cut
                 add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
             end
         end
-
     elseif spec == :ExpPrimal
+        # 0 Rescale
+        if maxabs(dual) > m.zero_tol
+            scale!(dual, (1. / maxabs(dual)))
+        else
+            return
+        end
+
+        # 1 Calculate dual inf
         if dual[1] == 0.
             # Do not add cuts for dual[1] >= 0 because these simply enforce the nonnegativity of x[2] and x[3] in ExpPrimal
             if (dual[2] >= 0.) && (dual[3] >= 0.)
@@ -1247,33 +1263,46 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
         else
             inf_dual = -dual[1] * exp(dual[2] / dual[1]) - e * dual[3]
 
-            # Project dual if infeasible and proj_dual_infeas or if strictly feasible and proj_dual_feas
+            # 2 Sanitize
+            for ind in 1:length(dual)
+                if abs(dual[ind]) < m.zero_tol
+                    dual[ind] = 0.
+                end
+            end
+
+            # 2 Project dual if infeasible and proj_dual_infeas or if strictly feasible and proj_dual_feas
             if ((inf_dual > 0.) && m.proj_dual_infeas) || ((inf_dual < 0.) && m.proj_dual_feas)
-                # Project: epigraph variable equals LHS
+                # Projection: epigraph variable equals LHS
                 dual[3] = -dual[1] * exp(dual[2] / dual[1]) / e
             end
 
-            # Add 3-dim cut
+            # 3 Add 3-dim cut
             add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
         end
-
     elseif spec == :SDP
-        # Make svec dual into smat dual
-        # TODO could preallocate smat before algorithm: m.sdp_smat[dim] for each different dim
-        smat = Array{Float64,2}(dim, dim)
-        make_smat!(dual, smat, dim)
+        # Make svec dual into smat dual, store in preallocated smat matrix for that dimension
+        make_smat!(dual, m.sdp_smat[dim], dim)
 
-        # Get eigendecomposition of smat dual (use symmetric property) and calculate dual inf as negative minimum eigenvalue
+        # 1 Get eigendecomposition of smat dual (use symmetric property) and calculate dual inf as negative minimum eigenvalue
         # (m.sdp_eigvals[dim], m.sdp_eigvecs[dim]) = eig(m.sdp_smat[dim]) # requires allocation; direct lapack call doesn't
-        eigvals = LAPACK.syev!('N', 'L', smat)
+        eigvals = LAPACK.syev!('N', 'L', m.sdp_smat[dim])
         inf_dual = -minimum(eigvals)
 
         # TODO If m.sdp_eig
         # Add SDP eigenvalue cuts for eigenvalues larger than tolerance
-        for ind in 1:dim
-            if eigvals[ind] > m.sdp_tol_eigval
-                # Make smat eigenvector ind into svec dual and add linear cut
-                make_svec_vvt!(dual, smat, ind, dim)
+        for jSD in 1:dim
+            if eigvals[jSD] > m.sdp_tol_eigval
+                # 2 Make smat eigenvector jSD into svec dual
+                make_svec_vvt!(dual, m.sdp_smat[dim], jSD, dim)
+
+                # 2 Sanitize
+                for kSD in 1:length(dual)
+                    if abs(dual[kSD]) < m.zero_tol
+                        dual[kSD] = 0.
+                    end
+                end
+
+                # 3 Add linear cut
                 add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
             end
         end
