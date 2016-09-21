@@ -57,6 +57,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     sdp_init_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
     sdp_eig::Bool               # (Conic SDP only) Use SDP eigenvector-derived cuts
     sdp_soc::Bool               # (Conic SDP only) Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
+    sdp_tol_eigvec::Float64     # (Conic SDP only) Tolerance for setting small values in SDP eigenvectors to zeros (for cut sanitation)
     sdp_tol_eigval::Float64     # (Conic SDP only) Tolerance for ignoring eigenvectors corresponding to small (positive) eigenvalues
 
     # Initial conic data
@@ -122,7 +123,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cb_lazy                     # Lazy callback reference (MIP-driven only)
 
     # Model constructor
-    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, viol_cuts_only, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, viol_cuts_only, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         m = new()
 
         m.log_level = log_level
@@ -149,6 +150,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.sdp_init_soc = sdp_init_soc
         m.sdp_eig = sdp_eig
         m.sdp_soc = sdp_soc
+        m.sdp_tol_eigvec = sdp_tol_eigvec
         m.sdp_tol_eigval = sdp_tol_eigval
 
         # If using MISOCP outer approximation, check MIP solver handles MISOCP
@@ -1288,19 +1290,19 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
         eigvals = LAPACK.syev!('N', 'L', m.sdp_smat[dim])
         inf_dual = -minimum(eigvals)
 
-        # TODO If m.sdp_eig
+        # TODO If m.sdp_eig ...
         # Add SDP eigenvalue cuts for eigenvalues larger than tolerance
         for jSD in 1:dim
             if eigvals[jSD] > m.sdp_tol_eigval
-                # 2 Make smat eigenvector jSD into svec dual
-                make_svec_vvt!(dual, m.sdp_smat[dim], jSD, dim)
-
-                # 2 Sanitize
-                for kSD in 1:length(dual)
-                    if abs(dual[kSD]) < m.zero_tol
-                        dual[kSD] = 0.
+                # 2 Sanitize eigenvector jSD
+                for iSD in 1:dim
+                    if abs(m.sdp_smat[dim][iSD, jSD]) < m.sdp_tol_eigvec
+                        m.sdp_smat[dim][iSD, jSD] = 0.
                     end
                 end
+
+                # 2 Make smat eigenvector jSD into svec dual
+                make_svec_vvt!(dual, m.sdp_smat[dim], jSD, dim)
 
                 # 3 Add linear cut
                 add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
