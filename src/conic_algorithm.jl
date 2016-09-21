@@ -283,12 +283,9 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
         @printf "Matrix A has %d entries smaller than zero tolerance %e; performance may be improved by first fixing small magnitudes to zero\n" A_num_zeros m.zero_tol
     end
 
-
-
-    A_sp[abs(A_sp) .< m.zero_tol] = 0.
-    A_sp = sparse(A_sp)
-
-
+    # This is for testing only: set near zeros in A matrix to zero
+    # A_sp[abs(A_sp) .< m.zero_tol] = 0.
+    # A_sp = sparse(A_sp)
 
     m.num_con_orig = num_con_orig
     m.num_var_orig = num_var_orig
@@ -750,7 +747,6 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                         coefs_smat[iSD, jSD] = coefs[kSD]
                     else
                         if abs(coefs[kSD]) == sqrt(2)
-                            println("oh it's root 2")
                             coefs_smat[iSD, jSD] = sign(coefs[kSD])
                         else
                             coefs_smat[iSD, jSD] = coefs[kSD] / sqrt(2)
@@ -1305,16 +1301,16 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
             add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
         end
     elseif spec == :SDP
-        if !m.sdp_eig
-            add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
-            inf_dual = 0.
-        else
+        # TODO currently adding this cut no matter what. it at least needs to be projected
+        add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
+
+        if m.sdp_eig
             # Make svec dual into smat dual, store in preallocated smat matrix for that dimension
-            make_smat!(dual, m.sdp_smat[dim], dim)
+            smat = make_smat!(dual, m.sdp_smat[dim], dim)
 
             # 1 Get eigendecomposition of smat dual (use symmetric property) and calculate dual inf as negative minimum eigenvalue
             # (m.sdp_eigvals[dim], m.sdp_eigvecs[dim]) = eig(m.sdp_smat[dim]) # requires allocation; direct lapack call doesn't
-            eigvals = LAPACK.syev!('N', 'L', m.sdp_smat[dim])
+            (eigvals, smat) = LAPACK.syev!('V', 'L', smat)
             inf_dual = -minimum(eigvals)
 
             # Add SDP eigenvalue cuts for eigenvalues larger than tolerance
@@ -1322,13 +1318,13 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
                 if eigvals[jSD] > m.sdp_tol_eigval
                     # 2 Sanitize eigenvector jSD
                     for iSD in 1:dim
-                        if abs(m.sdp_smat[dim][iSD, jSD]) < m.sdp_tol_eigvec
-                            m.sdp_smat[dim][iSD, jSD] = 0.
+                        if abs(smat[iSD, jSD]) < m.sdp_tol_eigvec
+                            smat[iSD, jSD] = 0.
                         end
                     end
 
                     # 2 Make smat eigenvector jSD into svec dual
-                    make_svec_vvt!(dual, m.sdp_smat[dim], jSD, dim)
+                    make_svec_vvt!(dual, smat, jSD, dim)
 
                     # 3 Add linear cut
                     add_linear_cut!(m, spec_summ, vars[1], coefs, dual)
@@ -1674,13 +1670,13 @@ function create_logs()
     logs[:conic_cuts] = 0.  # Adding cuts for conic subproblem model
     logs[:conic_soln] = 0.  # Checking and adding new feasible conic solution
     logs[:outer_inf] = 0.   # Calculating outer infeasibility for all cones
-    logs[:feas_add] = 0.     # Using heuristic callback (MIP driven solve only)
+    logs[:feas_add] = 0.    # Using heuristic callback (MIP driven solve only)
     logs[:mip_solve] = 0.   # Solving the MIP model
     logs[:oa_alg] = 0.      # Performing outer approximation algorithm
 
     # Iteration counters
     logs[:n_conic] = 0      # Number of conic subproblem solves
-    logs[:n_feas_add] = 0    # Number of times heuristic callback is called
+    logs[:n_feas_add] = 0   # Number of times heuristic callback is called
 
     return logs
 end
