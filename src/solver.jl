@@ -41,7 +41,7 @@ end
 
 
 function PajaritoSolver(;
-    log_level = 0,
+    log_level = 1,
     mip_solver_drives = false,
     pass_mip_sols = true,
     mip_subopt_count = 0,
