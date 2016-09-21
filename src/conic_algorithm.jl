@@ -1263,9 +1263,10 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
         smat = Array{Float64,2}(dim, dim)
         make_smat!(dual, smat, dim)
 
-        # Get eigendecomposition of smat dual and calculate dual inf as negative minimum eigenvalue
+        # Get eigendecomposition of smat dual (use symmetric property) and calculate dual inf as negative minimum eigenvalue
         # (m.sdp_eigvals[dim], m.sdp_eigvecs[dim]) = eig(m.sdp_smat[dim]) # requires allocation; direct lapack call doesn't
         eigvals = LAPACK.syev!('N', 'L', smat)
+        inf_dual = -minimum(eigvals)
 
         # TODO If m.sdp_eig
         # Add SDP eigenvalue cuts for eigenvalues larger than tolerance
@@ -1311,7 +1312,6 @@ function add_cone_cuts!(m::PajaritoConicModel, spec::Symbol, spec_summ::Dict{Sym
 
     # Update dual infeasibility
     if m.log_level > 2
-        inf_dual = -minimum(m.sdp_eigvals[dim])
         if inf_dual > 0.
             spec_summ[:dual_max_n] += 1
             spec_summ[:dual_max] = max(inf_dual, spec_summ[:dual_max])
