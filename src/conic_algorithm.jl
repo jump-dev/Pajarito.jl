@@ -313,7 +313,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     A_sp = sparse(A)
     A_num_zeros = count(val -> (abs(val) < m.zero_tol), nonzeros(A_sp))
     if A_num_zeros > 0
-        @printf "Matrix A has %d entries smaller than zero tolerance %e; performance may be improved by first fixing small magnitudes to zero\n" A_num_zeros m.zero_tol
+        warn("Matrix A has $(A_num_zeros) entries smaller than zero tolerance $(m.zero_tol); performance may be improved by first fixing small magnitudes to zero\n")
     end
 
     # This is for testing only: set near zeros in A matrix to zero
@@ -927,12 +927,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             end
         end
 
-
-
-
-
-
-        # TODO testing.
+        # TODO testing idea based on linearization of Schur complement SOC cuts with matrix of all 1s
         # for jSD in 1:dim
         #     @constraint(model_mip, coefs_smat[jSD, jSD] * vars_smat[jSD, jSD] + sum{coefs_smat[k, l] * vars_smat[k, l], k in 1:dim, l in 1:dim; (k != jSD) && (l != jSD)} >=  sum{2. * coefs_smat[k, jSD] * vars_smat[k, jSD], k in 1:dim; k != jSD})
         #     @constraint(model_mip, coefs_smat[jSD, jSD] * vars_smat[jSD, jSD] + sum{coefs_smat[k, l] * vars_smat[k, l], k in 1:dim, l in 1:dim; (k != jSD) && (l != jSD)} >= sum{-2. * coefs_smat[k, jSD] * vars_smat[k, jSD], k in 1:dim; k != jSD})
@@ -1538,6 +1533,12 @@ function add_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars::Vector{JuMP.Variab
         end
     end
 
+
+
+# maybe use full space matrix multiplication VDV'. look for BLAS function? or LAPACK? for reconstruct matrix from eigvecs and eigvals
+
+
+
     # 2 Project dual if infeasible and proj_dual_infeas
     if (inf_dual > 0.) && m.proj_dual_infeas
         make_svec_VDVt!(dual, smat, eigvals, dim)
@@ -1563,7 +1564,7 @@ function add_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars::Vector{JuMP.Variab
 
                 # 3 Add rank-1 Schur complement svec cut for each row index iSD, from smat eigenvector jSD
                 # TODO make it an option
-                if m.sdp_soclin
+                # if m.sdp_soclin
                     for iSD in 1:dim
                         # Cut for Schur vector positive
                         make_svec_vvt_schur!(dual, smat, jSD, iSD, dim, true)
@@ -1573,7 +1574,7 @@ function add_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars::Vector{JuMP.Variab
                         make_svec_vvt_schur!(dual, smat, jSD, iSD, dim, false)
                         add_cut_linear!(m, vars, coefs, dual, spec_summ)
                     end
-                end
+                # end
             end
         end
     end
