@@ -739,7 +739,6 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             num_exp += 1
         elseif spec == :SDP
             num_sdp += 1
-
             dim = round(Int, sqrt(1/4 + 2 * length(rows)) - 1/2) # smat space dimension
             if summ_sdp[:max_dim] < dim
                 summ_sdp[:max_dim] = dim
@@ -1061,7 +1060,7 @@ end
 # Solve the MIP model using iterative outer approximation algorithm
 function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     count_early = m.mip_subopt_count
-    soln_int_set = Set{Vector{Float64}}()
+    soln_hash_set = Set{UInt64}()
     soln_int = Vector{Float64}(length(m.cols_int))
 
     while true
@@ -1134,7 +1133,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
 
         # Check if integer solution has been returned before
-        if soln_int in soln_int_set
+        if hash(soln_int) in soln_hash_set
             if count_early > 0
                 # Solve was suboptimal: don't call subproblem, run MIP to optimality next iteration
                 count_early = m.mip_subopt_count
@@ -1155,7 +1154,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             end
         else
             # Solution is new: save it in the set
-            push!(soln_int_set, soln_int)
+            push!(soln_hash_set, hash(soln_int))
 
             # Solve conic subproblem to add cuts to MIP and update best feasible solution, finish if encounter conic solver failure
             if !process_conic!(m, soln_int, logs)
@@ -1430,7 +1429,7 @@ function add_cuts_soc!(m::PajaritoConicModel, dim::Int, vars::Vector{JuMP.Variab
     end
 
     # 1 Calculate dual inf
-    inf_dual = sumabs2(dual[2:end]) - dual[1]^2
+    inf_dual = norm(dual[2:end]) - dual[1]
     if m.log_level > 2
         update_inf_dual!(inf_dual, spec_summ)
     end
@@ -1442,21 +1441,23 @@ function add_cuts_soc!(m::PajaritoConicModel, dim::Int, vars::Vector{JuMP.Variab
         end
     end
 
-    # Discard cut if epigraph variable is 0
-    if dual[1] > 0.
-        # 2 Project dual if infeasible and proj_dual_infeas or if strictly feasible and proj_dual_feas
-        if ((inf_dual > 0.) && m.proj_dual_infeas) || ((inf_dual < 0.) && m.proj_dual_feas)
-            # Projection: epigraph variable equals norm
-            dual[1] = norm(dual[2:end])
-        end
+    # 2 Project dual if infeasible and proj_dual_infeas or if strictly feasible and proj_dual_feas
+    if ((inf_dual > 0.) && m.proj_dual_infeas) || ((inf_dual < 0.) && m.proj_dual_feas)
+        # Projection: epigraph variable equals norm
+        dual[1] = norm(dual[2:end])
+    end
 
-        if m.disagg_soc
-            # 3 Add disaggregated 3-dim cuts
-            add_cuts_dagg_soc!(m, vars, vars_dagg, coefs, dual, spec_summ)
-        else
-            # 3 Add nondisaggregated cut
-            add_cut_linear!(m, vars, coefs, dual, spec_summ)
-        end
+    # Discard cut if epigraph variable is 0
+    if dual[1] <= 0.
+        return
+    end
+
+    if m.disagg_soc
+        # 3 Add disaggregated 3-dim cuts
+        add_cuts_dagg_soc!(m, vars, vars_dagg, coefs, dual, spec_summ)
+    else
+        # 3 Add nondisaggregated cut
+        add_cut_linear!(m, vars, coefs, dual, spec_summ)
     end
 end
 
@@ -1494,17 +1495,19 @@ function add_cuts_exp!(m::PajaritoConicModel, vars::Vector{JuMP.Variable}, coefs
         end
     end
 
-    # Discard cut if dual[1] >= 0 (simply enforces the nonnegativity of x[2] and x[3]) or dual[3] < 0 (can't project onto dual[3] = 0)
-    if (dual[1] < 0.) && (dual[3] >= 0.)
-        # 2 Project dual if infeasible and proj_dual_infeas or if strictly feasible and proj_dual_feas
-        if ((inf_dual > 0.) && m.proj_dual_infeas) || ((inf_dual < 0.) && m.proj_dual_feas)
-            # Projection: epigraph variable equals LHS
-            dual[3] = -dual[1] * exp(dual[2] / dual[1] - 1.)
-        end
-
-        # 3 Add 3-dim cut
-        add_cut_linear!(m, vars, coefs, dual, spec_summ)
+    # 2 Project dual if infeasible and proj_dual_infeas or if strictly feasible and proj_dual_feas
+    if ((inf_dual > 0.) && m.proj_dual_infeas) || ((inf_dual < 0.) && m.proj_dual_feas)
+        # Projection: epigraph variable equals LHS
+        dual[3] = -dual[1] * exp(dual[2] / dual[1] - 1.)
     end
+
+    # Discard cut if dual[1] >= 0 (simply enforces the nonnegativity of x[2] and x[3]) or dual[3] < 0 (can't project onto dual[3] = 0)
+    if (dual[1] >= 0.) || (dual[3] < 0.)
+        return
+    end
+
+    # 3 Add 3-dim cut
+    add_cut_linear!(m, vars, coefs, dual, spec_summ)
 end
 
 # Add dual cuts for a SDP cone
@@ -1536,9 +1539,9 @@ function add_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars::Vector{JuMP.Variab
     end
 
     # 2 Project dual if infeasible and proj_dual_infeas
-    # if (inf_dual > 0.) && m.proj_dual_infeas
-    #     make_svec_VDVt!(dual, smat, eigvals, dim)
-    # end
+    if (inf_dual > 0.) && m.proj_dual_infeas
+        make_svec_VDVt!(dual, smat, eigvals, dim)
+    end
 
     # 3 Add single linear rank-n cut on dual
     add_cut_linear!(m, vars, coefs, dual, spec_summ)
@@ -1846,7 +1849,7 @@ function calc_inf_outer!(m::PajaritoConicModel)
     end
 
     for n in 1:m.num_soc
-        inf_outer = sumabs2(m.coefs_soc[n][2:end] .* getvalue(m.vars_soc[n][2:end])) - (m.coefs_soc[n][1] * getvalue(m.vars_soc[n][1]))^2
+        inf_outer = norm(m.coefs_soc[n][2:end] .* getvalue(m.vars_soc[n][2:end])) - (m.coefs_soc[n][1] * getvalue(m.vars_soc[n][1]))
         if inf_outer > 0.
             m.summ_soc[:outer_max_n] += 1
             m.summ_soc[:outer_max] = max(inf_outer, m.summ_soc[:outer_max])
