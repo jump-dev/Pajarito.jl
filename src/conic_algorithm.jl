@@ -1563,17 +1563,17 @@ function add_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars::Vector{JuMP.Variab
 
                 # 3 Add rank-1 Schur complement svec cut for each row index iSD, from smat eigenvector jSD
                 # TODO make it an option
-                # if m.sdp_soclin
-                    # for iSD in 1:dim
-                    #     # Cut for Schur vector positive
-                    #     make_svec_vvt_schur!(dual, smat, jSD, iSD, dim, true)
-                    #     add_cut_linear!(m, vars, coefs, dual, spec_summ)
-                    #
-                    #     # Cut for Schur vector negative
-                    #     make_svec_vvt_schur!(dual, smat, jSD, iSD, dim, false)
-                    #     add_cut_linear!(m, vars, coefs, dual, spec_summ)
-                    # end
-                # end
+                if m.sdp_soclin
+                    for iSD in 1:dim
+                        # Cut for Schur vector positive
+                        make_svec_vvt_schur!(dual, smat, jSD, iSD, dim, true)
+                        add_cut_linear!(m, vars, coefs, dual, spec_summ)
+
+                        # Cut for Schur vector negative
+                        make_svec_vvt_schur!(dual, smat, jSD, iSD, dim, false)
+                        add_cut_linear!(m, vars, coefs, dual, spec_summ)
+                    end
+                end
             end
         end
     end
