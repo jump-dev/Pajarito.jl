@@ -3,7 +3,7 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-function runconicdefaulttests(mip_solver_drives)
+function runconicdefaulttests(mip_solver_drives, log)
     facts("Default solvers test") do
         context("With $(mip_solver_drives ? "MIP-driven" : "Iterative"), defaulting to $(typeof(MathProgBase.defaultMIPsolver)) and $(typeof(MathProgBase.defaultConicsolver))") do
             x = Convex.Variable(1,:Int)
@@ -12,7 +12,7 @@ function runconicdefaulttests(mip_solver_drives)
                                 x <= 10,
                                 x^2 <= 9)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, log_level=0))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, log_level=log))
 
             @fact problem.optval --> roughly(9.0, TOL)
             @fact problem.status --> :Optimal

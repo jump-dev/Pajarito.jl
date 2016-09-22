@@ -3,12 +3,12 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
+function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver, log)
     algorithm = mip_solver_drives ? "MIP-driven" : "Iterative"
 
     facts("Sparse matrix bug test") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -24,7 +24,7 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
 
     facts("Convex constraint with LB and UB test") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -40,7 +40,7 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
 
     facts("Infeasible NLP problem") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -59,7 +59,7 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
 
     facts("Infeasible MIP problem") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -79,7 +79,7 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
 
     facts("Solver test") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -100,7 +100,7 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
 
     facts("Optimal solution with nonlinear objective test") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -121,7 +121,7 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
 
     facts("No integer variables test") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log))
 
             @variable(m, x >= 0, start = 1)
             @variable(m, y >= 0, start = 1)
@@ -140,7 +140,7 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
 
     facts("Maximization problem") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -158,7 +158,7 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
 
     facts("Maximization problem with nonlinear function") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)
@@ -176,7 +176,7 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver)
 
     facts("Maximization problem with nonlinear function (LP/QP interface)") do
         context("With $algorithm, $(typeof(mip_solver)) and $(typeof(nlp_solver))") do
-            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=0))
+            m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log))
 
             @variable(m, x >= 0, start = 1, Int)
             @variable(m, y >= 0, start = 1)

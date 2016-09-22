@@ -9,6 +9,9 @@ import Convex
 using Pajarito
 
 include(Pkg.dir("JuMP", "test", "solvers.jl"))
+include("nlptest.jl")
+include("conictest.jl")
+include("sdptest.jl")
 
 # Define solvers using JuMP/test/solvers.jl
 solvers_mip = lazy_solvers
@@ -26,35 +29,32 @@ solvers_sdp = mos ? [Mosek.MosekSolver(LOG=0)] : []
 # Set fact check tolerance
 TOL = 1e-3
 
+# Option to print with log_level
+log = 3
+
 # Nonlinear models tests in nlptest.jl
-include("nlptest.jl")
-for mip_solver_drives in [false, true], mip in solvers_mip, nlnr in solvers_nlnr
-    runnonlineartests(mip_solver_drives, mip, nlnr)
-end
+# for mip_solver_drives in [false, true], mip in solvers_mip, nlnr in solvers_nlnr
+#     runnonlineartests(mip_solver_drives, mip, nlnr, log)
+# end
 
 # Conic models test in conictest.jl
-include("conictest.jl")
-
 # Default solvers test
-runconicdefaulttests(false)
-
-log = 0
-for mip_solver_drives in [false, true], mip in solvers_mip
-    # Conic model with conic solvers
-    for conic in solvers_conic
-        runconictests(mip_solver_drives, mip, conic, log)
-    end
-
-    # Conic model with nonlinear solvers
-    for nlnr in solvers_nlnr
-        runconictests(mip_solver_drives, mip, nlnr, log)
-    end
-end
+# runconicdefaulttests(false, log)
+# for mip_solver_drives in [false, true], mip in solvers_mip
+#     # Conic model with conic solvers
+#     for conic in solvers_conic
+#         runconictests(mip_solver_drives, mip, conic, log)
+#     end
+#
+#     # Conic model with nonlinear solvers
+#     # for nlnr in solvers_nlnr
+#     #     runconictests(mip_solver_drives, mip, nlnr, log)
+#     # end
+# end
 
 # SDP conic models tests in sdptest.jl
-include("sdptest.jl")
 for mip_solver_drives in [false, true], mip in solvers_mip, sdp in solvers_sdp
-    runsdptests(mip_solver_drives, mip, sdp)
+    runsdptests(mip_solver_drives, mip, sdp, log)
 end
 
 FactCheck.exitstatus()
