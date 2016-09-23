@@ -67,8 +67,8 @@ function PajaritoSolver(;
     sdp_init_soc = false,
     sdp_eig = true,
     sdp_soc = false,
-    sdp_tol_eigvec = 1e-5,
-    sdp_tol_eigval = 1e-10
+    sdp_tol_eigvec = 1e-2,
+    sdp_tol_eigval = 1e-6
     )
 
     PajaritoSolver(log_level, mip_solver_drives, pass_mip_sols, round_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, viol_cuts_only, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
