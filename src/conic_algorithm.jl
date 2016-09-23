@@ -1125,6 +1125,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         if hash(soln_int) in soln_hash_set
             # Integer solution has been seen before
             logs[:n_repeat] += 1
+            warn("Integer solution has repeated\n")
 
             if count_early > 0
                 # Solve was suboptimal: don't call subproblem, run MIP to optimality next iteration
@@ -1217,6 +1218,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         if hash(soln_int) in soln_hash_set
             # Integer solution has been seen before
             logs[:n_repeat] += 1
+            # warn("Integer solution has repeated\n")
 
             # TODO don't do conic subproblem but have to add cuts violated by current solution
         else
