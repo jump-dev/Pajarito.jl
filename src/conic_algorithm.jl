@@ -15,11 +15,11 @@ http://mathprogbasejl.readthedocs.org/en/latest/conic.html
 
 TODO issues
 - MPB issue - can't call supportedcones on defaultConicsolver
-
 - count how many times we get repeated integer sols in mip solver driven
 - what to do if we encounter same MIP solutions in mip solver driven?
 -- maybe add all VIOLATED cuts
 -- maybe when we encounter the same integer solution (and we have been rounding), we iterate over all the nonlinear cones, and if the continuous MIP solution is not in a primal cone, we add a cut for that cone
+- maybe want two zero tols: one for discarding cut if largest value is too small, and one for setting near zeros to zero (the former should be larger)
 
 TODO features
 - implement warm-start pajarito: use set_best_soln!
@@ -918,6 +918,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
 
         # Add initial SDP linear constraints
+        # TODO these are redundant with init SOCs so don't do both
         if m.sdp_init_lin
             for jSD in 1:dim, iSD in (jSD + 1):dim
                 # Add initial SDP linear cuts based on linearization of 3-dim rotated SOCs that enforce 2x2 principal submatrix PSDness (essentially the dual of SDSOS)
@@ -926,12 +927,6 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 @constraint(model_mip, coefs_smat[iSD, iSD] * vars_smat[iSD, iSD] + coefs_smat[jSD, jSD] * vars_smat[jSD, jSD] >= -2. * coefs_smat[iSD, jSD] * vars_smat[iSD, jSD])
             end
         end
-
-        # TODO testing idea based on linearization of Schur complement SOC cuts with matrix of all 1s
-        # for jSD in 1:dim
-        #     @constraint(model_mip, coefs_smat[jSD, jSD] * vars_smat[jSD, jSD] + sum{coefs_smat[k, l] * vars_smat[k, l], k in 1:dim, l in 1:dim; (k != jSD) && (l != jSD)} >=  sum{2. * coefs_smat[k, jSD] * vars_smat[k, jSD], k in 1:dim; k != jSD})
-        #     @constraint(model_mip, coefs_smat[jSD, jSD] * vars_smat[jSD, jSD] + sum{coefs_smat[k, l] * vars_smat[k, l], k in 1:dim, l in 1:dim; (k != jSD) && (l != jSD)} >= sum{-2. * coefs_smat[k, jSD] * vars_smat[k, jSD], k in 1:dim; k != jSD})
-        # end
 
         # Add initial SDP SOC cuts
         if m.sdp_init_soc || m.sdp_soc
@@ -1127,8 +1122,10 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             end
         end
 
-        # Check if integer solution has been returned before
         if hash(soln_int) in soln_hash_set
+            # Integer solution has been seen before
+            logs[:n_repeat] += 1
+
             if count_early > 0
                 # Solve was suboptimal: don't call subproblem, run MIP to optimality next iteration
                 count_early = m.mip_subopt_count
@@ -1148,7 +1145,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 break
             end
         else
-            # Solution is new: save it in the set
+            # Integer solution is new: save it in the set
             push!(soln_hash_set, hash(soln_int))
 
             # Solve conic subproblem to add cuts to MIP and update best feasible solution, finish if encounter conic solver failure
@@ -1188,6 +1185,8 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     m.best_int = fill(NaN, length(m.cols_int))
     m.best_sub = fill(NaN, length(m.cols_cont))
     m.slck_sub = fill(NaN, length(m.b_sub))
+
+    soln_hash_set = Set{UInt64}()
     soln_int = Vector{Float64}(length(m.cols_int))
 
     # Add lazy cuts callback, to solve the conic subproblem and add lazy cuts
@@ -1197,8 +1196,6 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         tic()
         calc_inf_outer!(m)
         logs[:outer_inf] += toq()
-
-        m.cb_lazy = cb
 
         # Get integer solution
         for ind in 1:length(soln_int)
@@ -1217,9 +1214,20 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             end
         end
 
-        # TODO check if seen before
+        if hash(soln_int) in soln_hash_set
+            # Integer solution has been seen before
+            logs[:n_repeat] += 1
 
+            # TODO don't do conic subproblem but have to add cuts violated by current solution
+        else
+            # Integer solution is new: save it in the set
+            push!(soln_hash_set, hash(soln_int))
 
+            # TODO now do conic subproblem
+        end
+
+        # Solve conic subproblem and add dual cuts and possibly new best solution
+        m.cb_lazy = cb
         if !process_conic!(m, soln_int, logs)
             m.status = :ConicFailure
             throw(CallbackAbort())
@@ -1385,8 +1393,8 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
     if status_conic != :Infeasible
         tic()
         obj_new = dot(m.c_sub_int, soln_int) + MathProgBase.getobjval(model_conic)
+        # Check if have new best feasible solution
         if obj_new <= m.best_obj
-            # New best feasible solution
             # Save objective and best int and cont variable solutions
             m.best_obj = obj_new
             m.used_soln = false
@@ -1533,11 +1541,9 @@ function add_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars::Vector{JuMP.Variab
         end
     end
 
+    # TODO try removing from few to many small values from eigvecs and add rank 1 cuts
 
-
-# maybe use full space matrix multiplication VDV'. look for BLAS function? or LAPACK? for reconstruct matrix from eigvecs and eigvals
-
-
+    # TODO rewrite with full space matrix multiplication VDV'
 
     # 2 Project dual if infeasible and proj_dual_infeas
     if (inf_dual > 0.) && m.proj_dual_infeas
@@ -1563,7 +1569,7 @@ function add_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars::Vector{JuMP.Variab
                 add_cut_linear!(m, vars, coefs, dual, spec_summ)
 
                 # 3 Add rank-1 Schur complement svec cut for each row index iSD, from smat eigenvector jSD
-                # TODO make it an option
+                # TODO check correctness, see if it helps, make it an option
                 # if m.sdp_soclin
                     # for iSD in 1:dim
                     #     # Cut for Schur vector positive
@@ -1929,26 +1935,26 @@ end
 # Save in svec vector the ....TODO
 # @constraint(m.model_mip, coefs[iSD, iSD] * vars[iSD, iSD] + sum{smat[k, jSD] * smat[l, jSD] * coefs[k, l] * vars[k, l], k in 1:dim if k != iSD, l in 1:dim if l != iSD} >= sum{ 2 * smat[k, iSD] * smat[k, jSD] * coefs[k, iSD] * vars[k, iSD], k in 1:dim if k != iSD})
 # @constraint(m.model_mip, coefs[iSD, iSD] * vars[iSD, iSD] + sum{smat[k, jSD] * smat[l, jSD] * coefs[k, l] * vars[k, l], k in 1:dim if k != iSD, l in 1:dim if l != iSD} >= sum{-2 * smat[k, iSD] * smat[k, jSD] * coefs[k, iSD] * vars[k, iSD], k in 1:dim if k != iSD})
-function make_svec_vvt_schur!(svec::Vector{Float64}, smat::Array{Float64,2}, jind::Int, iind::Int, dim::Int, neg::Bool)
-    kSD = 1
-    for jSD in 1:dim, iSD in jSD:dim
-        if jSD == iSD
-            if iSD == iind
-                svec[kSD] = 1.
-            else
-                svec[kSD] = smat[iSD, jind]^2
-            end
-        else
-            if iSD == iind
-                svec[kSD] = (neg ? -1 : 1) * smat[iSD, jind] * smat[jSD, jind] * sqrt(2)
-            else
-                svec[kSD] = smat[iSD, jind] * smat[jSD, jind] * sqrt(2)
-            end
-        end
-        kSD += 1
-    end
-    return svec
-end
+# function make_svec_vvt_schur!(svec::Vector{Float64}, smat::Array{Float64,2}, jind::Int, iind::Int, dim::Int, neg::Bool)
+#     kSD = 1
+#     for jSD in 1:dim, iSD in jSD:dim
+#         if jSD == iSD
+#             if iSD == iind
+#                 svec[kSD] = 1.
+#             else
+#                 svec[kSD] = smat[iSD, jind]^2
+#             end
+#         else
+#             if iSD == iind
+#                 svec[kSD] = (neg ? -1 : 1) * smat[iSD, jind] * smat[jSD, jind] * sqrt(2)
+#             else
+#                 svec[kSD] = smat[iSD, jind] * smat[jSD, jind] * sqrt(2)
+#             end
+#         end
+#         kSD += 1
+#     end
+#     return svec
+# end
 
 
 #=========================================================
@@ -1976,9 +1982,10 @@ function create_logs()
     logs[:mip_solve] = 0.   # Solving the MIP model
     logs[:oa_alg] = 0.      # Performing outer approximation algorithm
 
-    # Iteration counters
+    # Counters
     logs[:n_conic] = 0      # Number of conic subproblem solves
-    logs[:n_feas_add] = 0   # Number of times heuristic callback is called
+    logs[:n_feas_add] = 0   # Number of times feasible MIP solution is added
+    logs[:n_repeat] = 0     # Number of times integer solution repeats
 
     return logs
 end
@@ -2082,6 +2089,7 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     @printf " - Relative opt. gap    = %14.3e\n" m.gap_rel_opt
     @printf " - Conic iter. count    = %14d\n" logs[:n_conic]
     @printf " - Feas. solution count = %14d\n" logs[:n_feas_add]
+    @printf " - Integer repeat count = %14d\n" logs[:n_repeat]
     @printf "\nTimers (s):\n"
     @printf " - Setup                = %14.2e\n" (logs[:total] - logs[:oa_alg])
     @printf " -- Transform data      = %14.2e\n" logs[:data_trans]

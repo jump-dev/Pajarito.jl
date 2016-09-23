@@ -45,7 +45,7 @@ function PajaritoSolver(;
     log_level = 1,
     mip_solver_drives = false,
     pass_mip_sols = true,
-    round_mip_sols = true,
+    round_mip_sols = false,
     mip_subopt_count = 0,
     mip_subopt_solver = MathProgBase.defaultMIPsolver,
     soc_in_mip = false,
