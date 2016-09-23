@@ -979,7 +979,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     coefs[ind] = - m.row_to_slckv[i]
                     isslacknew[ind] = false
                 else
-                    vars[ind] = @variable(model_mip)
+                    vars[ind] = @variable(model_mip, _)
                     @constraint(model_mip, lhs_expr[i] - vars[ind] == 0.)
                     isslacknew[ind] = true
                 end
