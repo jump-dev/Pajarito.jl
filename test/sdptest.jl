@@ -3,7 +3,7 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-function runsdptests(mip_solver_drives, mip_solver, sdp_solver)
+function runsdptests(mip_solver_drives, mip_solver, sdp_solver, log)
     algorithm = mip_solver_drives ? "MIP-driven" : "Iterative"
 
     facts("Maximization problem") do
@@ -18,7 +18,7 @@ function runsdptests(mip_solver_drives, mip_solver, sdp_solver)
                                 x^2 <= 4,
                                 y >= z[2,2])
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=sdp_solver, log_level=0))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=sdp_solver, log_level=log))
 
             @fact problem.optval --> roughly(8.0, TOL)
         end
