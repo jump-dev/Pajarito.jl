@@ -2283,7 +2283,7 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     @printf "\n"
     flush(STDOUT)
 
-    if log_level < 3
+    if m.log_level < 2
         return
     end
 
@@ -2296,7 +2296,7 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
     end
     if m.num_exp > 0
-        println(" - Primal exp. cones")
+        println(" - Primal exp.  cones")
         for n in 1:m.num_soc
             inf_outer = norm(m.coefs_soc[n][2:end] .* getvalue(m.vars_soc[n][2:end])) - (m.coefs_soc[n][1] * getvalue(m.vars_soc[n][1]))
             @printf "   %d : %14.4e\n" n inf_outer
@@ -2309,4 +2309,6 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             @printf "   %d : %14.4e\n" n inf_outer
         end
     end
+    @printf "\n"
+    flush(STDOUT)
 end
