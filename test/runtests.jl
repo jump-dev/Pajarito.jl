@@ -30,26 +30,26 @@ solvers_sdp = mos ? [Mosek.MosekSolver(LOG=0)] : []
 TOL = 1e-3
 
 # Option to print with log_level
-log = 3
+log = 0
 
-# # Nonlinear models tests in nlptest.jl
-# for mip_solver_drives in [false, true], mip in solvers_mip, nlnr in solvers_nlnr
-#     runnonlineartests(mip_solver_drives, mip, nlnr, log)
-# end
-#
-# # Conic models test in conictest.jl
-# # Default solvers test
-# runconicdefaulttests(false, log)
+# Nonlinear models tests in nlptest.jl
+for mip_solver_drives in [false, true], mip in solvers_mip, nlnr in solvers_nlnr
+    runnonlineartests(mip_solver_drives, mip, nlnr, log)
+end
+
+# Conic models test in conictest.jl
+# Default solvers test
+runconicdefaulttests(false, log)
 for mip_solver_drives in [false, true], mip in solvers_mip
     # Conic model with conic solvers
     for conic in solvers_conic
         runconictests(mip_solver_drives, mip, conic, log)
     end
 
-    # # Conic model with nonlinear solvers
-    # for nlnr in solvers_nlnr
-    #     runconictests(mip_solver_drives, mip, nlnr, log)
-    # end
+    # Conic model with nonlinear solvers
+    for nlnr in solvers_nlnr
+        runconictests(mip_solver_drives, mip, nlnr, log)
+    end
 end
 
 # SDP conic models tests in sdptest.jl
