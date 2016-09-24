@@ -2147,7 +2147,6 @@ function create_logs()
     logs[:conic_solve] = 0. # Solving conic subproblem model
     logs[:conic_cuts] = 0.  # Adding cuts for conic subproblem model
     logs[:conic_soln] = 0.  # Checking and adding new feasible conic solution
-    logs[:outer_inf] = 0.   # Calculating outer infeasibility for all cones
     logs[:feas_add] = 0.    # Using heuristic callback (MIP driven solve only)
     logs[:prim_cuts] = 0.   # Adding primal cuts
     logs[:mip_solve] = 0.   # Solving the MIP model
@@ -2279,7 +2278,6 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     @printf " -- Solve conic model   = %14.2e\n" logs[:conic_solve]
     @printf " -- Add conic cuts      = %14.2e\n" logs[:conic_cuts]
     @printf " -- Set conic solution  = %14.2e\n" logs[:conic_soln]
-    @printf " -- Calc. outer inf.    = %14.2e\n" logs[:outer_inf]
     @printf " -- Use heur. callback  = %14.2e\n" logs[:feas_add]
     @printf " -- Add primal cuts     = %14.2e\n" logs[:prim_cuts]
     @printf "\n"
