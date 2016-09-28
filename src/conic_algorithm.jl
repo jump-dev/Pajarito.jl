@@ -150,6 +150,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     gap_rel_opt::Float64        # Relative optimality gap = |mip_obj - best_obj|/|best_obj|
     cb_heur                     # Heuristic callback reference (MIP-driven only)
     cb_lazy                     # Lazy callback reference (MIP-driven only)
+    solve_time::Float64         # Time between starting loadproblem and ending optimize (seconds)
 
     # Model constructor
     function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, round_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, viol_cuts_only, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, primal_cuts_only, primal_cuts_always, primal_cuts_assist, primal_cut_zero_tol, primal_cut_inf_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
@@ -242,6 +243,9 @@ end
 
 # Verify initial conic data and convert appropriate types and store in Pajarito model
 function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, cone_var)
+    # Start solve time timer
+    m.solve_time = time()
+
     # Check dimensions of conic problem
     num_con_orig = length(b)
     num_var_orig = length(c)
@@ -428,6 +432,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     # Print summary
     logs[:total] = time() - logs[:total]
     print_finish(m, logs)
+
+    # Stop solve time timer
+    m.solve_time = time() - m.solve_time
 end
 
 MathProgBase.numconstr(m::PajaritoConicModel) = m.num_con_orig
@@ -435,6 +442,8 @@ MathProgBase.numconstr(m::PajaritoConicModel) = m.num_con_orig
 MathProgBase.numvar(m::PajaritoConicModel) = m.num_var_orig
 
 MathProgBase.status(m::PajaritoConicModel) = m.status
+
+MathProgBase.getsolvetime(m::PajaritoConicModel) = (m.status == :Loaded) ? 0. : m.solve_time
 
 MathProgBase.getobjval(m::PajaritoConicModel) = m.best_obj
 
@@ -2332,8 +2341,4 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     @printf " -- Use outer inf/cuts  = %14.2e\n" logs[:outer_inf]
     @printf "\n"
     flush(STDOUT)
-
-    if m.log_level < 2
-        return
-    end
 end
