@@ -32,8 +32,11 @@ immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     detect_slacks::Bool         # (Conic only) Use automatic slack variable detection for cuts (may reduce number of variables in MIP)
     slack_tol_order::Float64    # (Conic only) Order of magnitude tolerance for abs of coefficient on auto-detected slack variables (negative: -1 only, zero: -1 or 1, positive: order of magnitude)
     zero_tol::Float64           # (Conic only) Tolerance for setting small absolute values in duals to zeros
-    primal_cuts::Bool           # (Conic only) Use primal cuts at each iteration or in each lazy callback
+    primal_cuts_only::Bool      # (Conic only) Do not add dual cuts
+    primal_cuts_always::Bool    # (Conic only) Add primal cuts at each iteration or in each lazy callback
+    primal_cuts_assist::Bool    # (Conic only) Add primal cuts only when integer solutions are repeating
     primal_cut_zero_tol::Float64 # (Conic only) Tolerance level for zeros in primal cut adding functions (must be at least 1e-5)
+    primal_cut_inf_tol::Float64 # (Conic only) Tolerance level for cone outer infeasibilitities for primal cut adding functions (must be at least 1e-5)
     sdp_init_lin::Bool          # (Conic SDP only) Use SDP initial linear cuts
     sdp_init_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
     sdp_eig::Bool               # (Conic SDP only) Use SDP eigenvector-derived cuts
@@ -65,8 +68,11 @@ function PajaritoSolver(;
     detect_slacks = true,
     slack_tol_order = 2.,
     zero_tol = 1e-10,
-    primal_cuts = false,
+    primal_cuts_only = false,
+    primal_cuts_always = false,
+    primal_cuts_assist = false,
     primal_cut_zero_tol = 1e-4,
+    primal_cut_inf_tol = 1e-6,
     sdp_init_lin = true,
     sdp_init_soc = false,
     sdp_eig = true,
@@ -75,18 +81,16 @@ function PajaritoSolver(;
     sdp_tol_eigval = 1e-6
     )
 
-    PajaritoSolver(log_level, mip_solver_drives, pass_mip_sols, round_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, viol_cuts_only, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, primal_cuts, primal_cut_zero_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    PajaritoSolver(log_level, mip_solver_drives, pass_mip_sols, round_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, viol_cuts_only, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, primal_cuts_only, primal_cuts_always, primal_cuts_assist, primal_cut_zero_tol, primal_cut_inf_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
 end
 
 
 # Create Pajarito conic model: can solve with either conic algorithm or nonlinear algorithm wrapped with ConicNonlinearBridge
 function MathProgBase.ConicModel(s::PajaritoSolver)
     if applicable(MathProgBase.ConicModel, s.cont_solver)
-        return PajaritoConicModel(s.log_level, s.mip_solver_drives, s.pass_mip_sols, s.round_mip_sols, s.mip_subopt_count, s.mip_subopt_solver, s.soc_in_mip, s.disagg_soc, s.soc_ell_one, s.soc_ell_inf, s.exp_init, s.proj_dual_infeas, s.proj_dual_feas, s.viol_cuts_only, s.mip_solver, s.cont_solver, s.timeout, s.rel_gap, s.detect_slacks, s.slack_tol_order, s.zero_tol, s.primal_cuts, s.primal_cut_zero_tol, s.sdp_init_lin, s.sdp_init_soc, s.sdp_eig, s.sdp_soc, s.sdp_tol_eigvec, s.sdp_tol_eigval)
-
+        return PajaritoConicModel(s.log_level, s.mip_solver_drives, s.pass_mip_sols, s.round_mip_sols, s.mip_subopt_count, s.mip_subopt_solver, s.soc_in_mip, s.disagg_soc, s.soc_ell_one, s.soc_ell_inf, s.exp_init, s.proj_dual_infeas, s.proj_dual_feas, s.viol_cuts_only, s.mip_solver, s.cont_solver, s.timeout, s.rel_gap, s.detect_slacks, s.slack_tol_order, s.zero_tol, s.primal_cuts_only, s.primal_cuts_always, s.primal_cuts_assist, s.primal_cut_zero_tol, s.primal_cut_inf_tol, s.sdp_init_lin, s.sdp_init_soc, s.sdp_eig, s.sdp_soc, s.sdp_tol_eigvec, s.sdp_tol_eigval)
     elseif applicable(MathProgBase.NonlinearModel, s.cont_solver)
         return MathProgBase.ConicModel(ConicNonlinearBridge.ConicNLPWrapper(nlp_solver=s))
-
     else
         error("Continuous solver specified is neither a conic solver nor a nonlinear solver recognized by MathProgBase\n")
     end
@@ -110,4 +114,6 @@ function MathProgBase.NonlinearModel(s::PajaritoSolver)
     return PajaritoNonlinearModel(verbose, algorithm, mip_solver, cont_solver, opt_tolerance, time_limit)
 end
 
+
+# Create Pajarito linear-quadratic model: can solve with nonlinear algorithm wrapped with NonlinearToLPQPBridge
 MathProgBase.LinearQuadraticModel(s::PajaritoSolver) = MathProgBase.NonlinearToLPQPBridge(MathProgBase.NonlinearModel(s))

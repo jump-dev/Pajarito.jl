@@ -152,7 +152,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cb_lazy                     # Lazy callback reference (MIP-driven only)
 
     # Model constructor
-    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, round_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, viol_cuts_only, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, primal_cuts, primal_cut_zero_tol, primal_cut_inf_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, round_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, viol_cuts_only, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, primal_cuts_only, primal_cuts_always, primal_cuts_assist, primal_cut_zero_tol, primal_cut_inf_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
         # Errors
         if soc_in_mip || sdp_init_soc || sdp_soc
             # If using MISOCP outer approximation, check MIP solver handles MISOCP
@@ -180,6 +180,9 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         if round_mip_sols
             warn("Integer solutions will be rounded: if this seems to cause numerical challenges, change round_mip_sols option\n")
         end
+        if primal_cuts_only
+            warn("Using primal cuts only may cause convergence issues\n")
+        end
 
         # Initialize model
         m = new()
@@ -205,7 +208,9 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.detect_slacks = detect_slacks
         m.slack_tol_order = slack_tol_order
         m.zero_tol = zero_tol
-        m.primal_cuts = primal_cuts
+        m.primal_cuts_only = primal_cuts_only
+        m.primal_cuts_always = primal_cuts_always
+        m.primal_cuts_assist = primal_cuts_assist
         m.primal_cut_zero_tol = primal_cut_zero_tol
         m.primal_cut_inf_tol = primal_cut_inf_tol
         m.sdp_init_lin = sdp_init_lin
@@ -399,7 +404,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     dual_relax = process_relax!(m, logs)
     if !isempty(dual_relax)
         # Add initial dual cuts to MIP model and print info
-        add_init_dual_cuts!(m, dual_relax, true, logs)
+        add_dual_cuts!(m, dual_relax, true, logs)
         print_inf_dual(m)
 
         # Begin selected algorithm
@@ -1071,7 +1076,7 @@ end
 
 # Solve the MIP model using iterative outer approximation algorithm
 function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
-    cache_soln = Set{UInt64}()
+    cache_soln = Set{Vector{Float64}}()
     soln_int = Vector{Float64}(length(m.cols_int))
     count_early = m.mip_subopt_count
 
@@ -1230,6 +1235,8 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
     # Add lazy cuts callback
     function callback_lazy(cb)
+        m.cb_lazy = cb
+
         # Reset cones summary values
         reset_cone_summary!(m)
 
@@ -1256,14 +1263,12 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             logs[:n_repeat] += 1
 
             # Calculate cone outer infeasibilities of MIP solution, add any violated primal cuts if using primal cuts
-            m.cb_lazy = cb
             (oa_viol, cut_viol) = calc_outer_inf_cuts!(m, (m.primal_cuts_always || m.primal_cuts_assist), logs)
 
             # If there are positive outer infeasibilities and no primal cuts were added, add cached dual cuts
             if oa_viol && !cut_viol
                 # Get cached conic dual associated with repeated integer solution, re-add all dual cuts
-                dual_conic = dual_cache[soln_int]
-                add_dual_cuts!(m, dual_conic, false, logs)
+                add_dual_cuts!(m, cache_soln[soln_int], false, logs)
             end
         else
             # Integer solution is new: solve conic subproblem, finish if encounter conic solver failure
@@ -1289,7 +1294,6 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
             # Add dual cuts to MIP
             if !m.primal_cuts_only
-                m.cb_lazy = cb
                 add_dual_cuts!(m, dual_conic, false, logs)
             end
 
@@ -1468,7 +1472,7 @@ end
 =========================================================#
 
 # Add dual cuts for each cone and calculate infeasibilities for cuts and duals
-function add_dual_cuts!(m::PajaritoConicModel, dual::Vector{Float64}, initbool::Bool, logs::Dict{Symbol,Real})
+function add_dual_cuts!(m::PajaritoConicModel, dual_conic::Vector{Float64}, initbool::Bool, logs::Dict{Symbol,Real})
     tic()
     for n in 1:m.num_soc
         add_dual_cuts_soc!(m, m.dim_soc[n], m.vars_soc[n], m.vars_dagg_soc[n], m.coefs_soc[n], dual_conic[(initbool ? m.rows_relax_soc[n] : m.rows_sub_soc[n])], m.summ_soc)
