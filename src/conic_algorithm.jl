@@ -1421,14 +1421,15 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
         else
             warn("Apparent conic solver failure with status $status_conic: aborting iterative algorithm\n")
         end
-        return (Float64[], Float64[])
-    end
-
-    dual_conic = MathProgBase.getdual(model_conic)
-    if status_conic != :Infeasible
-        soln_conic = MathProgBase.getsolution(model_conic)
-    else
+        dual_conic = Float64[]
         soln_conic = Float64[]
+    else
+        dual_conic = MathProgBase.getdual(model_conic)
+        if status_conic != :Infeasible
+            soln_conic = MathProgBase.getsolution(model_conic)
+        else
+            soln_conic = Float64[]
+        end
     end
 
     # Free the conic model
