@@ -404,8 +404,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     dual_relax = process_relax!(m, logs)
     if !isempty(dual_relax)
         # Add initial dual cuts to MIP model and print info
-        add_dual_cuts!(m, dual_relax, true, logs)
-        print_inf_dual(m)
+        add_dual_cuts!(m, dual_relax, logs)
 
         # Begin selected algorithm
         logs[:oa_alg] = time()
@@ -1206,7 +1205,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
             # Add dual cuts to MIP
             if !m.primal_cuts_only
-                add_dual_cuts!(m, dual_conic, false, logs)
+                add_dual_cuts!(m, dual_conic, logs)
             end
 
             # Calculate cone outer infeasibilities of MIP solution, add any violated primal cuts if always using them
@@ -1268,7 +1267,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             # If there are positive outer infeasibilities and no primal cuts were added, add cached dual cuts
             if oa_viol && !cut_viol
                 # Get cached conic dual associated with repeated integer solution, re-add all dual cuts
-                add_dual_cuts!(m, cache_soln[soln_int], false, logs)
+                add_dual_cuts!(m, cache_soln[soln_int], logs)
             end
         else
             # Integer solution is new: solve conic subproblem, finish if encounter conic solver failure
@@ -1294,7 +1293,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
             # Add dual cuts to MIP
             if !m.primal_cuts_only
-                add_dual_cuts!(m, dual_conic, false, logs)
+                add_dual_cuts!(m, dual_conic, logs)
             end
 
             # Calculate cone outer infeasibilities of MIP solution, add any violated primal cuts if always using them
@@ -1473,22 +1472,22 @@ end
 =========================================================#
 
 # Add dual cuts for each cone and calculate infeasibilities for cuts and duals
-function add_dual_cuts!(m::PajaritoConicModel, dual_conic::Vector{Float64}, initbool::Bool, logs::Dict{Symbol,Real})
+function add_dual_cuts!(m::PajaritoConicModel, dual_conic::Vector{Float64}, logs::Dict{Symbol,Real})
     tic()
     for n in 1:m.num_soc
-        add_dual_cuts_soc!(m, m.dim_soc[n], m.vars_soc[n], m.vars_dagg_soc[n], m.coefs_soc[n], dual_conic[(initbool ? m.rows_relax_soc[n] : m.rows_sub_soc[n])], m.summ_soc)
+        add_dual_cuts_soc!(m, m.dim_soc[n], m.vars_soc[n], m.vars_dagg_soc[n], m.coefs_soc[n], dual_conic[(m.oa_started ? m.rows_sub_soc[n] : m.rows_relax_soc[n])], m.summ_soc)
     end
     for n in 1:m.num_exp
-        add_dual_cuts_exp!(m, m.vars_exp[n], m.coefs_exp[n], dual_conic[(initbool ? m.rows_relax_exp[n] : m.rows_sub_exp[n])], m.summ_exp)
+        add_dual_cuts_exp!(m, m.vars_exp[n], m.coefs_exp[n], dual_conic[(m.oa_started ? m.rows_sub_exp[n] : m.rows_relax_exp[n])], m.summ_exp)
     end
     for n in 1:m.num_sdp
-        add_dual_cuts_sdp!(m, m.dim_sdp[n], m.vars_smat_sdp[n], m.coefs_smat_sdp[n], dual_conic[(initbool ? m.rows_relax_sdp[n] : m.rows_sub_sdp[n])], m.smat_sdp[n], m.summ_sdp)
+        add_dual_cuts_sdp!(m, m.dim_sdp[n], m.vars_smat_sdp[n], m.coefs_smat_sdp[n], dual_conic[(m.oa_started ? m.rows_sub_sdp[n] : m.rows_relax_sdp[n])], m.smat_sdp[n], m.summ_sdp)
     end
 
-    if initbool
-        print_inf_dual(m)
-    else
+    if m.oa_started
         print_inf_dualcuts(m)
+    else
+        print_inf_dual(m)
     end
     logs[:dual_cuts] += toq()
 end
