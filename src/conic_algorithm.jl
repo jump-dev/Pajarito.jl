@@ -354,6 +354,9 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     m.cone_var_orig = Tuple{Symbol,Vector{Int}}[(spec, collect(inds)) for (spec, inds) in cone_var]
     m.status = :Loaded
 
+    # Set final solution to NaNs in case no solution from optimize
+    m.final_soln = fill(NaN, num_var_orig)
+
     # Update solve time timer
     m.solve_time += toq()
 end
@@ -448,14 +451,14 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             solve_iterative!(m, logs)
         end
         logs[:oa_alg] = time() - logs[:oa_alg]
-    end
 
-    # Create final solution on original variables
-    soln_new = zeros(m.num_var_new)
-    soln_new[m.cols_int] = m.best_int
-    soln_new[m.cols_cont] = m.best_sub
-    m.final_soln = zeros(m.num_var_orig)
-    m.final_soln[m.keep_cols] = soln_new
+        # Create final solution on original variables
+        soln_new = zeros(m.num_var_new)
+        soln_new[m.cols_int] = m.best_int
+        soln_new[m.cols_cont] = m.best_sub
+        m.final_soln = zeros(m.num_var_orig)
+        m.final_soln[m.keep_cols] = soln_new
+    end
 
     # Print summary
     logs[:total] = time() - logs[:total]
