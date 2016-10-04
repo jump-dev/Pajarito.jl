@@ -1188,6 +1188,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             if count_early == 0
                 # Check if converged hence optimal, else return suboptimal or add primal cuts and try again
                 m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
+                print_gap(m, logs)
                 if m.gap_rel_opt < m.rel_gap
                     m.status = :Optimal
                     break
@@ -1231,6 +1232,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
             # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
             m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
+            print_gap(m, logs)
             if m.gap_rel_opt < m.rel_gap
                 m.status = :Optimal
                 break
