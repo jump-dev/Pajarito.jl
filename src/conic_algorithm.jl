@@ -150,6 +150,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     gap_rel_opt::Float64        # Relative optimality gap = |mip_obj - best_obj|/|best_obj|
     cb_heur                     # Heuristic callback reference (MIP-driven only)
     cb_lazy                     # Lazy callback reference (MIP-driven only)
+    final_soln                  # Final solution on original variables
+    solve_time::Float64         # Time between starting loadproblem and ending optimize (seconds)
 
     # Model constructor
     function PajaritoConicModel(log_level, mip_solver_drives, pass_mip_sols, round_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, viol_cuts_only, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, primal_cuts_only, primal_cuts_always, primal_cuts_assist, primal_cut_zero_tol, primal_cut_inf_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
@@ -230,6 +232,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.best_int = Float64[]
         m.best_sub = Float64[]
         m.status = :NotLoaded
+        m.final_soln = Float64[]
+        m.solve_time = 0.
 
         return m
     end
@@ -242,6 +246,9 @@ end
 
 # Verify initial conic data and convert appropriate types and store in Pajarito model
 function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, cone_var)
+    # Start solve time timer
+    tic()
+
     # Check dimensions of conic problem
     num_con_orig = length(b)
     num_var_orig = length(c)
@@ -346,10 +353,19 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     m.cone_con_orig = Tuple{Symbol,Vector{Int}}[(spec, collect(inds)) for (spec, inds) in cone_con]
     m.cone_var_orig = Tuple{Symbol,Vector{Int}}[(spec, collect(inds)) for (spec, inds) in cone_var]
     m.status = :Loaded
+
+    # Set final solution to NaNs in case no solution from optimize
+    m.final_soln = fill(NaN, num_var_orig)
+
+    # Update solve time timer
+    m.solve_time += toq()
 end
 
 # Store warm-start vector on original variables in Pajarito model
 function MathProgBase.setwarmstart!(m::PajaritoConicModel, var_start::Vector{Real})
+    # Start solve time timer
+    tic()
+
     error("Warm-starts are not currently implemented in Pajarito (submit an issue)\n")
     # # Check if vector can be loaded
     # if m.status != :Loaded
@@ -360,10 +376,16 @@ function MathProgBase.setwarmstart!(m::PajaritoConicModel, var_start::Vector{Rea
     # end
     #
     # m.var_start = var_start
+
+    # Update solve time timer
+    m.solve_time += toq()
 end
 
 # Store variable type vector on original variables in Pajarito model
 function MathProgBase.setvartype!(m::PajaritoConicModel, types_var::Vector{Symbol})
+    # Start solve time timer
+    tic()
+
     # Check if vector can be loaded
     if m.status != :Loaded
         error("Must specify variable types right after loading problem\n")
@@ -379,10 +401,16 @@ function MathProgBase.setvartype!(m::PajaritoConicModel, types_var::Vector{Symbo
     end
 
     m.var_types = types_var
+
+    # Update solve time timer
+    m.solve_time += toq()
 end
 
 # Solve, given the initial conic model data and the variable types vector and possibly a warm-start vector
 function MathProgBase.optimize!(m::PajaritoConicModel)
+    # Start solve time timer
+    optimize_time = time()
+
     # Initialize
     if m.status != :Loaded
         error("Must call optimize! function after loading problem\n")
@@ -423,11 +451,21 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             solve_iterative!(m, logs)
         end
         logs[:oa_alg] = time() - logs[:oa_alg]
+
+        # Create final solution on original variables
+        soln_new = zeros(m.num_var_new)
+        soln_new[m.cols_int] = m.best_int
+        soln_new[m.cols_cont] = m.best_sub
+        m.final_soln = zeros(m.num_var_orig)
+        m.final_soln[m.keep_cols] = soln_new
     end
 
     # Print summary
     logs[:total] = time() - logs[:total]
     print_finish(m, logs)
+
+    # Update solve time timer
+    m.solve_time += (time() - optimize_time)
 end
 
 MathProgBase.numconstr(m::PajaritoConicModel) = m.num_con_orig
@@ -436,18 +474,13 @@ MathProgBase.numvar(m::PajaritoConicModel) = m.num_var_orig
 
 MathProgBase.status(m::PajaritoConicModel) = m.status
 
+MathProgBase.getsolvetime(m::PajaritoConicModel) = m.solve_time
+
 MathProgBase.getobjval(m::PajaritoConicModel) = m.best_obj
 
 MathProgBase.getobjbound(m::PajaritoConicModel) = m.mip_obj
 
-function MathProgBase.getsolution(m::PajaritoConicModel)
-    soln = zeros(m.num_var_orig)
-    soln_new = zeros(m.num_var_new)
-    soln_new[m.cols_int] = m.best_int
-    soln_new[m.cols_cont] = m.best_sub
-    soln[m.keep_cols] = soln_new
-    return soln
-end
+MathProgBase.getsolution(m::PajaritoConicModel) = m.final_soln
 
 
 #=========================================================
@@ -2332,8 +2365,4 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     @printf " -- Use outer inf/cuts  = %14.2e\n" logs[:outer_inf]
     @printf "\n"
     flush(STDOUT)
-
-    if m.log_level < 2
-        return
-    end
 end
