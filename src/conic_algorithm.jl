@@ -1153,6 +1153,10 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     m.mip_obj = mip_obj_bound
                 end
             end
+            if status_mip == :UserLimit && ((time() - logs[:oa_alg]) > (m.timeout - 0.01))
+                m.status = :UserLimit
+                break
+            end
             count_early += 1
         elseif status_mip == :Optimal
             # MIP is optimal, so it gives best OA bound; reset early MIP solve count
