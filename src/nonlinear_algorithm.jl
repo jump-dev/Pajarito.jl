@@ -307,7 +307,7 @@ function addCuttingPlanes!(m::PajaritoNonlinearModel, mip_model, separator, jac_
         if !(lin) #&& (val > 1e-4) # m.ub[i] is in the constraint somehow
             # CREATE SUPPORTING HYPERPLANE
             (m.verbose > 2) && println("Create supporting hyperplane for constraint $i")
-            new_rhs::Float64
+            local new_rhs::Float64
             if m.constrtype[i] == :(<=)
                 new_rhs = m.ub[i] - g[i]
             else
