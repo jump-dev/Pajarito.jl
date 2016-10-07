@@ -453,11 +453,13 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         logs[:oa_alg] = time() - logs[:oa_alg]
 
         # Create final solution on original variables
-        soln_new = zeros(m.num_var_new)
-        soln_new[m.cols_int] = m.best_int
-        soln_new[m.cols_cont] = m.best_sub
-        m.final_soln = zeros(m.num_var_orig)
-        m.final_soln[m.keep_cols] = soln_new
+        if !isempty(m.best_int)
+            soln_new = zeros(m.num_var_new)
+            soln_new[m.cols_int] = m.best_int
+            soln_new[m.cols_cont] = m.best_sub
+            m.final_soln = zeros(m.num_var_orig)
+            m.final_soln[m.keep_cols] = soln_new
+        end
     end
 
     # Print summary
