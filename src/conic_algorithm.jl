@@ -1409,7 +1409,7 @@ function process_relax!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         return Float64[]
     elseif status_relax == :Unbounded
         warn("Initial conic relaxation status was $status_relax: terminating Pajarito\n")
-        m.status = :InfeasibleOrUnbounded
+        m.status = :UnboundedRelaxation
         return Float64[]
     elseif !(status_relax in (:Optimal, :Suboptimal))
         warn("Apparent conic solver failure with status $status_relax: terminating Pajarito\n")
