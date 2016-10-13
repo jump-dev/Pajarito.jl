@@ -234,6 +234,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
         m.oa_started = false
         m.best_obj = Inf
+        m.mip_obj = -Inf
         m.best_int = Float64[]
         m.best_sub = Float64[]
         m.status = :NotLoaded
@@ -1163,7 +1164,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     m.mip_obj = mip_obj_bound
                 end
             end
-            if status_mip == :UserLimit && ((time() - logs[:oa_alg]) > (m.timeout - 0.01))
+            if status_mip == :UserLimit && ((time() - logs[:total]) > (m.timeout - 0.01))
                 m.status = :UserLimit
                 break
             end
