@@ -105,9 +105,9 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
     # MIP constructed data
     model_mip::JuMP.Model       # JuMP MIP (outer approximation) model
-    x_mip::Vector{JuMP.Variable} # JuMP vector of original variables
-    x_int::Vector{JuMP.Variable} # JuMP vector of integer variables
-    x_cont::Vector{JuMP.Variable} # JuMP vector of continuous variables
+    x_all::Vector{JuMP.Variable} # JuMP vector of original variables
+    x_int::Vector{JuMP.Variable} # JuMP (sub)vector of integer variables
+    x_cont::Vector{JuMP.Variable} # JuMP (sub)vector of continuous variables
 
     # SOC data
     num_soc::Int                # Number of SOCs
@@ -757,29 +757,29 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     model_mip = JuMP.Model(solver=m.mip_solver)
 
     # Create variables and set types
-    x_mip = @variable(model_mip, [1:m.num_var_new])
+    x_all = @variable(model_mip, [1:m.num_var_new])
     for j in 1:m.num_var_new
-        setcategory(x_mip[j], m.keep_var_types[j])
+        setcategory(x_all[j], m.keep_var_types[j])
     end
 
     # Set objective function
-    @objective(model_mip, :Min, dot(m.c_new, x_mip))
+    @objective(model_mip, :Min, dot(m.c_new, x_all))
 
     # Add variable cones to MIP
     for (spec, cols) in m.cone_var_new
         if spec == :NonNeg
             for j in cols
-                setname(x_mip[j], "v$(j)")
-                setlowerbound(x_mip[j], 0.)
+                setname(x_all[j], "v$(j)")
+                setlowerbound(x_all[j], 0.)
             end
         elseif spec == :NonPos
             for j in cols
-                setname(x_mip[j], "v$(j)")
-                setupperbound(x_mip[j], 0.)
+                setname(x_all[j], "v$(j)")
+                setupperbound(x_all[j], 0.)
             end
         elseif spec == :Free
             for j in cols
-                setname(x_mip[j], "v$(j)")
+                setname(x_all[j], "v$(j)")
             end
         elseif spec == :Zero
             error("Bug: Zero cones should have been removed by transform data function (submit an issue)\n")
@@ -1030,7 +1030,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     n_exp = 0
     n_sdp = 0
 
-    lhs_expr = m.b_new - m.A_new * x_mip
+    lhs_expr = m.b_new - m.A_new * x_all
 
     # Add constraint cones to MIP; if linear, add directly, else create slacks if necessary
     for (spec, rows) in m.cone_con_new
@@ -1049,7 +1049,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
             for (ind, i) in enumerate(rows)
                 if haskey(m.row_to_slckj, i)
-                    vars[ind] = x_mip[m.row_to_slckj[i]]
+                    vars[ind] = x_all[m.row_to_slckj[i]]
                     coefs[ind] = - m.row_to_slckv[i]
                     isslacknew[ind] = false
                 else
@@ -1076,9 +1076,9 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
     # Store MIP data
     m.model_mip = model_mip
-    m.x_mip = x_mip
-    m.x_int = x_mip[m.cols_int]
-    m.x_cont = x_mip[m.cols_cont]
+    m.x_all = x_all
+    m.x_int = x_all[m.cols_int]
+    m.x_cont = x_all[m.cols_cont]
 
     m.num_soc = num_soc
     if num_soc > 0
