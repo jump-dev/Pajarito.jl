@@ -230,6 +230,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.oa_started = false
         m.best_obj = Inf
         m.mip_obj = -Inf
+        m.gap_rel_opt = NaN
         m.best_int = Float64[]
         m.best_sub = Float64[]
         m.status = :NotLoaded
