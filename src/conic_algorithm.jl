@@ -122,7 +122,9 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     isslacknew_sdp::Vector{Vector{Bool}} # Indicators for which slacks were newly added
     smat_sdp::Vector{Array{Float64,2}} # Preallocated matrix to help with memory for SDP cut generation
 
-    # Dynamic solve data
+    # Miscellaneous solve information
+    update_bvec::Bool           # Indicates whether to use setbvec! to update an existing conic subproblem model
+    model_conic::MathProgBase.AbstractConicModel # Conic subproblem model: persists when the conic solver implements MathProgBase.setbvec!
     oa_started::Bool            # Indicator for Iterative or MIP-solver-driven algorithms started
     status::Symbol              # Current solve status
     mip_obj::Float64            # Latest MIP (outer approx) objective value
@@ -429,7 +431,15 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         add_dual_cuts!(m, dual_relax, rows_relax_soc, rows_relax_exp, rows_relax_sdp, logs)
         print_inf_dual(m)
 
-        # Begin selected algorithm
+        # Initialize conic model if conic solver implements setbvec!
+        if m.update_bvec
+            tic()
+            m.model_conic = MathProgBase.ConicModel(m.cont_solver)
+            MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, m.b_sub_int, m.cone_con_sub, m.cone_var_sub)
+            logs[:conic_load] += toq()
+        end
+
+        # Initialize and begin selected algorithm
         logs[:oa_alg] = time()
         m.oa_started = true
         m.best_slck = zeros(length(m.b_sub))
@@ -1047,7 +1057,6 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real}, cone_c
 
     # Store MIP data
     m.model_mip = model_mip
-    # m.x_all = x_all
     m.x_int = x_all[cols_int]
     m.x_cont = x_all[cols_cont]
 
@@ -1397,6 +1406,10 @@ function process_relax!(m::PajaritoConicModel, logs::Dict{Symbol,Real}, cone_con
 
     dual_relax = MathProgBase.getdual(model_relax)
 
+    # Determine whether can use setbvec! on the conic subproblem model by checking on this model
+    m.update_bvec = method_exists(MathProgBase.setbvec!, (typeof(model_relax), Vector{Float64}))
+    @show m.update_bvec
+
     # Free the conic model
     if applicable(MathProgBase.freemodel!, model_relax)
         MathProgBase.freemodel!(model_relax)
@@ -1413,20 +1426,23 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
     scale!(m.b_sub_int, -1) # m.b_sub_int = - m.b_sub_int
     BLAS.axpy!(1, m.b_sub, m.b_sub_int) # m.b_sub_int = m.b_sub_int + m.b_sub
 
-    # Load conic model
-    # TODO implement changing only RHS vector in MathProgBase
-    model_conic = MathProgBase.ConicModel(m.cont_solver)
-    MathProgBase.loadproblem!(model_conic, m.c_sub_cont, m.A_sub_cont, m.b_sub_int, m.cone_con_sub, m.cone_var_sub)
+    # Update b vector in conic model, or create new conic model
+    if m.update_bvec
+        MathProgBase.setbvec!(m.model_conic, m.b_sub_int)
+    else
+        m.model_conic = MathProgBase.ConicModel(m.cont_solver)
+        MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, m.b_sub_int, m.cone_con_sub, m.cone_var_sub)
+    end
     logs[:conic_load] += toq()
 
     # Solve conic model
     tic()
-    MathProgBase.optimize!(model_conic)
+    MathProgBase.optimize!(m.model_conic)
     logs[:conic_solve] += toq()
     logs[:n_conic] += 1
 
     # Only proceed if status is infeasible, optimal or suboptimal
-    status_conic = MathProgBase.status(model_conic)
+    status_conic = MathProgBase.status(m.model_conic)
     if !(status_conic in (:Optimal, :Suboptimal, :Infeasible))
         if m.mip_solver_drives
             warn("Apparent conic solver failure with status $status_conic: aborting MIP-solver-driven algorithm\n")
@@ -1436,17 +1452,17 @@ function process_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::
         dual_conic = Float64[]
         soln_conic = Float64[]
     else
-        dual_conic = MathProgBase.getdual(model_conic)
+        dual_conic = MathProgBase.getdual(m.model_conic)
         if status_conic != :Infeasible
-            soln_conic = MathProgBase.getsolution(model_conic)
+            soln_conic = MathProgBase.getsolution(m.model_conic)
         else
             soln_conic = Float64[]
         end
     end
 
-    # Free the conic model
-    if applicable(MathProgBase.freemodel!, model_conic)
-        MathProgBase.freemodel!(model_conic)
+    # Free the conic model if not saving it
+    if !m.update_bvec && applicable(MathProgBase.freemodel!, m.model_conic)
+        MathProgBase.freemodel!(m.model_conic)
     end
 
     return (dual_conic, soln_conic)
