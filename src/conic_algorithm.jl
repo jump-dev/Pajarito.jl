@@ -1408,7 +1408,6 @@ function process_relax!(m::PajaritoConicModel, logs::Dict{Symbol,Real}, cone_con
 
     # Determine whether can use setbvec! on the conic subproblem model by checking on this model
     m.update_bvec = method_exists(MathProgBase.setbvec!, (typeof(model_relax), Vector{Float64}))
-    @show m.update_bvec
 
     # Free the conic model
     if applicable(MathProgBase.freemodel!, model_relax)
