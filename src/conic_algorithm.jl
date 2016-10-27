@@ -1102,22 +1102,23 @@ end
 function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     cache_soln = Set{Vector{Float64}}()
     soln_int = Vector{Float64}(length(m.x_int))
-    count_early = m.mip_subopt_count
+    count_subopt = 0
 
     while true
         # Reset cones summary values
         reset_cone_summary!(m)
 
-        if count_early < m.mip_subopt_count
-            # Solve is a partial solve: use subopt MIP solver
-            # Don't set time limit: trust that user has provided reasonably small time limit
+        if count_subopt < m.mip_subopt_count
+            # Solve is a partial solve: use subopt MIP solver, trust that user has provided reasonably small time limit
             setsolver(m.model_mip, m.mip_subopt_solver)
+            count_subopt += 1
         else
             # Solve is a full solve: use full MIP solver with remaining time limit
             if applicable(MathProgBase.setparameters!, m.mip_solver)
                 MathProgBase.setparameters!(m.mip_solver, TimeLimit=(m.timeout - (time() - logs[:total])))
             end
             setsolver(m.model_mip, m.mip_solver)
+            count_subopt = 0
         end
 
         # Solve MIP
@@ -1135,23 +1136,18 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             warn("MIP solver returned status $status_mip, which could indicate that the initial dual cuts added were too weak: aborting iterative algorithm\n")
             m.status = :MIPFailure
             break
-        elseif status_mip in (:UserLimit, :Suboptimal)
-            # MIP stopped early, so check if OA bound is higher than current best bound; increment early mip solve count
-            if applicable(MathProgBase.getobjbound, m.model_mip)
-                mip_obj_bound = MathProgBase.getobjbound(m.model_mip)
-                if mip_obj_bound > m.mip_obj
-                    m.mip_obj = mip_obj_bound
-                end
+        elseif status_mip in (:UserLimit, :Suboptimal, :Optimal)
+            # Update OA bound if MIP bound is better than current OA bound
+            mip_obj_bound = MathProgBase.getobjbound(m.model_mip)
+            if mip_obj_bound > m.mip_obj
+                m.mip_obj = mip_obj_bound
             end
+
+            # Timeout if MIP reached time limit
             if status_mip == :UserLimit && ((time() - logs[:total]) > (m.timeout - 0.01))
                 m.status = :UserLimit
                 break
             end
-            count_early += 1
-        elseif status_mip == :Optimal
-            # MIP is optimal, so it gives best OA bound; reset early MIP solve count
-            m.mip_obj = getobjectivevalue(m.model_mip)
-            count_early = 0
         else
             warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue): aborting iterative algorithm\n")
             m.status = :MIPFailure
@@ -1175,7 +1171,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             logs[:n_repeat] += 1
 
             # If MIP was run until optimal
-            if count_early == 0
+            if count_subopt == 0
                 # Check if converged hence optimal, else return suboptimal or add primal cuts and try again
                 m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
                 print_gap(m, logs)
@@ -1205,7 +1201,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             end
 
             # Run MIP to optimality next iteration
-            count_early = m.mip_subopt_count
+            count_subopt = m.mip_subopt_count
         else
             # Integer solution is new: save it in the set
             push!(cache_soln, copy(soln_int))
