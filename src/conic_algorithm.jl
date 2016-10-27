@@ -1729,16 +1729,62 @@ function add_dual_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars_smat::Array{Ju
                 # TODO could instead add rank-n schur cuts. which one dominates??
                 # if m.sdp_soclin
                     # for iSD in 1:dim
-                    #     # Cut for Schur vector positive
-                    #     # Cut for Schur vector negative
                     #       @constraint(m.model_mip, coefs[iSD, iSD] * vars[iSD, iSD] + sum(smat[k, jSD] * smat[l, jSD] * coefs[k, l] * vars[k, l] for k in 1:dim, l in 1:dim if (k != iSD && l != iSD)) >= sum( 2 * smat[k, iSD] * smat[k, jSD] * coefs[k, iSD] * vars[k, iSD] for k in 1:dim if k != iSD))
                     #       @constraint(m.model_mip, coefs[iSD, iSD] * vars[iSD, iSD] + sum(smat[k, jSD] * smat[l, jSD] * coefs[k, l] * vars[k, l] for k in 1:dim, l in 1:dim if (k != iSD && l != iSD)) >= sum(-2 * smat[k, iSD] * smat[k, jSD] * coefs[k, iSD] * vars[k, iSD] for k in 1:dim if k != iSD))
                     # end
                 # end
+
+                if m.sdp_soc
+                    # Add SDP SOC cuts (derived from Schur complement) for each diagonal element
+                    for iSD in 1:dim
+                        # Use norm and transformation from RSOC to SOC
+                        # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
+                        @expression(m.model_mip, y_expr, coefs[iSD, iSD] * vars[iSD, iSD])
+                        @expression(m.model_mip, z_expr, sum(smat[k, jSD] * smat[l, jSD] * coefs[k, l] * vars[k, l] for k in 1:dim, l in 1:dim if (k != iSD && l != iSD))
+                        @expression(m.model_mip, vec_expr[k in 1:dim if k != iSD], 2 * smat[k, iSD] * smat[k, jSD] * coefs[k, iSD] * vars[k, iSD])
+                        append!(vec_expr, (y_expr - z_expr))
+
+                        @expression(m.model_mip, cut_expr, y_expr + z_expr - norm(vec_expr))
+                        if !m.viol_cuts_only || !m.oa_started || (getvalue(cut_expr) > 0.)
+                            if m.mip_solver_drives && m.oa_started
+                                @lazyconstraint(m.cb_lazy, cut_expr >= 0.)
+                            else
+                                @constraint(m.model_mip, cut_expr >= 0.)
+                            end
+
+                            if (m.log_level > 2) && m.oa_started
+                                update_inf_cut!(getvalue(cut_expr), spec_summ)
+                            end
+                        end
+                    end
+                end
             end
         end
     end
 end
+
+
+#         # Get eigenvector and form rank-1 outer product
+#         vj = Vdual[:, jV]
+#         vvj = vj * vj'
+#
+#         # For each diagonal element of SDP
+#         for iSD in 1:dim
+#             no_i = vcat(1:(iSD - 1), (iSD + 1):dim)
+#
+#             # Add helper variable for subvector iSD product
+#             @variable(m.model_mip, vx, basename="h$(n)SDvx_$(jV)_$(iSD)")
+#             @constraint(m.model_mip, vx == vecdot(vj[no_i], vars[no_i, iSD]))
+#
+#             # Add helper variable for submatrix iSD product
+#             @variable(m.model_mip, vvX >= 0., basename="h$(n)SDvvX_$(jV)_$(iSD)")
+#             @constraint(m.model_mip, vvX == vecdot(vvj[no_i, no_i], vars[no_i, no_i]))
+#
+#             # Add SOC constraint
+#             @constraint(m.model_mip, vars[iSD, iSD] * vvX >= vx^2)
+
+
+
 
 # Update dual infeasibility values in cone summary
 function update_inf_dual!(inf_dual::Float64, spec_summ::Dict{Symbol,Real})
@@ -1761,47 +1807,6 @@ function update_inf_cut!(inf_cut::Float64, spec_summ::Dict{Symbol,Real})
         spec_summ[:cut_min] = max(-inf_cut, spec_summ[:cut_min])
     end
 end
-
-# Add SDP SOC cuts (derived from Schur complement) for each eigenvector and each diagonal element
-# TODO broken
-# function add_sdp_soc_cuts!(m::PajaritoConicModel, spec_summ::Dict{Symbol,Real}, vars::Tuple{Vector{JuMP.Variable},Vector{JuMP.Variable},Array{JuMP.Variable,2}}, coefs::Vector{Float64}, Vdual::Array{Float64,2})
-#     (dim, nV) = size(Vdual)
-#
-#     # For each sanitized eigenvector with significant eigenvalue
-#     for jV in 1:nV
-#         # Get eigenvector and form rank-1 outer product
-#         vj = Vdual[:, jV]
-#         vvj = vj * vj'
-#
-#         # For each diagonal element of SDP
-#         for iSD in 1:dim
-#             no_i = vcat(1:(iSD - 1), (iSD + 1):dim)
-#
-#             # Add helper variable for subvector iSD product
-#             @variable(m.model_mip, vx, basename="h$(n)SDvx_$(jV)_$(iSD)")
-#             @constraint(m.model_mip, vx == vecdot(vj[no_i], vars[no_i, iSD]))
-#
-#             # Add helper variable for submatrix iSD product
-#             @variable(m.model_mip, vvX >= 0., basename="h$(n)SDvvX_$(jV)_$(iSD)")
-#             @constraint(m.model_mip, vvX == vecdot(vvj[no_i, no_i], vars[no_i, no_i]))
-#
-#             # Add SOC constraint
-#             @constraint(m.model_mip, vars[iSD, iSD] * vvX >= vx^2)
-#
-#             # Update cut infeasibility
-#             if m.log_level > 2
-#                 inf_cut = -getvalue(vars[iSD, iSD]) * vecdot(vvj[no_i, no_i], getvalue(vars[no_i, no_i])) + (vecdot(vj[no_i], getvalue(vars[no_i, iSD])))^2
-#                 if inf_cut > 0.
-#                     spec_summ[:cut_max_n] += 1
-#                     spec_summ[:cut_max] = max(inf_cut, spec_summ[:cut_max])
-#                 elseif inf_cut < 0.
-#                     spec_summ[:cut_min_n] += 1
-#                     spec_summ[:cut_min] = max(-inf_cut, spec_summ[:cut_min])
-#                 end
-#             end
-#         end
-#     end
-# end
 
 
 #=========================================================
