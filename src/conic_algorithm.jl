@@ -985,8 +985,7 @@ function create_mip_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real}, cone_c
 
         # Add initial SDP SOC cuts
         if m.sdp_init_soc || m.sdp_soc
-            error("SOC in MIP is currently broken\n")
-            # TODO maybe fix jump issue 784 so that warm start works
+            # error("SOC in MIP is currently broken\n")
             # help = @variable(model_mip, [j in 1:dim], lowerbound=0., basename="h$(n_sdp)SDhelp")
             # kSD = 1
             # for jSD in 1:dim, iSD in jSD:dim
@@ -1739,10 +1738,17 @@ function add_dual_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars_smat::Array{Ju
                     for iSD in 1:dim
                         # Use norm and transformation from RSOC to SOC
                         # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
-                        @expression(m.model_mip, y_expr, coefs[iSD, iSD] * vars[iSD, iSD])
-                        @expression(m.model_mip, z_expr, sum(smat[k, jSD] * smat[l, jSD] * coefs[k, l] * vars[k, l] for k in 1:dim, l in 1:dim if (k != iSD && l != iSD))
-                        vec_expr = JuMP.AffExpr[2 * smat[k, iSD] * smat[k, jSD] * coefs[k, iSD] * vars[k, iSD] for k in 1:dim if k != iSD]
-                        append!(vec_expr, (y_expr - z_expr))
+                        @expression(m.model_mip, y_expr, coefs_smat[iSD, iSD] * vars_smat[iSD, iSD])
+                        @expression(m.model_mip, z_expr, sum(smat[k, v] * smat[l, v] * coefs_smat[k, l] * vars_smat[k, l] for k in 1:dim, l in 1:dim if (k != iSD && l != iSD)))
+                        vec_expr = Vector{JuMP.AffExpr}(dim)
+                        ind = 1
+                        for k in 1:dim
+                            if k != iSD
+                                vec_expr[ind] = 2 * smat[k, iSD] * smat[k, v] * coefs_smat[k, iSD] * vars_smat[k, iSD]
+                            end
+                        end
+                        vec_expr[dim] = y_expr - z_expr
+                        # JuMP.AffExpr[2 * smat[k, iSD] * smat[k, v] * coefs_smat[k, iSD] * vars_smat[k, iSD] for k in 1:dim if k != iSD]
 
                         @expression(m.model_mip, cut_expr, y_expr + z_expr - norm(vec_expr))
                         if !m.viol_cuts_only || !m.oa_started || (getvalue(cut_expr) > 0.)
