@@ -1741,7 +1741,7 @@ function add_dual_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars_smat::Array{Ju
                         # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
                         @expression(m.model_mip, y_expr, coefs[iSD, iSD] * vars[iSD, iSD])
                         @expression(m.model_mip, z_expr, sum(smat[k, jSD] * smat[l, jSD] * coefs[k, l] * vars[k, l] for k in 1:dim, l in 1:dim if (k != iSD && l != iSD))
-                        @expression(m.model_mip, vec_expr[k in 1:dim if k != iSD], 2 * smat[k, iSD] * smat[k, jSD] * coefs[k, iSD] * vars[k, iSD])
+                        vec_expr = JuMP.AffExpr[2 * smat[k, iSD] * smat[k, jSD] * coefs[k, iSD] * vars[k, iSD] for k in 1:dim if k != iSD]
                         append!(vec_expr, (y_expr - z_expr))
 
                         @expression(m.model_mip, cut_expr, y_expr + z_expr - norm(vec_expr))
