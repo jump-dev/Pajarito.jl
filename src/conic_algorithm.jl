@@ -1745,6 +1745,7 @@ function add_dual_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars_smat::Array{Ju
                         for k in 1:dim
                             if k != iSD
                                 vec_expr[ind] = 2 * smat[k, iSD] * smat[k, v] * coefs_smat[k, iSD] * vars_smat[k, iSD]
+                                ind += 1
                             end
                         end
                         vec_expr[dim] = y_expr - z_expr
