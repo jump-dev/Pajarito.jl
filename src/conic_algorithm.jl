@@ -611,44 +611,6 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
     end
 
-
-    # vars_bin = filter((j -> m.var_types[j] == :Bin), cols)
-    # vars_other = filter((j -> m.var_types[j] != :Bin), cols)
-    #
-    # if !isempty(vars_bin) && (spec != :NonPos)
-    #     # Put binary vars in NonNeg var cone, unless the original var cone was NonPos in which case the binary vars are fixed at zero
-    #     old_new_col[vars_bin] = collect((num_var_new + 1):(num_var_new + length(vars_bin)))
-    #     num_var_new += length(vars_bin)
-    #
-    #     push!(cone_var_new, (:NonNeg, old_new_col[vars_bin]))
-    #     append!(bin_vars_new, old_new_col[vars_bin])
-    # end
-    #
-    # if !isempty(vars_other)
-    #     # Put non-binary vars in NonNeg or NonPos or Free var cone
-    #     old_new_col[vars_other] = collect((num_var_new + 1):(num_var_new + length(vars_other)))
-    #     num_var_new += length(vars_other)
-    #
-    #     if (spec == :NonNeg) || (spec == :NonPos)
-    #         push!(cone_var_new, (spec, old_new_col[vars_other]))
-    #     else
-    #         push!(cone_var_new, (:Free, old_new_col[vars_other]))
-    #     end
-    # end
-    #
-    # if (spec != :Free) && (spec != :NonNeg) && (spec != :NonPos)
-    #     # Convert nonlinear var cone to constraint cone
-    #     push!(cone_con_new, (spec, collect((num_con_new + 1):(num_con_new + length(cols)))))
-    #     for j in cols
-    #         num_con_new += 1
-    #         push!(A_I, num_con_new)
-    #         push!(A_J, j)
-    #         push!(A_V, -1.)
-    #         push!(b_new, 0.)
-    #     end
-    # end
-
-
     A_zeros = sparse(A_I, A_J, A_V, num_con_new, m.num_var_orig)
     keep_cols = find(old_new_col)
     c_new = m.c_orig[keep_cols]
@@ -725,7 +687,6 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
     row_to_slckj = Dict{Int,Int}()
     row_to_slckv = Dict{Int,Float64}()
-
     bin_set_upper = falses(length(bin_vars_new))
 
     j = 0
