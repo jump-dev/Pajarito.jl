@@ -13,6 +13,7 @@ immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     # Solver parameters
     log_level::Int              # Verbosity flag: 1 for minimal OA iteration and solve statistics, 2 for including cone summary information, 3 for running commentary
     mip_solver_drives::Bool     # Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
+    solve_relax::Bool           # (Conic only) Solve the continuous conic relaxation to add initial dual cuts
     pass_mip_sols::Bool         # (Conic only) Give best feasible solutions constructed from conic subproblem solution to MIP
     round_mip_sols::Bool        # (Conic only) Round the integer variable values from the MIP solver before passing to the conic subproblems
     mip_subopt_count::Int       # (Conic only) Number of times to solve MIP suboptimally with time limit between zero gap solves
@@ -49,6 +50,7 @@ end
 function PajaritoSolver(;
     log_level = 1,
     mip_solver_drives = false,
+    solve_relax = true,
     pass_mip_sols = true,
     round_mip_sols = false,
     mip_subopt_count = 0,
@@ -81,14 +83,14 @@ function PajaritoSolver(;
     sdp_tol_eigval = 1e-6
     )
 
-    PajaritoSolver(log_level, mip_solver_drives, pass_mip_sols, round_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, viol_cuts_only, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, primal_cuts_only, primal_cuts_always, primal_cuts_assist, primal_cut_zero_tol, primal_cut_inf_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
+    PajaritoSolver(log_level, mip_solver_drives, solve_relax, pass_mip_sols, round_mip_sols, mip_subopt_count, mip_subopt_solver, soc_in_mip, disagg_soc, soc_ell_one, soc_ell_inf, exp_init, proj_dual_infeas, proj_dual_feas, viol_cuts_only, mip_solver, cont_solver, timeout, rel_gap, detect_slacks, slack_tol_order, zero_tol, primal_cuts_only, primal_cuts_always, primal_cuts_assist, primal_cut_zero_tol, primal_cut_inf_tol, sdp_init_lin, sdp_init_soc, sdp_eig, sdp_soc, sdp_tol_eigvec, sdp_tol_eigval)
 end
 
 
 # Create Pajarito conic model: can solve with either conic algorithm or nonlinear algorithm wrapped with ConicNonlinearBridge
 function MathProgBase.ConicModel(s::PajaritoSolver)
     if applicable(MathProgBase.ConicModel, s.cont_solver)
-        return PajaritoConicModel(s.log_level, s.mip_solver_drives, s.pass_mip_sols, s.round_mip_sols, s.mip_subopt_count, s.mip_subopt_solver, s.soc_in_mip, s.disagg_soc, s.soc_ell_one, s.soc_ell_inf, s.exp_init, s.proj_dual_infeas, s.proj_dual_feas, s.viol_cuts_only, s.mip_solver, s.cont_solver, s.timeout, s.rel_gap, s.detect_slacks, s.slack_tol_order, s.zero_tol, s.primal_cuts_only, s.primal_cuts_always, s.primal_cuts_assist, s.primal_cut_zero_tol, s.primal_cut_inf_tol, s.sdp_init_lin, s.sdp_init_soc, s.sdp_eig, s.sdp_soc, s.sdp_tol_eigvec, s.sdp_tol_eigval)
+        return PajaritoConicModel(s.log_level, s.mip_solver_drives, s.solve_relax, s.pass_mip_sols, s.round_mip_sols, s.mip_subopt_count, s.mip_subopt_solver, s.soc_in_mip, s.disagg_soc, s.soc_ell_one, s.soc_ell_inf, s.exp_init, s.proj_dual_infeas, s.proj_dual_feas, s.viol_cuts_only, s.mip_solver, s.cont_solver, s.timeout, s.rel_gap, s.detect_slacks, s.slack_tol_order, s.zero_tol, s.primal_cuts_only, s.primal_cuts_always, s.primal_cuts_assist, s.primal_cut_zero_tol, s.primal_cut_inf_tol, s.sdp_init_lin, s.sdp_init_soc, s.sdp_eig, s.sdp_soc, s.sdp_tol_eigvec, s.sdp_tol_eigval)
     elseif applicable(MathProgBase.NonlinearModel, s.cont_solver)
         return MathProgBase.ConicModel(ConicNonlinearBridge.ConicNLPWrapper(nlp_solver=s))
     else
