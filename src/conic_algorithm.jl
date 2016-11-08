@@ -17,6 +17,7 @@ TODO issues
 - MPB issue - can't call supportedcones on defaultConicsolver
 - maybe want two zero tols: one for discarding cut if largest value is too small, and one for setting near zeros to zero (the former should be larger)
 - log primal cuts added
+- factor out transform data code into MPB conic format preprocessor
 
 TODO features
 - implement warm-start pajarito: use set_best_soln!
@@ -540,7 +541,7 @@ MathProgBase.getsolution(m::PajaritoConicModel) = m.final_soln
  Model constructor functions
 =========================================================#
 
-# Transform data: convert variable cones to constraint cones, detect existing slack variables
+# Transform data: convert nonlinear variable cones to constraint cones, detect existing slack variables, add missing binary relaxation constraints
 function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     tic()
 
@@ -552,29 +553,101 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     num_var_new = 0
     (A_I, A_J, A_V) = findnz(m.A_orig)
     old_new_col = zeros(Int, m.num_var_orig)
+    bin_vars_new = Int[]
 
+    vars_nonneg = Int[]
+    vars_nonpos = Int[]
+    vars_free = Int[]
     for (spec, cols) in m.cone_var_orig
-        if spec == :Zero
-            nothing
-        elseif spec in (:Free, :NonNeg, :NonPos)
-            old_new_col[cols] = collect((num_var_new + 1):(num_var_new + length(cols)))
-            push!(cone_var_new, (spec, old_new_col[cols]))
-            num_var_new += length(cols)
-        else
-            old_new_col[cols] = collect((num_var_new + 1):(num_var_new + length(cols)))
-            push!(cone_var_new, (:Free, old_new_col[cols]))
-            num_var_new += length(cols)
+        if spec != :Zero
+            vars_nonneg = Int[]
+            vars_nonpos = Int[]
+            vars_free = Int[]
 
-            push!(cone_con_new, (spec, collect((num_con_new + 1):(num_con_new + length(cols)))))
             for j in cols
-                num_con_new += 1
-                push!(A_I, num_con_new)
-                push!(A_J, j)
-                push!(A_V, -1.)
-                push!(b_new, 0.)
+                if m.var_types[j] == :Bin
+                    # Put binary vars in NonNeg var cone, unless the original var cone was NonPos in which case the binary vars are fixed at zero
+                    if spec != :NonPos
+                        num_var_new += 1
+                        old_new_col[j] = num_var_new
+                        push!(vars_nonneg, j)
+                        push!(bin_vars_new, j)
+                    end
+                else
+                    # Put non-binary vars in NonNeg or NonPos or Free var cone
+                    num_var_new += 1
+                    old_new_col[j] = num_var_new
+                    if spec == :NonNeg
+                        push!(vars_nonneg, j)
+                    elseif spec == :NonPos
+                        push!(vars_nonpos, j)
+                    else
+                        push!(vars_free, j)
+                    end
+                end
+            end
+
+            if !isempty(vars_nonneg)
+                push!(cone_var_new, (:NonNeg, old_new_col[vars_nonneg]))
+            end
+            if !isempty(vars_nonpos)
+                push!(cone_var_new, (:NonPos, old_new_col[vars_nonpos]))
+            end
+            if !isempty(vars_free)
+                push!(cone_var_new, (:Free, old_new_col[vars_free]))
+            end
+
+            if (spec != :Free) && (spec != :NonNeg) && (spec != :NonPos)
+                # Convert nonlinear var cone to constraint cone
+                push!(cone_con_new, (spec, collect((num_con_new + 1):(num_con_new + length(cols)))))
+                for j in cols
+                    num_con_new += 1
+                    push!(A_I, num_con_new)
+                    push!(A_J, j)
+                    push!(A_V, -1.)
+                    push!(b_new, 0.)
+                end
             end
         end
     end
+
+
+    # vars_bin = filter((j -> m.var_types[j] == :Bin), cols)
+    # vars_other = filter((j -> m.var_types[j] != :Bin), cols)
+    #
+    # if !isempty(vars_bin) && (spec != :NonPos)
+    #     # Put binary vars in NonNeg var cone, unless the original var cone was NonPos in which case the binary vars are fixed at zero
+    #     old_new_col[vars_bin] = collect((num_var_new + 1):(num_var_new + length(vars_bin)))
+    #     num_var_new += length(vars_bin)
+    #
+    #     push!(cone_var_new, (:NonNeg, old_new_col[vars_bin]))
+    #     append!(bin_vars_new, old_new_col[vars_bin])
+    # end
+    #
+    # if !isempty(vars_other)
+    #     # Put non-binary vars in NonNeg or NonPos or Free var cone
+    #     old_new_col[vars_other] = collect((num_var_new + 1):(num_var_new + length(vars_other)))
+    #     num_var_new += length(vars_other)
+    #
+    #     if (spec == :NonNeg) || (spec == :NonPos)
+    #         push!(cone_var_new, (spec, old_new_col[vars_other]))
+    #     else
+    #         push!(cone_var_new, (:Free, old_new_col[vars_other]))
+    #     end
+    # end
+    #
+    # if (spec != :Free) && (spec != :NonNeg) && (spec != :NonPos)
+    #     # Convert nonlinear var cone to constraint cone
+    #     push!(cone_con_new, (spec, collect((num_con_new + 1):(num_con_new + length(cols)))))
+    #     for j in cols
+    #         num_con_new += 1
+    #         push!(A_I, num_con_new)
+    #         push!(A_J, j)
+    #         push!(A_V, -1.)
+    #         push!(b_new, 0.)
+    #     end
+    # end
+
 
     A_zeros = sparse(A_I, A_J, A_V, num_con_new, m.num_var_orig)
     keep_cols = find(old_new_col)
@@ -638,10 +711,10 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     A_new = sparse(A_I, A_J, A_V, num_con_new, num_var_new)
     (A_I, A_J, A_V) = findnz(A_new)
 
-    # Set up for detecting existing slack variables in nonlinear cone rows with b=0, corresponding to isolated row nonzeros
+    # Set up for detecting isolated row nonzeros
     row_slck_count = zeros(Int, num_con_new)
     for (ind, i) in enumerate(A_I)
-        if (b_new[i] == 0.) && (A_V[ind] != 0.)
+        if A_V[ind] != 0.
             if row_slck_count[i] == 0
                 row_slck_count[i] = ind
             elseif row_slck_count[i] > 0
@@ -653,44 +726,100 @@ function trans_data!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     row_to_slckj = Dict{Int,Int}()
     row_to_slckv = Dict{Int,Float64}()
 
+    bin_set_upper = falses(length(bin_vars_new))
+
+    j = 0
+    type_j = :Cont
+    bound_j = 0.0
     for (spec, rows) in cone_con_new
-        if !(spec in (:Free, :Zero, :NonNeg, :NonPos))
-            # If option to detect slacks is true, auto-detect slacks depending on order of magnitude tolerance for abs of the coefficient
-            if m.detect_slacks
-                if m.slack_tol_order < 0.
-                    # Negative slack tol order means only choose -1 coefficients
-                    for i in rows
-                        if row_slck_count[i] > 0
-                            if A_V[row_slck_count[i]] == -1.
-                                row_to_slckj[i] = A_J[row_slck_count[i]]
-                                row_to_slckv[i] = A_V[row_slck_count[i]]
+        if (spec == :NonNeg) || (spec == :NonPos)
+            for i in rows
+                if (row_slck_count[i] > 0) && (b_new[i] != 0.)
+                    # Isolated variable x_j with b_i - a_ij*x_j in spec, b_i & a_ij nonzero
+                    j = A_J[row_slck_count[i]]
+                    type_j = m.var_types[keep_cols[j]]
+                    bound_j = b_new[i] / A_V[row_slck_count[i]]
+
+                    if (spec == :NonNeg) && (A_V[row_slck_count[i]] > 0) || (spec == :NonPos) && (A_V[row_slck_count[i]] < 0)
+                        # Upper bound: b_i/a_ij >= x_j
+                        if (type_j == :Bin) && (bound_j >= 1.)
+                            # Tighten binary upper bound to 1
+                            if spec == :NonNeg
+                                # 1 >= x_j
+                                b_new[i] = 1.
+                                A_V[row_slck_count[i]] = 1.
+                            else
+                                # -1 <= -x_j
+                                b_new[i] = -1.
+                                A_V[row_slck_count[i]] = -1.
+                            end
+
+                            bin_set_upper[j] = true
+                        elseif type_j != :Cont
+                            # Tighten binary or integer upper bound by rounding down
+                            # TODO this may cause either fixing or infeasibility: detect this and remove variable (at least for binary)
+                            if spec == :NonNeg
+                                # floor >= x_j
+                                b_new[i] = floor(bound_j)
+                                A_V[row_slck_count[i]] = 1.
+                            else
+                                # -floor <= -x_j
+                                b_new[i] = -floor(bound_j)
+                                A_V[row_slck_count[i]] = -1.
+                            end
+
+                            if type_j == :Bin
+                                bin_set_upper[j] = true
                             end
                         end
-                    end
-                elseif m.slack_tol_order == 0.
-                    # Zero slack tol order means only choose -1, +1 coefficients
-                    for i in rows
-                        if row_slck_count[i] > 0
-                            if abs(A_V[row_slck_count[i]]) == 1.
-                                row_to_slckj[i] = A_J[row_slck_count[i]]
-                                row_to_slckv[i] = A_V[row_slck_count[i]]
-                            end
-                        end
-                    end
-                else
-                    # Positive slack tol order means choose coefficients with abs in order of magnitude range
-                    for i in rows
-                        if row_slck_count[i] > 0
-                            if abs(log10(abs(A_V[row_slck_count[i]]))) <= m.slack_tol_order
-                                row_to_slckj[i] = A_J[row_slck_count[i]]
-                                row_to_slckv[i] = A_V[row_slck_count[i]]
+                    else
+                        # Lower bound: b_i/a_ij <= x_j
+                        if type_j != :Cont
+                            # Tighten binary or integer lower bound by rounding up
+                            # TODO this may cause either fixing or infeasibility: detect this and remove variable (at least for binary)
+                            if spec == :NonPos
+                                # ceil <= x_j
+                                b_new[i] = ceil(bound_j)
+                                A_V[row_slck_count[i]] = 1.
+                            else
+                                # -ceil >= -x_j
+                                b_new[i] = -ceil(bound_j)
+                                A_V[row_slck_count[i]] = -1.
                             end
                         end
                     end
                 end
             end
+        elseif m.detect_slacks && (spec != :Free) && (spec != :Zero)
+            for i in rows
+                if (row_slck_count[i] > 0) && (b_new[i] == 0.)
+                    # Nonlinear cone row with isolated nonzero: check if can use as a slack variable
+                    # Negative slack tol order means only choose -1 coefficients
+                    # Zero slack tol order means only choose -1, +1 coefficients
+                    # Positive slack tol order means choose coefficients with abs in order of magnitude range
+                    if ((m.slack_tol_order < 0.) && (A_V[row_slck_count[i]] == -1.)) || ((m.slack_tol_order == 0.) && (abs(A_V[row_slck_count[i]]) == 1.)) || (abs(log10(abs(A_V[row_slck_count[i]]))) <= m.slack_tol_order)
+                        row_to_slckj[i] = A_J[row_slck_count[i]]
+                        row_to_slckv[i] = A_V[row_slck_count[i]]
+                    end
+                end
+            end
         end
     end
+
+    # For any binary variables without upper bound set, add 1 >= x_j to constraint cones
+    num_con_prev = num_con_new
+    for ind in 1:length(bin_vars_new)
+        if !bin_set_upper[ind]
+            num_con_new += 1
+            push!(A_I, num_con_new)
+            push!(A_J, bin_vars_new[ind])
+            push!(A_V, 1.)
+            push!(b_new, 1.)
+        end
+    end
+    push!(cone_con_new, (:NonNeg, collect((num_con_prev + 1):num_con_new)))
+
+    A_new = sparse(A_I, A_J, A_V, num_con_new, num_var_new)
 
     logs[:data_trans] += toq()
 
@@ -1243,7 +1372,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             (status_conic, dual_conic) = solve_conic!(m, soln_int, logs)
             if (status_conic != :Optimal) && (status_conic != :Suboptimal) && (status_conic != :Infeasible)
                 # Infer conic solver failure
-                warn("Continuous solver returned conic subproblem status $status_relax: terminating Pajarito\n")
+                warn("Continuous solver returned conic subproblem status $status_conic: terminating Pajarito\n")
                 m.status = :ConicFailure
                 break
             end
@@ -1319,7 +1448,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             (status_conic, dual_conic) = solve_conic!(m, soln_int, logs)
             if (status_conic != :Optimal) && (status_conic != :Suboptimal) && (status_conic != :Infeasible)
                 # Infer conic solver failure
-                warn("Continuous solver returned conic subproblem status $status_relax: terminating Pajarito\n")
+                warn("Continuous solver returned conic subproblem status $status_conic: terminating Pajarito\n")
                 m.status = :ConicFailure
                 throw(CallbackAbort())
             end
