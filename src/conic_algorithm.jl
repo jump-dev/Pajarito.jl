@@ -462,7 +462,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             end
             print_inf_dual(m)
         end
-    else
+    end
 
     # Determine whether can use setbvec! on the conic subproblem model and create it
     if method_exists(MathProgBase.setbvec!, (typeof(MathProgBase.ConicModel(m.cont_solver)), Vector{Float64}))
