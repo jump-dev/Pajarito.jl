@@ -165,6 +165,9 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
         # Warnings
         if log_level > 1
+            if !solve_relax
+                warn("Not solving the conic continuous relaxation problem; Pajarito may return status :MIPFailure if the outer approximation MIP is unbounded\n")
+            end
             if sdp_soc && mip_solver_drives
                 warn("SOC cuts for SDP cones cannot be added during the MIP-solver-driven algorithm, but initial SOC cuts may be used\n")
             end
@@ -1159,7 +1162,11 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             break
         elseif status_mip == :Unbounded
             # Stop if unbounded (initial conic relax solve should detect this)
-            warn("MIP solver returned status $status_mip, which could indicate that the initial dual cuts added were too weak: aborting iterative algorithm\n")
+            if m.solve_relax
+                warn("MIP solver returned status $status_mip, which suggests that the initial dual cuts added were too weak: aborting iterative algorithm\n")
+            else
+                warn("MIP solver returned status $status_mip, because the initial conic relaxation was not solved: aborting iterative algorithm\n")
+            end
             m.status = :MIPFailure
             break
         elseif status_mip in (:UserLimit, :Suboptimal, :Optimal)
