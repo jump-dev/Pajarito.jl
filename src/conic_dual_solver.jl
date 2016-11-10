@@ -2,6 +2,7 @@
 # See http://mathprogbasejl.readthedocs.io/en/latest/conic.html
 #
 # Strong duality must hold between the primal and dual
+# NOTE: potentially returns incorrect status (eg if both infeasible)
 #
 # Primal:
 # min_x   c^Tx
@@ -74,6 +75,7 @@ end
 function MathProgBase.status(m::ConicDualModel)
     dualstatus = MathProgBase.status(m.dualmodel)
 
+    # TODO Potentially returns incorrect status, but this is good enough for our purposes
     if dualstatus == :Optimal
         return :Optimal
     elseif dualstatus == :Infeasible
