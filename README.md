@@ -39,20 +39,43 @@ All solvers can have their parameters specified through their corresponding Juli
 
 ## Pajarito solver options
 
-The following options can be passed to `PajaritoSolver()` to modify its behavior:
+The following options can be passed to `PajaritoSolver()` to modify its behavior (*C* means conic algorithm only):
 
   * `log_level::Int` Verbosity flag: 1 for minimal OA iteration and solve statistics, 2 for including cone summary information, 3 for running commentary
-  * `mip_solver_drives::Bool` Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
-  * `mip_solver::MathProgBase.AbstractMathProgSolver` MIP solver (MILP or MISOCP)
-  * `cont_solver::MathProgBase.AbstractMathProgSolver` Continuous solver (conic or nonlinear)
   * `timeout::Float64` Time limit for outer approximation algorithm not including initial load (in seconds)
   * `rel_gap::Float64` Relative optimality gap termination condition
-  * `soc_in_mip::Bool` (Conic only) Use SOC/SOCRotated cones in the MIP outer approximation model (if MIP solver supports MISOCP)
-  * `disagg_soc::Bool` (Conic only) Disaggregate SOC/SOCRotated cones in the MIP only
-  * `drop_dual_infeas::Bool` (Conic only) Do not add cuts from dual cone infeasible dual vectors
-  * `proj_dual_infeas::Bool` (Conic only) Project dual cone infeasible dual vectors onto dual cone boundaries
-  * `proj_dual_feas::Bool` (Conic only) Project dual cone strictly feasible dual vectors onto dual cone boundaries
-  * `zero_tol::Float64` (Conic only) Tolerance for setting small absolute values in duals to zeros
+  * `mip_solver_drives::Bool` Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
+  * `solve_relax::Bool` *C* Solve the continuous conic relaxation to add initial dual cuts
+  * `round_mip_sols::Bool` *C* Round the integer variable values from the MIP solver before passing to the conic subproblems
+  * `pass_mip_sols::Bool` *C* Give best feasible solutions constructed from conic subproblem solution to MIP
+
+  * `cont_solver::MathProgBase.AbstractMathProgSolver` Continuous solver (conic or nonlinear)
+  * `mip_solver::MathProgBase.AbstractMathProgSolver` MIP solver (MILP or MISOCP)
+  * `mip_subopt_solver::MathProgBase.AbstractMathProgSolver` *C* MIP solver for suboptimal solves, with appropriate options (gap or timeout) specified directly
+  * `mip_subopt_count::Int` *C* Number of times to solve MIP suboptimally with time limit between zero gap solves
+
+  * `soc_disagg::Bool` *C* Disaggregate SOC cones in the MIP only
+  * `soc_in_mip::Bool` *C* Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
+  * `sdp_eig::Bool` *C* Use SDP eigenvector-derived cuts
+  * `sdp_soc::Bool` *C* Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
+  * `init_soc_one::Bool` *C* Start with disaggregated L_1 outer approximation cuts for SOCs (if soc_disagg)
+  * `init_soc_inf::Bool` *C* Start with disaggregated L_inf outer approximation cuts for SOCs (if soc_disagg)
+  * `init_exp::Bool` *C* Start with several outer approximation cuts on the exponential cones
+  * `init_sdp_lin::Bool` *C* Use SDP initial linear cuts
+  * `init_sdp_soc::Bool` *C* Use SDP initial SOC cuts (if MIP solver supports MISOCP)
+
+  * `viol_cuts_only::Bool` *C* Only add cuts that are violated by the current MIP solution (may be useful for MSD algorithm where many cuts are added)
+  * `proj_dual_infeas::Bool` *C* Project dual cone infeasible dual vectors onto dual cone boundaries
+  * `proj_dual_feas::Bool` *C* Project dual cone strictly feasible dual vectors onto dual cone boundaries
+  * `prim_cuts_only::Bool` *C* Do not add dual cuts
+  * `prim_cuts_always::Bool` *C* Add primal cuts at each iteration or in each lazy callback
+  * `prim_cuts_assist::Bool` *C* Add primal cuts only when integer solutions are repeating
+
+  * `tol_zero::Float64` *C* Tolerance for setting small absolute values in duals to zeros
+  * `tol_prim_zero::Float64` *C* Tolerance level for zeros in primal cut adding functions (must be at least 1e-5)
+  * `tol_prim_infeas::Float64` *C* Tolerance level for cone outer infeasibilities for primal cut adding functions (must be at least 1e-5)
+  * `tol_sdp_eigvec::Float64` *C* Tolerance for setting small values in SDP eigenvectors to zeros (for cut sanitation)
+  * `tol_sdp_eigval::Float64` *C* Tolerance for ignoring eigenvectors corresponding to small (positive) eigenvalues
 
 **Pajarito is not yet numerically robust and may require tuning of parameters to improve convergence.** If the default parameters don't work for you, please let us know.
 

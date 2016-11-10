@@ -1623,7 +1623,7 @@ function add_dual_cuts_soc!(m::PajaritoConicModel, dim::Int, vars::Vector{JuMP.V
     end
 
     # 1 Calculate dual inf
-    inf_dual = sqrt(sumabs2(dual[j] for j in 2:dim)) - dual[1]
+    inf_dual = vecnorm(dual[j] for j in 2:dim) - dual[1]
     update_inf_dual!(m, inf_dual, spec_summ)
 
     # 2 Sanitize: remove near-zeros
@@ -1636,7 +1636,7 @@ function add_dual_cuts_soc!(m::PajaritoConicModel, dim::Int, vars::Vector{JuMP.V
     # 2 Project dual if infeasible and proj_dual_infeas or if strictly feasible and proj_dual_feas
     if ((inf_dual > 0.) && m.proj_dual_infeas) || ((inf_dual < 0.) && m.proj_dual_feas)
         # Projection: epigraph variable equals norm
-        dual[1] += sqrt(sumabs2(dual[j] for j in 2:dim))
+        dual[1] += vecnorm(dual[j] for j in 2:dim)
     end
 
     # Discard cut if epigraph variable is 0
@@ -1911,7 +1911,7 @@ end
 # Add primal cuts for a SOC
 function add_prim_cuts_soc!(m::PajaritoConicModel, add_viol_cuts::Bool, dim::Int, vars::Vector{JuMP.Variable}, vars_dagg::Vector{JuMP.Variable}, spec_summ::Dict{Symbol,Real})
     # Calculate and update outer infeasibility
-    inf_outer = sqrt(sumabs2(getvalue(vars[j]) for j in 2:dim)) - getvalue(vars[1])
+    inf_outer = vecnorm(getvalue(vars[j]) for j in 2:dim) - getvalue(vars[1])
     update_inf_outer!(m, inf_outer, spec_summ)
 
     # If outer infeasibility is small, return, else update and return if not adding primal cuts
@@ -1948,7 +1948,7 @@ function add_prim_cuts_soc!(m::PajaritoConicModel, add_viol_cuts::Bool, dim::Int
     else
         # Don't add primal cut if norm of non-epigraph variables is zero
         # TODO can still add a different cut if infeasible
-        solnorm = sqrt(sumabs2(getvalue(vars[j]) for j in 2:dim))
+        solnorm = vecnorm(getvalue(vars[j]) for j in 2:dim)
         if solnorm < m.tol_prim_zero
             return
         end
