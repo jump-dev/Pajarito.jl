@@ -114,7 +114,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver, log)
                                x^2 <= 5,
                                exp(y) + x <= 7)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, disagg_soc=false, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, soc_disagg=false, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
 
             @fact problem.status --> :Optimal
             @fact Convex.evaluate(x) --> roughly(2.0, TOL)
@@ -162,7 +162,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver, log)
     #         @fact MathProgBase.status(m) --> :ConicFailure
     #    end
     # end
-    
+
     ## Currently fails on some solver combinations
     # facts("Conic failure with RSOC - finite duality gap") do
     #     context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
