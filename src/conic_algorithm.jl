@@ -32,15 +32,18 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     log_level::Int              # Verbosity flag: 1 for minimal OA iteration and solve statistics, 2 for including cone summary information, 3 for running commentary
     timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
     rel_gap::Float64            # Relative optimality gap termination condition
+
     mip_solver_drives::Bool     # Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
-    solve_relax::Bool           # (Conic only) Solve the continuous conic relaxation to add initial dual cuts
+    mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver (MILP or MISOCP)
+    mip_subopt_solver::MathProgBase.AbstractMathProgSolver # MIP solver for suboptimal solves, with appropriate options (gap or timeout) specified directly
+    mip_subopt_count::Int       # (Conic only) Number of times to solve MIP suboptimally with time limit between zero gap solves
     round_mip_sols::Bool        # (Conic only) Round the integer variable values from the MIP solver before passing to the conic subproblems
     pass_mip_sols::Bool         # (Conic only) Give best feasible solutions constructed from conic subproblem solution to MIP
 
     cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver (conic or nonlinear)
-    mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver (MILP or MISOCP)
-    mip_subopt_solver::MathProgBase.AbstractMathProgSolver # MIP solver for suboptimal solves, with appropriate options (gap or timeout) specified directly
-    mip_subopt_count::Int       # (Conic only) Number of times to solve MIP suboptimally with time limit between zero gap solves
+    solve_relax::Bool           # (Conic only) Solve the continuous conic relaxation to add initial dual cuts
+    dualize_relax::Bool         # (Conic only) Solve the conic dual of the continuous conic relaxation
+    dualize_sub::Bool           # (Conic only) Solve the conic duals of the continuous conic subproblems
 
     soc_disagg::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
     soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
@@ -115,7 +118,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     smat_sdp::Vector{Array{Float64,2}} # Preallocated matrix to help with memory for SDP cut generation
 
     # Miscellaneous for algorithms
-    update_bvec::Bool           # Indicates whether to use setbvec! to update an existing conic subproblem model
+    update_conicsub::Bool       # Indicates whether to use setbvec! to update an existing conic subproblem model
     model_conic::MathProgBase.AbstractConicModel # Conic subproblem model: persists when the conic solver implements MathProgBase.setbvec!
     oa_started::Bool            # Indicator for Iterative or MIP-solver-driven algorithms started
     isnew_feas::Bool            # Indicator for incumbent/best feasible solution not yet added by MIP-solver-driven heuristic callback
@@ -135,10 +138,10 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     solve_time::Float64         # Time between starting loadproblem and ending optimize (seconds)
 
     # Current Pajarito status
-    status
+    status::Symbol
 
     # Model constructor
-    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, solve_relax, round_mip_sols, pass_mip_sols, cont_solver, mip_solver, mip_subopt_solver, mip_subopt_count, soc_disagg, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, viol_cuts_only, proj_dual_infeas, proj_dual_feas, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_zero, tol_prim_infeas, tol_sdp_eigvec, tol_sdp_eigval)
+    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, viol_cuts_only, proj_dual_infeas, proj_dual_feas, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_zero, tol_prim_infeas, tol_sdp_eigvec, tol_sdp_eigval)
         # Errors
         if viol_cuts_only && !mip_solver_drives
             # If using iterative algorithm, must always add non-violated cuts
@@ -186,6 +189,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.log_level = log_level
         m.mip_solver_drives = mip_solver_drives
         m.solve_relax = solve_relax
+        m.dualize_relax = dualize_relax
+        m.dualize_sub = dualize_sub
         m.pass_mip_sols = pass_mip_sols
         m.round_mip_sols = round_mip_sols
         m.mip_subopt_count = mip_subopt_count
@@ -220,7 +225,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.num_var_orig = 0
         m.num_con_orig = 0
 
-        m.update_bvec = false
+        m.update_conicsub = false
         m.oa_started = false
         m.viol_oa = false
         m.viol_cut = false
@@ -341,7 +346,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         @printf "\nCreating conic model data..."
     end
     tic()
-    (map_rows_sub, cols_cont, cols_int) = create_conic_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new)
+    (map_rows_sub, cols_cont, cols_int) = create_conicsub_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new)
     logs[:data_conic] += toq()
     if m.log_level >= 0
         @printf "...Done %6.2fs\n" logs[:data_conic]
@@ -367,7 +372,12 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             @printf "\nSolving conic relaxation..."
         end
         tic()
-        model_relax = MathProgBase.ConicModel(m.cont_solver)
+        if m.dualize_relax
+            solver_relax = ConicDualWrapper(conicsolver=m.cont_solver)
+        else
+            solver_relax = m.cont_solver
+        end
+        model_relax = MathProgBase.ConicModel(solver_relax)
         MathProgBase.loadproblem!(model_relax, c_new, A_new, b_new, cone_con_new, cone_var_new)
         # Mosek.writedata(m.model_conic.task, "$(round(Int, time())).task")    # For MOSEK debug only: dump task
         MathProgBase.optimize!(model_relax)
@@ -403,19 +413,26 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
     end
 
-    if !m.prim_cuts_only && method_exists(MathProgBase.setbvec!, (typeof(MathProgBase.ConicModel(m.cont_solver)), Vector{Float64}))
-        # Using dual cuts and can use setbvec! on the conic subproblem model: create it
-        m.update_bvec = true
+    if !m.prim_cuts_only
+        tic()
         if m.log_level >= 0
             @printf "\nCreating conic subproblem model..."
         end
-        tic()
-        m.model_conic = MathProgBase.ConicModel(m.cont_solver)
-        MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, m.b_sub_int, m.cone_con_sub, m.cone_var_sub)
-        logs[:conic_load] += toq()
-        if m.log_level >= 0
-            @printf "...Done %6.2fs\n" logs[:conic_load]
+        if m.dualize_sub
+            solver_conicsub = ConicDualWrapper(conicsolver=m.cont_solver)
+        else
+            solver_conicsub = m.cont_solver
         end
+        m.model_conic = MathProgBase.ConicModel(solver_conicsub)
+        if method_exists(MathProgBase.setbvec!, (typeof(m.model_conic), Vector{Float64}))
+            # Can use setbvec! on the conic subproblem model: load it
+            m.update_conicsub = true
+            MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, m.b_sub_int, m.cone_con_sub, m.cone_var_sub)
+        end
+        if m.log_level >= 0
+            @printf "...Done %6.2fs\n" logs[:conic_proc]
+        end
+        logs[:conic_proc] += toq()
     end
 
     if (m.status != :Infeasible) && (m.status != :UnboundedRelaxation) && (m.status != :ConicFailure)
@@ -784,7 +801,7 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
 end
 
 # Create conic subproblem data
-function create_conic_data!(m::PajaritoConicModel, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Float64,Int64}, b_new::Vector{Float64}, cone_con_new::Vector{Tuple{Symbol,Vector{Int}}}, cone_var_new::Vector{Tuple{Symbol,Vector{Int}}}, var_types_new::Vector{Symbol})
+function create_conicsub_data!(m::PajaritoConicModel, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Float64,Int64}, b_new::Vector{Float64}, cone_con_new::Vector{Tuple{Symbol,Vector{Int}}}, cone_var_new::Vector{Tuple{Symbol,Vector{Int}}}, var_types_new::Vector{Symbol})
     # Build new subproblem variable cones by removing integer variables
     cols_cont = Int[]
     cols_int = Int[]
@@ -1066,7 +1083,7 @@ function create_mip_data!(m::PajaritoConicModel, c_new::Vector{Float64}, A_new::
                 # Add initial rotated SOC for off-diagonal element to enforce 2x2 principal submatrix PSDness
                 # Use norm and transformation from RSOC to SOC
                 # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
-                @constraint(model_mip, vars_smat[iSD, iSD] + vars_smat[jSD, jSD] >= norm2(JuMP.AffExpr[(2. * vars_smat[iSD, jSD]), (vars_smat[iSD, iSD] - vars_smat[jSD, jSD])]))
+                @constraint(model_mip, vars_smat[iSD, iSD] + vars_smat[jSD, jSD] >= norm(JuMP.AffExpr[(2. * vars_smat[iSD, jSD]), (vars_smat[iSD, iSD] - vars_smat[jSD, jSD])]))
             elseif m.init_sdp_lin
                 # Add initial SDP linear cuts based on linearization of 3-dim rotated SOCs that enforce 2x2 principal submatrix PSDness (essentially the dual of SDSOS)
                 # 2|m_ij| <= m_ii + m_jj, where m_kk is scaled by sqrt(2) in smat space
@@ -1284,7 +1301,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
             if !m.prim_cuts_only
                 # Solve conic subproblem and update incumbent feasible solution, finish if encounter conic solver failure
-                (status_conic, dual_conic) = solve_conic!(m, soln_int, logs)
+                (status_conic, dual_conic) = solve_conicsub!(m, soln_int, logs)
                 if (status_conic != :Optimal) && (status_conic != :Suboptimal) && (status_conic != :Infeasible)
                     # Infer conic solver failure
                     warn("Continuous solver returned conic subproblem status $status_conic: terminating Pajarito\n")
@@ -1322,6 +1339,11 @@ end
 
 # Solve the MIP model using MIP-solver-driven callback algorithm
 function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
+    if applicable(MathProgBase.setparameters!, m.mip_solver)
+        MathProgBase.setparameters!(m.mip_solver, TimeLimit=(m.timeout - (time() - logs[:total])))
+        setsolver(m.model_mip, m.mip_solver)
+    end
+
     cache_soln = Dict{Vector{Float64},Vector{Float64}}()
     soln_int = Vector{Float64}(length(m.x_int))
 
@@ -1360,7 +1382,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
             if !m.prim_cuts_only
                 # Solve conic subproblem and update incumbent feasible solution, finish if encounter conic solver failure
-                (status_conic, dual_conic) = solve_conic!(m, soln_int, logs)
+                (status_conic, dual_conic) = solve_conicsub!(m, soln_int, logs)
                 if (status_conic != :Optimal) && (status_conic != :Suboptimal) && (status_conic != :Infeasible)
                     # Infer conic solver failure
                     warn("Continuous solver returned conic subproblem status $status_conic: terminating Pajarito\n")
@@ -1399,13 +1421,9 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
     # Start MIP solver
     logs[:mip_solve] = time()
-    if applicable(MathProgBase.setparameters!, m.mip_solver)
-        MathProgBase.setparameters!(m.mip_solver, TimeLimit=(m.timeout - (time() - logs[:total])))
-        setsolver(m.model_mip, m.mip_solver)
-    end
+    status_mip = solve(m.model_mip)#, suppress_warnings=true)
     logs[:mip_solve] = time() - logs[:mip_solve]
 
-    status_mip = solve(m.model_mip, suppress_warnings=true)
     if (status_mip == :Infeasible) || (status_mip == :InfeasibleOrUnbounded)
         m.status = :Infeasible
     elseif status_mip == :Unbounded
@@ -1432,30 +1450,37 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 end
 
 # Solve conic subproblem given some solution to the integer variables, update incumbent
-function solve_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::Dict{Symbol,Real})
+function solve_conicsub!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::Dict{Symbol,Real})
     # Calculate new b vector from integer solution and solve conic model
     # m.b_sub_int = m.b_sub - m.A_sub_int*soln_int
     tic()
     A_mul_B!(m.b_sub_int, m.A_sub_int, soln_int) # m.b_sub_int = m.A_sub_int*soln_int
     scale!(m.b_sub_int, -1) # m.b_sub_int = - m.b_sub_int
     BLAS.axpy!(1, m.b_sub, m.b_sub_int) # m.b_sub_int = m.b_sub_int + m.b_sub
-    if m.update_bvec
+    logs[:conic_proc] += toq()
+
+    # Load/solve conic model
+    tic()
+    if m.update_conicsub
         # Reuse model already created by changing b vector
         MathProgBase.setbvec!(m.model_conic, m.b_sub_int)
     else
-        # Create new model
-        m.model_conic = MathProgBase.ConicModel(m.cont_solver)
+        # Load new model
+        if m.dualize_sub
+            solver_conicsub = ConicDualWrapper(conicsolver=m.cont_solver)
+        else
+            solver_conicsub = m.cont_solver
+        end
+        m.model_conic = MathProgBase.ConicModel(solver_conicsub)
         MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, m.b_sub_int, m.cone_con_sub, m.cone_var_sub)
     end
     # Mosek.writedata(m.model_conic.task, "$(round(Int, time())).task")         # For MOSEK debug only: dump task
-    logs[:conic_load] += toq()
-
-    # Solve conic model
-    tic()
     MathProgBase.optimize!(m.model_conic)
-    status_conic = MathProgBase.status(m.model_conic)
     logs[:conic_solve] += toq()
     logs[:n_conic] += 1
+
+    tic()
+    status_conic = MathProgBase.status(m.model_conic)
 
     # Get dual vector
     if (status_conic == :Optimal) || (status_conic == :Suboptimal) || (status_conic == :Infeasible)
@@ -1489,9 +1514,11 @@ function solve_conic!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs::Di
     end
 
     # Free the conic model if not saving it
-    if !m.update_bvec && applicable(MathProgBase.freemodel!, m.model_conic)
+    if !m.update_conicsub && applicable(MathProgBase.freemodel!, m.model_conic)
         MathProgBase.freemodel!(m.model_conic)
     end
+
+    logs[:conic_proc] += toq()
 
     return (status_conic, dual_conic)
 end
@@ -1700,7 +1727,7 @@ function add_dual_cuts_exp!(m::PajaritoConicModel, vars::Vector{JuMP.Variable}, 
     # 2 Sanitize: remove near-zeros
     for ind in 1:3
         if abs(dual[ind]) < m.tol_zero
-            dual[ind] = 0.
+            dual[ind]
         end
     end
 
@@ -1851,7 +1878,7 @@ function make_sdp_soc_expr(dim::Int, vec_expr::Vector{JuMP.AffExpr}, vars_smat::
         end
     end
     vec_expr[dim] = y_expr - z_expr
-    return (y_expr + z_expr - norm2(vec_expr))
+    return (y_expr + z_expr - norm(vec_expr))
 end
 
 # Update dual infeasibility values in cone summary
@@ -2053,6 +2080,24 @@ function add_prim_cuts_sdp!(m::PajaritoConicModel, add_viol_cuts::Bool, dim::Int
             end
             m.viol_cut = true
         end
+
+        # Sanitize eigenvector v for sparser rank-1 cut
+        for vi in 1:dim
+            if abs(smat[vi, v]) < m.tol_sdp_eigvec
+                smat[vi, v] = 0.
+            end
+        end
+
+        # Add sparse rank-1 cut from smat sparsified eigenvector v
+        @expression(m.model_mip, cut_expr, sum((vi == vj ? 1. : 2.) * smat[vi, v] * smat[vj, v] * vars_smat[vi, vj] for vj in 1:dim, vi in vj:dim))
+        if getvalue(cut_expr) < m.tol_prim_zero
+            if m.mip_solver_drives
+                @lazyconstraint(m.cb_lazy, cut_expr >= 0.)
+            else
+                @constraint(m.model_mip, cut_expr >= 0.)
+            end
+            m.viol_cut = true
+        end
     end
 end
 
@@ -2140,7 +2185,7 @@ function create_logs()
     logs[:relax_solve] = 0. # Solving initial conic relaxation model
     logs[:oa_alg] = 0.      # Performing outer approximation algorithm
     logs[:mip_solve] = 0.   # Solving the MIP model
-    logs[:conic_load] = 0.  # Loading conic subproblem model
+    logs[:conic_proc] = 0.  # Processing conic b vector and dual and solution
     logs[:conic_solve] = 0. # Solving conic subproblem model
     logs[:conic_soln] = 0.  # Adding new feasible conic solution
     logs[:dual_cuts] = 0.   # Adding dual cuts
@@ -2294,8 +2339,8 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         @printf " - Iterative algorithm  = %14.2e\n" logs[:oa_alg]
         @printf " -- Solve MIPs          = %14.2e\n" logs[:mip_solve]
     end
-    @printf " -- Load conic data     = %14.2e\n" logs[:conic_load]
     @printf " -- Solve conic model   = %14.2e\n" logs[:conic_solve]
+    @printf " -- Process conic data  = %14.2e\n" logs[:conic_proc]
     @printf " -- Add conic solution  = %14.2e\n" logs[:conic_soln]
     @printf " -- Add dual cuts       = %14.2e\n" logs[:dual_cuts]
     @printf " -- Use outer inf/cuts  = %14.2e\n" logs[:outer_inf]

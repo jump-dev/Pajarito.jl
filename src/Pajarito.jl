@@ -17,6 +17,7 @@ module Pajarito
     import MathProgBase
     using ConicNonlinearBridge
 
+    include("conic_dual_solver.jl")
     include("solver.jl")
     include("conic_algorithm.jl")
     include("nonlinear_algorithm.jl")

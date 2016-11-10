@@ -10,19 +10,21 @@ This file implements the default PajaritoSolver
 export PajaritoSolver
 
 immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
-    # Solver parameters
     log_level::Int              # Verbosity flag: 1 for minimal OA iteration and solve statistics, 2 for including cone summary information, 3 for running commentary
     timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
     rel_gap::Float64            # Relative optimality gap termination condition
+
     mip_solver_drives::Bool     # Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
-    solve_relax::Bool           # (Conic only) Solve the continuous conic relaxation to add initial dual cuts
+    mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver (MILP or MISOCP)
+    mip_subopt_solver::MathProgBase.AbstractMathProgSolver # MIP solver for suboptimal solves, with appropriate options (gap or timeout) specified directly
+    mip_subopt_count::Int       # (Conic only) Number of times to solve MIP suboptimally with time limit between zero gap solves
     round_mip_sols::Bool        # (Conic only) Round the integer variable values from the MIP solver before passing to the conic subproblems
     pass_mip_sols::Bool         # (Conic only) Give best feasible solutions constructed from conic subproblem solution to MIP
 
     cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver (conic or nonlinear)
-    mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver (MILP or MISOCP)
-    mip_subopt_solver::MathProgBase.AbstractMathProgSolver # MIP solver for suboptimal solves, with appropriate options (gap or timeout) specified directly
-    mip_subopt_count::Int       # (Conic only) Number of times to solve MIP suboptimally with time limit between zero gap solves
+    solve_relax::Bool           # (Conic only) Solve the continuous conic relaxation to add initial dual cuts
+    dualize_relax::Bool         # (Conic only) Solve the conic dual of the continuous conic relaxation
+    dualize_sub::Bool           # (Conic only) Solve the conic duals of the continuous conic subproblems
 
     soc_disagg::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
     soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
@@ -53,15 +55,18 @@ function PajaritoSolver(;
     log_level = 1,
     timeout = 60*60.,
     rel_gap = 1e-5,
+
     mip_solver_drives = false,
-    solve_relax = true,
+    mip_solver = MathProgBase.defaultMIPsolver,
+    mip_subopt_solver = MathProgBase.defaultMIPsolver,
+    mip_subopt_count = 0,
     round_mip_sols = false,
     pass_mip_sols = true,
 
     cont_solver = MathProgBase.defaultConicsolver,
-    mip_solver = MathProgBase.defaultMIPsolver,
-    mip_subopt_solver = MathProgBase.defaultMIPsolver,
-    mip_subopt_count = 0,
+    solve_relax = true,
+    dualize_relax = false,
+    dualize_sub = false,
 
     soc_disagg = true,
     soc_in_mip = false,
@@ -88,14 +93,14 @@ function PajaritoSolver(;
     tol_sdp_eigval = 1e-6
     )
 
-    PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, solve_relax, round_mip_sols, pass_mip_sols, cont_solver, mip_solver, mip_subopt_solver, mip_subopt_count, soc_disagg, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, viol_cuts_only, proj_dual_infeas, proj_dual_feas, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_zero, tol_prim_infeas, tol_sdp_eigvec, tol_sdp_eigval)
+    PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, viol_cuts_only, proj_dual_infeas, proj_dual_feas, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_zero, tol_prim_infeas, tol_sdp_eigvec, tol_sdp_eigval)
 end
 
 
 # Create Pajarito conic model: can solve with either conic algorithm or nonlinear algorithm wrapped with ConicNonlinearBridge
 function MathProgBase.ConicModel(s::PajaritoSolver)
     if applicable(MathProgBase.ConicModel, s.cont_solver)
-        return PajaritoConicModel(s.log_level, s.timeout, s.rel_gap, s.mip_solver_drives, s.solve_relax, s.round_mip_sols, s.pass_mip_sols, s.cont_solver, s.mip_solver, s.mip_subopt_solver, s.mip_subopt_count, s.soc_disagg, s.soc_in_mip, s.sdp_eig, s.sdp_soc, s.init_soc_one, s.init_soc_inf, s.init_exp, s.init_sdp_lin, s.init_sdp_soc, s.viol_cuts_only, s.proj_dual_infeas, s.proj_dual_feas, s.prim_cuts_only, s.prim_cuts_always, s.prim_cuts_assist, s.tol_zero, s.tol_prim_zero, s.tol_prim_infeas, s.tol_sdp_eigvec, s.tol_sdp_eigval)
+        return PajaritoConicModel(s.log_level, s.timeout, s.rel_gap, s.mip_solver_drives, s.mip_solver, s.mip_subopt_solver, s.mip_subopt_count, s.round_mip_sols, s.pass_mip_sols, s.cont_solver, s.solve_relax, s.dualize_relax, s.dualize_sub, s.soc_disagg, s.soc_in_mip, s.sdp_eig, s.sdp_soc, s.init_soc_one, s.init_soc_inf, s.init_exp, s.init_sdp_lin, s.init_sdp_soc, s.viol_cuts_only, s.proj_dual_infeas, s.proj_dual_feas, s.prim_cuts_only, s.prim_cuts_always, s.prim_cuts_assist, s.tol_zero, s.tol_prim_zero, s.tol_prim_infeas, s.tol_sdp_eigvec, s.tol_sdp_eigval)
     elseif applicable(MathProgBase.NonlinearModel, s.cont_solver)
         return MathProgBase.ConicModel(ConicNonlinearBridge.ConicNLPWrapper(nlp_solver=s))
     else
