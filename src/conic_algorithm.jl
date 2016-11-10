@@ -426,12 +426,12 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
         if m.mip_solver_drives
             if m.log_level >= 0
-                @printf "\nStarting MIP-solver-driven outer approximation algorithm\n\n"
+                @printf "\nStarting MIP-solver-driven outer approximation algorithm\n"
             end
             solve_mip_driven!(m, logs)
         else
             if m.log_level >= 0
-                @printf "\nStarting iterative outer approximation algorithm\n\n"
+                @printf "\nStarting iterative outer approximation algorithm\n"
             end
             solve_iterative!(m, logs)
         end
