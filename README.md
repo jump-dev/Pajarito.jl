@@ -41,17 +41,19 @@ All solvers can have their parameters specified through their corresponding Juli
 
 The following options can be passed to `PajaritoSolver()` to modify its behavior (**C** means conic algorithm only):
 
-  * `log_level::Int` Verbosity flag: 1 for minimal OA iteration and solve statistics, 2 for including cone summary information, 3 for running commentary
+  * `log_level::Int` Verbosity flag: -1 for no output, 0 for minimal solution information, 1 for basic OA iteration and solve statistics, 2 for cone summary information, 3 for infeasibilities of duals, cuts, and OA solutions
   * `timeout::Float64` Time limit for outer approximation algorithm not including initial load (in seconds)
   * `rel_gap::Float64` Relative optimality gap termination condition
   * `mip_solver_drives::Bool` Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
-  * `solve_relax::Bool` **C** Solve the continuous conic relaxation to add initial dual cuts
-  * `round_mip_sols::Bool` **C** Round the integer variable values from the MIP solver before passing to the conic subproblems
-  * `pass_mip_sols::Bool` **C** Give best feasible solutions constructed from conic subproblem solution to MIP
-  * `cont_solver::MathProgBase.AbstractMathProgSolver` Continuous solver (conic or nonlinear)
   * `mip_solver::MathProgBase.AbstractMathProgSolver` MIP solver (MILP or MISOCP)
   * `mip_subopt_solver::MathProgBase.AbstractMathProgSolver` **C** MIP solver for suboptimal solves, with appropriate options (gap or timeout) specified directly
   * `mip_subopt_count::Int` **C** Number of times to solve MIP suboptimally with time limit between zero gap solves
+  * `round_mip_sols::Bool` **C** Round the integer variable values from the MIP solver before passing to the conic subproblems
+  * `pass_mip_sols::Bool` **C** Give best feasible solutions constructed from conic subproblem solution to MIP
+  * `cont_solver::MathProgBase.AbstractMathProgSolver` Continuous solver (conic or nonlinear)
+  * `solve_relax::Bool` **C** Solve the continuous conic relaxation to add initial dual cuts
+  * `dualize_relax::Bool` **C** Solve the conic dual of the continuous conic relaxation
+  * `dualize_sub::Bool` **C** Solve the conic duals of the continuous conic subproblems
   * `soc_disagg::Bool` **C** Disaggregate SOC cones in the MIP only
   * `soc_in_mip::Bool` **C** Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
   * `sdp_eig::Bool` **C** Use SDP eigenvector-derived cuts
