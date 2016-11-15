@@ -1066,7 +1066,7 @@ function create_mip_data!(m::PajaritoConicModel, c_new::Vector{Float64}, A_new::
             # Dual exp cone is  e * z >= -x * exp(y / x), z >= 0, x < 0
             # at x = -1; y = -1, -1/2, -1/5, 0, 1/5, 1/2, 1; z = exp(-y) / e = exp(-y - 1)
             for yval in [-1., -0.5, -0.2, 0., 0.2, 0.5, 1.]
-                @constraint(model_mip, -vars[1] + yval * vars[1] + exp(-yval - 1.) * vars[3] >= 0)
+                @constraint(model_mip, -vars[1] + yval * vars[2] + exp(-yval - 1.) * vars[3] >= 0)
             end
         end
     end
