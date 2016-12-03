@@ -53,7 +53,7 @@ end
 
 function PajaritoSolver(;
     log_level = 1,
-    timeout = 60*60.,
+    timeout = Inf,
     rel_gap = 1e-5,
 
     mip_solver_drives = false,
