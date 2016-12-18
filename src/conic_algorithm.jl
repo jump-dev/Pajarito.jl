@@ -1410,8 +1410,6 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         end
 
         if haskey(cache_soln, soln_int)
-            println("repeat")
-
             # Integer solution has been seen before
             logs[:n_repeat] += 1
 
@@ -1432,19 +1430,13 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 print_inf_dualcuts(m)
             end
         else
-            println("new")
-
             # Integer solution is new: calculate cone outer infeasibilities of MIP solution, add any violated primal cuts if always using them
             calc_outer_inf_cuts!(m, m.prim_cuts_always, logs)
             print_inf_outer(m)
 
             if !m.prim_cuts_only
-                println("solving conic")
-
                 # Solve conic subproblem and update incumbent feasible solution
                 (status_conic, dual_conic) = solve_conicsub!(m, soln_int, logs)
-
-                @show status_conic
 
                 # Check if encountered conic solver failure
                 if (status_conic == :Optimal) || (status_conic == :Suboptimal) || (status_conic == :Infeasible)
@@ -1550,21 +1542,12 @@ function solve_conicsub!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs:
         MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, m.b_sub_int, m.cone_con_sub, m.cone_var_sub)
     end
     # Mosek.writedata(m.model_conic.task, "mosekfail.task")         # For MOSEK debug only: dump task
-    println("really solving conic")
     MathProgBase.optimize!(m.model_conic)
-    println("solved conic")
-
     logs[:conic_solve] += toq()
     logs[:n_conic] += 1
 
     tic()
-    println("getting status")
-
     status_conic = MathProgBase.status(m.model_conic)
-    @show status_conic
-
-    println("getting dual")
-
     if (status_conic == :Optimal) || (status_conic == :Suboptimal) || (status_conic == :Infeasible)
         # Get dual vector
         dual_conic = MathProgBase.getdual(m.model_conic)
@@ -1590,8 +1573,6 @@ function solve_conicsub!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs:
         dual_conic = Float64[]
     end
 
-    println("getting sol")
-
     # Check if have new best feasible solution
     if (status_conic == :Optimal) || (status_conic == :Suboptimal)
         soln_cont = MathProgBase.getsolution(m.model_conic)
@@ -1609,13 +1590,10 @@ function solve_conicsub!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs:
         end
     end
 
-    println("freeing")
-
     # Free the conic model if not saving it
     if !m.update_conicsub && applicable(MathProgBase.freemodel!, m.model_conic)
         MathProgBase.freemodel!(m.model_conic)
     end
-    println("done ")
 
     logs[:conic_proc] += toq()
 
