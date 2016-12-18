@@ -158,10 +158,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
             # If only using primal cuts, have to use them always
             error("When using primal cuts only, they must be added always\n")
         end
-        if (prim_cuts_only || prim_cuts_assist) && (tol_prim_zero < 1e-5)
-            # If using primal cuts, cut zero tolerance needs to be sufficiently positive
-            error("When using primal cuts, primal cut zero tolerance must be at least 1e-5 to avoid numerical issues\n")
-        end
 
         # Warnings
         if log_level > 1
@@ -180,6 +176,9 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
             end
             if prim_cuts_only
                 warn("Using primal cuts only may cause convergence issues\n")
+            end
+            if (prim_cuts_only || prim_cuts_assist) && (tol_prim_zero < 1e-5)
+                warn("When using primal cuts, primal cut zero tolerance should be at least 1e-5 to avoid numerical issues\n")
             end
         end
 
@@ -382,7 +381,6 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
         model_relax = MathProgBase.ConicModel(solver_relax)
         MathProgBase.loadproblem!(model_relax, c_new, A_new, b_new, cone_con_new, cone_var_new)
-        # Mosek.writedata(m.model_conic.task, "$(round(Int, time())).task")    # For MOSEK debug only: dump task
         MathProgBase.optimize!(model_relax)
         logs[:relax_solve] += toq()
         if m.log_level > 0
@@ -397,6 +395,24 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             warn("Initial conic relaxation status was $status_relax: terminating Pajarito\n")
             m.status = :UnboundedRelaxation
         elseif (status_relax != :Optimal) && (status_relax != :Suboptimal)
+            if m.log_level > 2
+                # Conic solver failed: dump the conic problem
+                println("Conic failure: dumping conic subproblem data")
+                @show status_relax
+                println()
+                @show c_new
+                println()
+                @show findnz(A_new)
+                println()
+                @show b_new
+                println()
+                @show cone_con_new
+                println()
+                @show cone_var_new
+                println()
+                # Mosek.writedata(model_relax.task, "$(round(Int, time())).task")    # For MOSEK debug only: dump task
+            end
+
             warn("Apparent conic solver failure with status $status_relax: terminating Pajarito\n")
             m.status = :ConicFailure
         else
@@ -1149,17 +1165,17 @@ function create_mip_data!(m::PajaritoConicModel, c_new::Vector{Float64}, A_new::
     m.x_cont = x_all[cols_cont]
     # @show model_mip
 
-    # If putting SOCs in the MIP, don't add any conic cuts for them
+    # If putting SOCs in the MIP, no SOCs to be dealt with in outer approximation
     if m.soc_in_mip
-        m.num_soc = 0
-    else
-        m.num_soc = num_soc
-        m.summ_soc = summ_soc
-        m.dim_soc = dim_soc
-        m.rows_sub_soc = rows_sub_soc
-        m.vars_soc = vars_soc
-        m.vars_dagg_soc = vars_dagg_soc
+        num_soc = 0
     end
+
+    m.num_soc = num_soc
+    m.summ_soc = summ_soc
+    m.dim_soc = dim_soc
+    m.rows_sub_soc = rows_sub_soc
+    m.vars_soc = vars_soc
+    m.vars_dagg_soc = vars_dagg_soc
 
     m.num_exp = num_exp
     m.summ_exp = summ_exp
@@ -1312,23 +1328,39 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             # Integer solution is new: save it in the set
             push!(cache_soln, copy(soln_int))
 
-            # Calculate cone outer infeasibilities of MIP solution, add any violated primal cuts if always using them
+            # Add primal cuts if always using and calculate OA infeas
             calc_outer_inf_cuts!(m, m.prim_cuts_always, logs)
             print_inf_outer(m)
 
             if !m.prim_cuts_only
-                # Solve conic subproblem and update incumbent feasible solution, finish if encounter conic solver failure
+                # Solve conic subproblem and update incumbent feasible solution
                 (status_conic, dual_conic) = solve_conicsub!(m, soln_int, logs)
-                if (status_conic != :Optimal) && (status_conic != :Suboptimal) && (status_conic != :Infeasible)
-                    # Infer conic solver failure
-                    warn("Continuous solver returned conic subproblem status $status_conic: terminating Pajarito\n")
-                    m.status = :ConicFailure
-                    break
-                end
 
-                # Add dual cuts to MIP
-                add_dual_cuts!(m, dual_conic, m.rows_sub_soc, m.rows_sub_exp, m.rows_sub_sdp, logs)
-                print_inf_dualcuts(m)
+                # Check if encountered conic solver failure
+                if (status_conic == :Optimal) || (status_conic == :Suboptimal) || (status_conic == :Infeasible)
+                    # Success: add dual cuts to MIP
+                    add_dual_cuts!(m, dual_conic, m.rows_sub_soc, m.rows_sub_exp, m.rows_sub_sdp, logs)
+                    print_inf_dualcuts(m)
+                else
+                    # Conic failure
+                    if !m.prim_cuts_assist && !m.prim_cuts_always
+                        # Not using primal cuts, so have to terminate
+                        warn("Continuous solver returned conic subproblem status $status_conic, and no primal cuts are being used; terminating Pajarito\n")
+                        m.status = :ConicFailure
+                        break
+                    elseif !m.prim_cuts_always && m.prim_cuts_assist
+                        # Have not yet added primal cuts, add them
+                        calc_outer_inf_cuts!(m, true, logs)
+                        print_inf_outer(m)
+                    end
+
+                    # Primal cuts were used: if there were positive outer infeasibilities and no primal cuts were actually added, must terminate
+                    if (m.prim_cuts_always || m.prim_cuts_assist) && m.viol_oa && !m.viol_cut
+                        warn("Continuous solver returned conic subproblem status $status_conic, and no primal cuts were able to be added; terminating Pajarito\n")
+                        m.status = :ConicFailure
+                        break
+                    end
+                end
             end
 
             # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
@@ -1387,31 +1419,52 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
             # If there are positive outer infeasibilities and no primal cuts were added, add cached dual cuts
             if m.viol_oa && !m.viol_cut
+                if isempty(cache_soln[soln_int])
+                    warn("No primal cuts were able to be added; terminating Pajarito\n")
+                    m.status = :MIPFailure
+                    throw(CallbackAbort())
+                end
+
                 # Get cached conic dual associated with repeated integer solution, re-add all dual cuts
                 add_dual_cuts!(m, cache_soln[soln_int], m.rows_sub_soc, m.rows_sub_exp, m.rows_sub_sdp, logs)
                 print_inf_dualcuts(m)
             end
         else
-            # Integer solution is new
-            # Calculate cone outer infeasibilities of MIP solution, add any violated primal cuts if always using them
+            # Integer solution is new: calculate cone outer infeasibilities of MIP solution, add any violated primal cuts if always using them
             calc_outer_inf_cuts!(m, m.prim_cuts_always, logs)
             print_inf_outer(m)
 
             if !m.prim_cuts_only
-                # Solve conic subproblem and update incumbent feasible solution, finish if encounter conic solver failure
+                # Solve conic subproblem and update incumbent feasible solution
                 (status_conic, dual_conic) = solve_conicsub!(m, soln_int, logs)
-                if (status_conic != :Optimal) && (status_conic != :Suboptimal) && (status_conic != :Infeasible)
-                    # Infer conic solver failure
-                    warn("Continuous solver returned conic subproblem status $status_conic: terminating Pajarito\n")
-                    m.status = :ConicFailure
-                    throw(CallbackAbort())
+
+                # Check if encountered conic solver failure
+                if (status_conic == :Optimal) || (status_conic == :Suboptimal) || (status_conic == :Infeasible)
+                    # Success: add dual cuts to MIP
+                    add_dual_cuts!(m, dual_conic, m.rows_sub_soc, m.rows_sub_exp, m.rows_sub_sdp, logs)
+                    print_inf_dualcuts(m)
+                else
+                    # Conic failure
+                    if !m.prim_cuts_assist && !m.prim_cuts_always
+                        # Not using primal cuts, so have to terminate
+                        warn("Continuous solver returned conic subproblem status $status_conic, and no primal cuts are being used; terminating Pajarito\n")
+                        m.status = :ConicFailure
+                        throw(CallbackAbort())
+                    elseif !m.prim_cuts_always && m.prim_cuts_assist
+                        # Have not yet added primal cuts, add them
+                        calc_outer_inf_cuts!(m, true, logs)
+                        print_inf_outer(m)
+                    end
+
+                    # Primal cuts were used: if there were positive outer infeasibilities and no primal cuts were actually added, must terminate
+                    if (m.prim_cuts_always || m.prim_cuts_assist) && m.viol_oa && !m.viol_cut
+                        warn("Continuous solver returned conic subproblem status $status_conic, and no primal cuts were able to be added; terminating Pajarito\n")
+                        m.status = :ConicFailure
+                        throw(CallbackAbort())
+                    end
                 end
 
-                # Add dual cuts to MIP
-                add_dual_cuts!(m, dual_conic, m.rows_sub_soc, m.rows_sub_exp, m.rows_sub_sdp, logs)
-                print_inf_dualcuts(m)
-
-                # Cache integer solution and corresponding dual
+                # Cache integer solution and corresponding dual (empty if conic failure)
                 cache_soln[copy(soln_int)] = dual_conic
             else
                 # Cache integer solution
@@ -1488,18 +1541,35 @@ function solve_conicsub!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs:
         m.model_conic = MathProgBase.ConicModel(solver_conicsub)
         MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, m.b_sub_int, m.cone_con_sub, m.cone_var_sub)
     end
-    # Mosek.writedata(m.model_conic.task, "$(round(Int, time())).task")         # For MOSEK debug only: dump task
+    # Mosek.writedata(m.model_conic.task, "mosekfail.task")         # For MOSEK debug only: dump task
     MathProgBase.optimize!(m.model_conic)
     logs[:conic_solve] += toq()
     logs[:n_conic] += 1
 
     tic()
     status_conic = MathProgBase.status(m.model_conic)
-
-    # Get dual vector
     if (status_conic == :Optimal) || (status_conic == :Suboptimal) || (status_conic == :Infeasible)
+        # Get dual vector
         dual_conic = MathProgBase.getdual(m.model_conic)
     else
+        if m.log_level > 2
+            # Conic solver failed: dump the conic problem
+            println("Conic failure: dumping conic subproblem data")
+            @show status_conic
+            println()
+            @show m.c_sub_cont
+            println()
+            @show findnz(m.A_sub_cont)
+            println()
+            @show m.b_sub_int
+            println()
+            @show m.cone_con_sub
+            println()
+            @show m.cone_var_sub
+            println()
+            # Mosek.writedata(m.model_conic.task, "$(round(Int, time())).task")    # For MOSEK debug only: dump task
+        end
+
         dual_conic = Float64[]
     end
 
