@@ -1165,17 +1165,17 @@ function create_mip_data!(m::PajaritoConicModel, c_new::Vector{Float64}, A_new::
     m.x_cont = x_all[cols_cont]
     # @show model_mip
 
-    # If putting SOCs in the MIP, don't add any conic cuts for them
+    # If putting SOCs in the MIP, no SOCs to be dealt with in outer approximation
     if m.soc_in_mip
-        m.num_soc = 0
-    else
-        m.num_soc = num_soc
-        m.summ_soc = summ_soc
-        m.dim_soc = dim_soc
-        m.rows_sub_soc = rows_sub_soc
-        m.vars_soc = vars_soc
-        m.vars_dagg_soc = vars_dagg_soc
+        num_soc = 0
     end
+
+    m.num_soc = num_soc
+    m.summ_soc = summ_soc
+    m.dim_soc = dim_soc
+    m.rows_sub_soc = rows_sub_soc
+    m.vars_soc = vars_soc
+    m.vars_dagg_soc = vars_dagg_soc
 
     m.num_exp = num_exp
     m.summ_exp = summ_exp
