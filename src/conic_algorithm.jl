@@ -1419,21 +1419,20 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             logs[:n_repeat] += 1
 
             # Calculate cone outer infeasibilities of MIP solution, add any violated primal cuts if using primal cuts
+
+            # DO WE STILL WANT TO ADD PRIMAL CUTS? or wait for incumbent callback 
+
             calc_outer_inf_cuts!(m, (m.prim_cuts_always || m.prim_cuts_assist), logs)
             print_inf_outer(m)
 
             # If there are positive outer infeasibilities and no primal cuts were added, add cached dual cuts
-            if m.viol_oa && !m.viol_cut
-                if isempty(cache_soln[soln_int])
-                    warn("No primal cuts were able to be added; terminating Pajarito\n")
-                    m.status = :MIPFailure
-                    throw(CallbackAbort())
-                end
-
-                # Get cached conic dual associated with repeated integer solution, re-add all dual cuts
-                add_dual_cuts!(m, cache_soln[soln_int], m.rows_sub_soc, m.rows_sub_exp, m.rows_sub_sdp, logs)
-                print_inf_dualcuts(m)
-            end
+            # if m.viol_oa && !m.viol_cut
+            #     if !isempty(cache_soln[soln_int])
+            #         # Get cached conic dual associated with repeated integer solution, re-add all dual cuts
+            #         add_dual_cuts!(m, cache_soln[soln_int], m.rows_sub_soc, m.rows_sub_exp, m.rows_sub_sdp, logs)
+            #         print_inf_dualcuts(m)
+            #     end
+            # end
         else
             # Integer solution is new: calculate cone outer infeasibilities of MIP solution, add any violated primal cuts if always using them
             calc_outer_inf_cuts!(m, m.prim_cuts_always, logs)
