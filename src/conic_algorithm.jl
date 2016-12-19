@@ -1254,9 +1254,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 break
             end
         else
-            warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue): aborting iterative algorithm\n")
-            m.status = :MIPFailure
-            break
+            error("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
         end
 
         # Get integer solution, round if option
@@ -1396,7 +1394,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     cache_soln = Dict{Vector{Float64},Vector{Float64}}()
     soln_int = Vector{Float64}(length(m.x_int))
 
-    # Add lazy cuts callback
+    # Add lazy cuts callback to add dual and primal conic cuts
     function callback_lazy(cb)
         m.cb_lazy = cb
 
@@ -1475,7 +1473,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     addlazycallback(m.model_mip, callback_lazy)
 
     if !m.prim_cuts_only && m.pass_mip_sols
-        # Add heuristic callback
+        # Add heuristic callback to give MIP solver feasible solutions from conic solves
         function callback_heur(cb)
             # If have a new best feasible solution since last heuristic solution added
             if m.isnew_feas
@@ -1489,33 +1487,61 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         addheuristiccallback(m.model_mip, callback_heur)
     end
 
+    # Add info callback to stop MIP solver when converged
+    function callback_info(cb)
+        # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
+        m.mip_obj = MathProgBase.cbgetbestbound(cb)
+        m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
+        print_gap(m, logs)
+        if m.gap_rel_opt < m.rel_gap
+            m.status = :Optimal
+            throw(CallbackAbort())
+        end
+    end
+    addinfocallback(m.model_mip, callback_info, when = :Intermediate)
+
     # Start MIP solver
     logs[:mip_solve] = time()
     status_mip = solve(m.model_mip)#, suppress_warnings=true)
     logs[:mip_solve] = time() - logs[:mip_solve]
 
+    if (m.status == :Optimal) || (m.status == :ConicFailure) || (m.status == :MIPFailure)
+        return
+    end
+
     if (status_mip == :Infeasible) || (status_mip == :InfeasibleOrUnbounded)
         m.status = :Infeasible
     elseif status_mip == :Unbounded
-        # Should not be unbounded: initial conic relax solve should detect this
+        # Shouldn't happen - initial conic relax solve should detect this
         warn("MIP solver returned status $status_mip, which could indicate that the initial dual cuts added were too weak\n")
         m.status = :MIPFailure
-    elseif (status_mip == :UserLimit) || (status_mip == :Optimal)
-        if (m.best_obj == Inf) && (m.prim_cuts_assist || m.prim_cuts_always)
-            # No feasible solution from conic problem, but primal cuts should ensure conic feasibility of MIP solution, so use MIP solution as best feasible
-            m.best_int = getvalue(m.x_int)
-            m.best_cont = getvalue(m.x_cont)
-            m.best_obj = dot(m.c_sub_int, m.best_int) + dot(m.c_sub_cont, m.best_cont)
-        end
+    elseif (status_mip == :UserLimit) || (status_mip == :Optimal) || (status_mip == :Suboptimal)
+        if m.best_obj == Inf
+            # No feasible solution from conic problem, check MIP solution if using primal cuts
+            if (m.prim_cuts_assist || m.prim_cuts_always)
+                # Primal cuts should ensure conic NEAR-feasibility of MIP solution
+                m.best_int = getvalue(m.x_int)
+                m.best_cont = getvalue(m.x_cont)
 
-        m.mip_obj = getobjbound(m.model_mip)
-        m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-        if (m.status != :ConicFailure) && (m.status != :MIPFailure)
-            m.status = status_mip
+                m.best_obj = dot(m.c_sub_int, m.best_int) + dot(m.c_sub_cont, m.best_cont)
+                m.mip_obj = getobjbound(m.model_mip)
+                m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
+                m.status = :NearFeasible
+            else
+                m.status = :NoKnownFeasible
+            end
+        else
+            # Have a feasible solution: check if gap condition is satisfied
+            m.mip_obj = getobjbound(m.model_mip)
+            m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
+            if m.gap_rel_opt < m.rel_gap
+                m.status = :Optimal
+            else
+                m.status = :Suboptimal
+            end
         end
     else
-        warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
-        m.status = :MIPFailure
+        error("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
     end
 end
 
