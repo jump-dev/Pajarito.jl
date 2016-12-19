@@ -1492,7 +1492,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
         m.mip_obj = MathProgBase.cbgetbestbound(cb)
         m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-        print_gap(m, logs)
+        print_gap_MSD(m, logs)
         if m.gap_rel_opt < m.rel_gap
             m.status = :Optimal
             throw(CallbackAbort())
@@ -2365,7 +2365,7 @@ function print_inf_outer(m::PajaritoConicModel)
     flush(STDOUT)
 end
 
-# Print objective gap information
+# Print objective gap information for iterative
 function print_gap(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     if m.log_level <= 1
         return
@@ -2377,9 +2377,29 @@ function print_gap(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     if m.gap_rel_opt < 1000
         @printf "%4d | %+14.6e | %+14.6e | %11.3e | %11.3e\n" logs[:n_mip] m.best_obj m.mip_obj m.gap_rel_opt (time() - logs[:oa_alg])
     elseif isnan(m.gap_rel_opt)
-        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" logs[:n_mip] m.best_obj m.mip_obj "Infeas" (time() - logs[:oa_alg])
+        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" logs[:n_mip] m.best_obj m.mip_obj "Inf" (time() - logs[:oa_alg])
     else
         @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" logs[:n_mip] m.best_obj m.mip_obj ">1000" (time() - logs[:oa_alg])
+    end
+    flush(STDOUT)
+end
+
+# Print objective gap information for MSD
+function print_gap_MSD(m::PajaritoConicModel, logs::Dict{Symbol,Real})
+    if m.log_level <= 2
+        return
+    end
+
+    if logs[:n_mip] == 0
+        @printf "\n%-14s | %-14s | %-11s | %-11s\n" "Best obj" "OA obj" "Rel gap" "Time (s)"
+        logs[:n_mip] += 1
+    end
+    if m.gap_rel_opt < 1000
+        @printf "%+14.6e | %+14.6e | %11.3e | %11.3e\n" m.best_obj m.mip_obj m.gap_rel_opt (time() - logs[:oa_alg])
+    elseif isnan(m.gap_rel_opt)
+        @printf "%+14.6e | %+14.6e | %11s | %11.3e\n" m.best_obj m.mip_obj "Inf" (time() - logs[:oa_alg])
+    else
+        @printf "%+14.6e | %+14.6e | %11s | %11.3e\n" m.best_obj m.mip_obj ">1000" (time() - logs[:oa_alg])
     end
     flush(STDOUT)
 end
