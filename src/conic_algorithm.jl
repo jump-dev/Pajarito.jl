@@ -143,6 +143,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # Model constructor
     function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, viol_cuts_only, proj_dual_infeas, proj_dual_feas, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_conic_feas, tol_zero, tol_prim_zero, tol_prim_infeas, tol_sdp_eigvec, tol_sdp_eigval)
         # Errors
+        if !isa(solver, CplexSolver)
+            error("This branch of Pajarito requires that you use CPLEX as the MIP solver\n")
         if viol_cuts_only && !mip_solver_drives
             # If using iterative algorithm, must always add non-violated cuts
             error("If using Iterative algorithm, cannot add only violated cuts\n")
@@ -478,19 +480,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             if m.log_level > 0
                 @printf "\nStarting MIP-solver-driven outer approximation algorithm\n"
             end
-
-
-
-
-
-
-            if isa(solver, CplexSolver)
-            # If solver implements incumbent callbacks, use true MSD algorithm with incumbent checking, else use old MSD with just info callbacks
-            if applicable(addincumbentcallback, m.model_mip, _ -> _)
-                solve_mip_driven(m, logs)
-            else
-                solve_info_mip_driven!(m, logs)
-            end
+            solve_mip_driven(m, logs)
         else
             if m.log_level > 0
                 @printf "\nStarting iterative outer approximation algorithm\n"
@@ -1557,167 +1547,6 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         m.gap_rel_opt = getobjgap(m.model_mip) #(m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
 
         m.status = status_mip
-    else
-        error("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
-    end
-end
-
-# Solve the MIP model using old MIP-solver-driven callback algorithm with only info callbacks
-function solve_info_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
-    if isfinite(m.timeout) && applicable(MathProgBase.setparameters!, m.mip_solver)
-        MathProgBase.setparameters!(m.mip_solver, TimeLimit=(m.timeout - (time() - logs[:total])))
-        setsolver(m.model_mip, m.mip_solver)
-    end
-
-    cache_soln = Dict{Vector{Float64},Vector{Float64}}()
-    soln_int = Vector{Float64}(length(m.x_int))
-
-    # Add lazy cuts callback to add dual and primal conic cuts
-    function callback_lazy(cb)
-        m.cb_lazy = cb
-
-        # Reset cones summary values
-        reset_cone_summary!(m)
-
-        # Get integer solution, round if option
-        soln_int = getvalue(m.x_int)
-        if m.round_mip_sols
-            soln_int = map!(round, soln_int)
-        end
-
-        if haskey(cache_soln, soln_int)
-            # Integer solution has been seen before
-            logs[:n_repeat] += 1
-
-            # Calculate cone outer infeasibilities of MIP solution, add any violated primal cuts if using primal cuts
-            calc_outer_inf_cuts!(m, (m.prim_cuts_always || m.prim_cuts_assist), logs)
-            print_inf_outer(m)
-
-            # If there are positive outer infeasibilities and no primal cuts were added, add cached dual cuts
-            if m.viol_oa && !m.viol_cut
-                if isempty(cache_soln[soln_int])
-                    warn("No primal cuts were able to be added; terminating Pajarito\n")
-                    m.status = :MIPFailure
-                    return JuMP.StopTheSolver
-                end
-
-                # Get cached conic dual associated with repeated integer solution, re-add all dual cuts
-                add_dual_cuts!(m, cache_soln[soln_int], m.rows_sub_soc, m.rows_sub_exp, m.rows_sub_sdp, logs)
-                print_inf_dualcuts(m)
-            end
-        else
-            # Integer solution is new: calculate cone outer infeasibilities of MIP solution, add any violated primal cuts if always using them
-            calc_outer_inf_cuts!(m, m.prim_cuts_always, logs)
-            print_inf_outer(m)
-
-            if !m.prim_cuts_only
-                # Solve conic subproblem and update incumbent feasible solution
-                (status_conic, dual_conic) = solve_conicsub!(m, soln_int, logs)
-
-                # Check if encountered conic solver failure
-                if (status_conic == :Optimal) || (status_conic == :Suboptimal) || (status_conic == :Infeasible)
-                    # Success: add dual cuts to MIP
-                    add_dual_cuts!(m, dual_conic, m.rows_sub_soc, m.rows_sub_exp, m.rows_sub_sdp, logs)
-                    print_inf_dualcuts(m)
-                else
-                    # Conic failure
-                    if !m.prim_cuts_assist && !m.prim_cuts_always
-                        # Not using primal cuts, so have to terminate
-                        warn("Continuous solver returned conic subproblem status $status_conic, and no primal cuts are being used; terminating Pajarito\n")
-                        m.status = :ConicFailure
-                        return JuMP.StopTheSolver
-                    elseif !m.prim_cuts_always && m.prim_cuts_assist
-                        # Have not yet added primal cuts, add them
-                        calc_outer_inf_cuts!(m, true, logs)
-                        print_inf_outer(m)
-                    end
-
-                    # Primal cuts were used: if there were positive outer infeasibilities and no primal cuts were actually added, must terminate
-                    if (m.prim_cuts_always || m.prim_cuts_assist) && m.viol_oa && !m.viol_cut
-                        warn("Continuous solver returned conic subproblem status $status_conic, and no primal cuts were able to be added; terminating Pajarito\n")
-                        m.status = :ConicFailure
-                        return JuMP.StopTheSolver
-                    end
-                end
-
-                # Cache integer solution and corresponding dual (empty if conic failure)
-                cache_soln[copy(soln_int)] = dual_conic
-            else
-                # Cache integer solution
-                cache_soln[copy(soln_int)] = Float64[]
-            end
-        end
-    end
-    addlazycallback(m.model_mip, callback_lazy)
-
-    if !m.prim_cuts_only && m.pass_mip_sols
-        # Add heuristic callback to give MIP solver feasible solutions from conic solves
-        function callback_heur(cb)
-            # If have a new best feasible solution since last heuristic solution added
-            if m.isnew_feas
-                # Set MIP solution to the new best feasible solution
-                m.cb_heur = cb
-                set_best_soln!(m, logs)
-                addsolution(cb)
-                m.isnew_feas = false
-            end
-        end
-        addheuristiccallback(m.model_mip, callback_heur)
-    end
-
-    # Add info callback to stop MIP solver when converged
-    function callback_info(cb)
-        # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
-        m.mip_obj = MathProgBase.cbgetbestbound(cb)
-        m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-        print_gap_MSD(m, logs)
-        if m.gap_rel_opt < m.rel_gap
-            m.status = :Optimal
-            return JuMP.StopTheSolver
-        end
-    end
-    addinfocallback(m.model_mip, callback_info, when = :Intermediate)
-
-    # Start MIP solver
-    logs[:mip_solve] = time()
-    status_mip = solve(m.model_mip)#, suppress_warnings=true)
-    logs[:mip_solve] = time() - logs[:mip_solve]
-
-    if (m.status == :Optimal) || (m.status == :ConicFailure) || (m.status == :MIPFailure)
-        return
-    end
-
-    if (status_mip == :Infeasible) || (status_mip == :InfeasibleOrUnbounded)
-        m.status = :Infeasible
-    elseif status_mip == :Unbounded
-        # Shouldn't happen - initial conic relax solve should detect this
-        warn("MIP solver returned status $status_mip, which could indicate that the initial dual cuts added were too weak\n")
-        m.status = :MIPFailure
-    elseif (status_mip == :UserLimit) || (status_mip == :Optimal) || (status_mip == :Suboptimal)
-        if m.best_obj == Inf
-            # No feasible solution from conic problem, check MIP solution if using primal cuts
-            if (m.prim_cuts_assist || m.prim_cuts_always)
-                # Primal cuts should ensure conic NEAR-feasibility of MIP solution
-                m.best_int = getvalue(m.x_int)
-                m.best_cont = getvalue(m.x_cont)
-
-                m.best_obj = dot(m.c_sub_int, m.best_int) + dot(m.c_sub_cont, m.best_cont)
-                m.mip_obj = getobjbound(m.model_mip)
-                m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-                m.status = :NearFeasible
-            else
-                m.status = :NoKnownFeasible
-            end
-        else
-            # Have a feasible solution: check if gap condition is satisfied
-            m.mip_obj = getobjbound(m.model_mip)
-            m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-            if m.gap_rel_opt < m.rel_gap
-                m.status = :Optimal
-            else
-                m.status = :Suboptimal
-            end
-        end
     else
         error("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
     end
