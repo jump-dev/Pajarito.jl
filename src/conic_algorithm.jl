@@ -478,6 +478,13 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             if m.log_level > 0
                 @printf "\nStarting MIP-solver-driven outer approximation algorithm\n"
             end
+
+
+
+
+
+
+            if isa(solver, CplexSolver)
             # If solver implements incumbent callbacks, use true MSD algorithm with incumbent checking, else use old MSD with just info callbacks
             if applicable(addincumbentcallback, m.model_mip, _ -> _)
                 solve_mip_driven(m, logs)
@@ -1420,7 +1427,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
             # Calculate cone outer infeasibilities of MIP solution, add any violated primal cuts if using primal cuts
 
-            # DO WE STILL WANT TO ADD PRIMAL CUTS? or wait for incumbent callback 
+            # DO WE STILL WANT TO ADD PRIMAL CUTS? or wait for incumbent callback
 
             calc_outer_inf_cuts!(m, (m.prim_cuts_always || m.prim_cuts_assist), logs)
             print_inf_outer(m)
@@ -1453,7 +1460,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                         # Not using primal cuts, so have to terminate
                         warn("Continuous solver returned conic subproblem status $status_conic, and no primal cuts are being used; terminating Pajarito\n")
                         m.status = :ConicFailure
-                        throw(CallbackAbort())
+                        return JuMP.StopTheSolver
                     elseif !m.prim_cuts_always && m.prim_cuts_assist
                         # Have not yet added primal cuts, add them
                         calc_outer_inf_cuts!(m, true, logs)
@@ -1464,7 +1471,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     if (m.prim_cuts_always || m.prim_cuts_assist) && m.viol_oa && !m.viol_cut
                         warn("Continuous solver returned conic subproblem status $status_conic, and no primal cuts were able to be added; terminating Pajarito\n")
                         m.status = :ConicFailure
-                        throw(CallbackAbort())
+                        return JuMP.StopTheSolver
                     end
                 end
 
@@ -1591,7 +1598,7 @@ function solve_info_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 if isempty(cache_soln[soln_int])
                     warn("No primal cuts were able to be added; terminating Pajarito\n")
                     m.status = :MIPFailure
-                    throw(CallbackAbort())
+                    return JuMP.StopTheSolver
                 end
 
                 # Get cached conic dual associated with repeated integer solution, re-add all dual cuts
@@ -1618,7 +1625,7 @@ function solve_info_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                         # Not using primal cuts, so have to terminate
                         warn("Continuous solver returned conic subproblem status $status_conic, and no primal cuts are being used; terminating Pajarito\n")
                         m.status = :ConicFailure
-                        throw(CallbackAbort())
+                        return JuMP.StopTheSolver
                     elseif !m.prim_cuts_always && m.prim_cuts_assist
                         # Have not yet added primal cuts, add them
                         calc_outer_inf_cuts!(m, true, logs)
@@ -1629,7 +1636,7 @@ function solve_info_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     if (m.prim_cuts_always || m.prim_cuts_assist) && m.viol_oa && !m.viol_cut
                         warn("Continuous solver returned conic subproblem status $status_conic, and no primal cuts were able to be added; terminating Pajarito\n")
                         m.status = :ConicFailure
-                        throw(CallbackAbort())
+                        return JuMP.StopTheSolver
                     end
                 end
 
@@ -1666,7 +1673,7 @@ function solve_info_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         print_gap_MSD(m, logs)
         if m.gap_rel_opt < m.rel_gap
             m.status = :Optimal
-            throw(CallbackAbort())
+            return JuMP.StopTheSolver
         end
     end
     addinfocallback(m.model_mip, callback_info, when = :Intermediate)
