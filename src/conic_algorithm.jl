@@ -1002,7 +1002,7 @@ function create_mip_data!(m::PajaritoConicModel, c_new::Vector{Float64}, A_new::
         if m.soc_in_mip
             # If putting SOCs in the MIP directly, don't need to use other SOC infrastructure in Pajarito so return
             # TODO fix jump issue 784 so that warm start works
-            @constraint(model_mip, norm2{vars[j], j in 2:len} <= vars[1])
+            @constraint(model_mip, norm(vars[j] for j in 2:len) <= vars[1])
             return
         end
 
@@ -1922,7 +1922,7 @@ function add_dual_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars_smat::Array{Ju
             # Use norm and transformation from RSOC to SOC
             # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
             @expression(m.model_mip, z_expr, sum(smat[k, v] * smat[l, v] * vars_smat[k, l] for k in 1:dim, l in 1:dim if (k != ind_min && l != ind_min)))
-            @expression(m.model_mip, cut_expr, vars_smat[ind_min, ind_min] + z_expr - norm2{((k == ind_min) ? (vars_smat[ind_min, ind_min] - z_expr) : (2 * smat[k, ind_min] * smat[k, v] * vars_smat[k, ind_min])), k in 1:dim})
+            @expression(m.model_mip, cut_expr, vars_smat[ind_min, ind_min] + z_expr - norm(((k == ind_min) ? (vars_smat[ind_min, ind_min] - z_expr) : (2 * smat[k, ind_min] * smat[k, v] * vars_smat[k, ind_min])) for k in 1:dim))
 
             if !m.viol_cuts_only || !m.oa_started || (getvalue(cut_expr) < 0.)
                 if m.mip_solver_drives && m.oa_started
