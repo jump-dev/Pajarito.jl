@@ -1420,7 +1420,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                 if isempty(cache_soln[soln_int])
                     warn("No primal cuts were able to be added; terminating Pajarito\n")
                     m.status = :MIPFailure
-                    return CallbackAbort()
+                    return JuMP.StopTheSolver
                 end
 
                 # Get cached conic dual associated with repeated integer solution, re-add all dual cuts
@@ -1447,7 +1447,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                         # Not using primal cuts, so have to terminate
                         warn("Continuous solver returned conic subproblem status $status_conic, and no primal cuts are being used; terminating Pajarito\n")
                         m.status = :ConicFailure
-                        return CallbackAbort()
+                        return JuMP.StopTheSolver
                     elseif !m.prim_cuts_always && m.prim_cuts_assist
                         # Have not yet added primal cuts, add them
                         calc_outer_inf_cuts!(m, true, logs)
@@ -1458,7 +1458,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     if (m.prim_cuts_always || m.prim_cuts_assist) && m.viol_oa && !m.viol_cut
                         warn("Continuous solver returned conic subproblem status $status_conic, and no primal cuts were able to be added; terminating Pajarito\n")
                         m.status = :ConicFailure
-                        return CallbackAbort()
+                        return JuMP.StopTheSolver
                     end
                 end
 
@@ -1495,7 +1495,7 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         print_gap_MSD(m, logs)
         if m.gap_rel_opt < m.rel_gap
             m.status = :Optimal
-            return CallbackAbort()
+            return JuMP.StopTheSolver
         end
     end
     addinfocallback(m.model_mip, callback_info, when = :Intermediate)
