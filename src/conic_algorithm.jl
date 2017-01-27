@@ -1215,7 +1215,7 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         else
             # Solve is a full solve: use full MIP solver with remaining time limit
             if isfinite(m.timeout) && applicable(MathProgBase.setparameters!, m.mip_solver)
-                MathProgBase.setparameters!(m.mip_solver, TimeLimit=(m.timeout - (time() - logs[:total])))
+                MathProgBase.setparameters!(m.mip_solver, TimeLimit=max(0., m.timeout - (time() - logs[:total])))
             end
             setsolver(m.model_mip, m.mip_solver)
             count_subopt = 0
@@ -1387,7 +1387,7 @@ end
 # Solve the MIP model using MIP-solver-driven callback algorithm
 function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     if isfinite(m.timeout) && applicable(MathProgBase.setparameters!, m.mip_solver)
-        MathProgBase.setparameters!(m.mip_solver, TimeLimit=(m.timeout - (time() - logs[:total])))
+        MathProgBase.setparameters!(m.mip_solver, TimeLimit=max(0., m.timeout - (time() - logs[:total])))
         setsolver(m.model_mip, m.mip_solver)
     end
 
