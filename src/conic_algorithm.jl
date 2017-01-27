@@ -1600,7 +1600,7 @@ function solve_conicsub!(m::PajaritoConicModel, soln_int::Vector{Float64}, logs:
     end
 
     # Check if have new best feasible solution
-    if (status_conic == :Optimal) || (status_conic == :Suboptimal)
+    if status_conic == :Optimal
         soln_cont = MathProgBase.getsolution(m.model_conic)
         logs[:n_feas] += 1
 
@@ -1742,7 +1742,7 @@ function add_dual_cuts_soc!(m::PajaritoConicModel, dim::Int, vars::Vector{JuMP.V
     end
 
     # 1 Calculate dual inf
-    inf_dual = vecnorm(dual[j] for j in 2:dim) - dual[1]
+    inf_dual = sumabs2(dual[j] for j in 2:dim) - dual[1]^2
     update_inf_dual!(m, inf_dual, spec_summ)
 
     # 2 Sanitize: remove near-zeros
@@ -2030,7 +2030,7 @@ end
 # Add primal cuts for a SOC
 function add_prim_cuts_soc!(m::PajaritoConicModel, add_viol_cuts::Bool, dim::Int, vars::Vector{JuMP.Variable}, vars_dagg::Vector{JuMP.Variable}, spec_summ::Dict{Symbol,Real})
     # Calculate and update outer infeasibility
-    inf_outer = vecnorm(getvalue(vars[j]) for j in 2:dim) - getvalue(vars[1])
+    inf_outer = sumabs2(getvalue(vars[j]) for j in 2:dim) - getvalue(vars[1])^2
     update_inf_outer!(m, inf_outer, spec_summ)
 
     # If outer infeasibility is small, return, else update and return if not adding primal cuts
