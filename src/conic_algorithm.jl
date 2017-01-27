@@ -161,7 +161,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
         # Warnings
         if log_level > 1
-            warn("If matrix A has nonzero entries smaller than zero tolerance, performance may be improved by fixing these values to zero\n")
             if !solve_relax
                 warn("Not solving the conic continuous relaxation problem; Pajarito may return status :MIPFailure if the outer approximation MIP is unbounded\n")
             end
@@ -1001,7 +1000,6 @@ function create_mip_data!(m::PajaritoConicModel, c_new::Vector{Float64}, A_new::
     function add_soc!(n_soc, len, rows, vars)
         if m.soc_in_mip
             # If putting SOCs in the MIP directly, don't need to use other SOC infrastructure in Pajarito so return
-            # TODO fix jump issue 784 so that warm start works
             @constraint(model_mip, norm(vars[j] for j in 2:len) <= vars[1])
             return
         end
