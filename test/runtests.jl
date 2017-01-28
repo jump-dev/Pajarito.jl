@@ -19,11 +19,12 @@ solvers_nlnr = []
 ipt && push!(solvers_nlnr, Ipopt.IpoptSolver(print_level=0))
 kni && push!(solvers_nlnr, KNITRO.KnitroSolver(objrange=1e16,outlev=0,maxit=100000))
 solvers_conic = eco ? Any[ECOS.ECOSSolver(verbose=false)] : []
+solvers_sdp = mos ? Any[Mosek.MosekSolver(LOG=0)] : []
+
 if scs
     push!(solvers_conic,SCS.SCSSolver(eps=1e-5,max_iters=1000000,verbose=0))
+    push!(solvers_sdp,SCS.SCSSolver(eps=1e-5,max_iters=1000000,verbose=0))
 end
-solvers_sdp = mos ? [Mosek.MosekSolver(LOG=0)] : []
-
 @show solvers_mip
 @show solvers_nlnr
 @show solvers_conic
