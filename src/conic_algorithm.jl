@@ -443,29 +443,29 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
     end
 
-    if !m.prim_cuts_only
-        tic()
-        if m.log_level > 1
-            @printf "\nCreating conic subproblem model..."
-        end
-        if m.dualize_sub
-            solver_conicsub = ConicDualWrapper(conicsolver=m.cont_solver)
-        else
-            solver_conicsub = m.cont_solver
-        end
-        m.model_conic = MathProgBase.ConicModel(solver_conicsub)
-        if method_exists(MathProgBase.setbvec!, (typeof(m.model_conic), Vector{Float64}))
-            # Can use setbvec! on the conic subproblem model: load it
-            m.update_conicsub = true
-            MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, m.b_sub_int, m.cone_con_sub, m.cone_var_sub)
-        end
-        if m.log_level > 1
-            @printf "...Done %8.2fs\n" logs[:conic_proc]
-        end
-        logs[:conic_proc] += toq()
-    end
-
     if (m.status != :Infeasible) && (m.status != :UnboundedRelaxation) && (m.status != :ConicFailure)
+        if !m.prim_cuts_only
+            tic()
+            if m.log_level > 1
+                @printf "\nCreating conic subproblem model..."
+            end
+            if m.dualize_sub
+                solver_conicsub = ConicDualWrapper(conicsolver=m.cont_solver)
+            else
+                solver_conicsub = m.cont_solver
+            end
+            m.model_conic = MathProgBase.ConicModel(solver_conicsub)
+            if method_exists(MathProgBase.setbvec!, (typeof(m.model_conic), Vector{Float64}))
+                # Can use setbvec! on the conic subproblem model: load it
+                m.update_conicsub = true
+                MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, m.b_sub_int, m.cone_con_sub, m.cone_var_sub)
+            end
+            if m.log_level > 1
+                @printf "...Done %8.2fs\n" logs[:conic_proc]
+            end
+            logs[:conic_proc] += toq()
+        end
+
         # Initialize and begin iterative or MIP-solver-driven algorithm
         logs[:oa_alg] = time()
         m.oa_started = true
