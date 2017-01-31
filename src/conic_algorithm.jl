@@ -1284,8 +1284,14 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                     print_gap(m, logs)
                     break
                 elseif !m.prim_cuts_always && !m.prim_cuts_assist
-                    # Not converged but have a feasible solution and not using primal cuts
-                    m.status = :Suboptimal
+                    # Not converged and not using primal cuts
+                    if m.best_obj < Inf
+                        # Use best feasible
+                        m.status = :Suboptimal
+                    else
+                        # No feasible solution is known
+                        m.status = :NoKnownFeasible
+                    end
                     print_gap(m, logs)
                     if m.round_mip_sols
                         warn("Rounded integer solutions are cycling before convergence tolerance is reached: aborting iterative algorithm\n")
