@@ -1519,7 +1519,22 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         # Shouldn't happen - initial conic relax solve should detect this
         warn("MIP solver returned status $status_mip, which could indicate that the initial dual cuts added were too weak\n")
         m.status = :MIPFailure
-    elseif (status_mip == :UserLimit) || (status_mip == :Optimal) || (status_mip == :Suboptimal)
+    elseif status_mip == :UserLimit
+        # Either a timeout, or our info callback stopped the MIP solver
+        if m.best_obj == Inf
+            # We do not have a feasible conic solution
+            m.status = status_mip
+        else
+            # We have a feasible solution: check if gap condition is satisfied
+            m.mip_obj = getobjbound(m.model_mip)
+            m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
+            if m.gap_rel_opt < m.rel_gap
+                m.status = :Optimal
+            else
+                m.status = status_mip
+            end
+        end
+    elseif status_mip == :Optimal
         if m.best_obj == Inf
             # No feasible solution from conic problem, check MIP solution if using primal cuts
             if (m.prim_cuts_assist || m.prim_cuts_always)
