@@ -84,7 +84,7 @@ function PajaritoSolver(;
     proj_dual_feas = false,
     prim_cuts_only = false,
     prim_cuts_always = false,
-    prim_cuts_assist = false,
+    prim_cuts_assist = true,
 
     tol_zero = 1e-10,
     tol_prim_zero = 1e-4,
