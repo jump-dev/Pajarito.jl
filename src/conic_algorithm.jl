@@ -167,9 +167,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
             if sdp_soc && mip_solver_drives
                 warn("SOC cuts for SDP cones cannot be added during the MIP-solver-driven algorithm, but initial SOC cuts may be used\n")
             end
-            if mip_solver_drives
-                warn("For the MIP-solver-driven algorithm, optimality tolerance must be specified as MIP solver option, not Pajarito option\n")
-            end
             if round_mip_sols
                 warn("Integer solutions will be rounded: if this seems to cause numerical challenges, change round_mip_sols option\n")
             end
