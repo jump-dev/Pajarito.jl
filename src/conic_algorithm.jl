@@ -2101,7 +2101,7 @@ function calc_outer_inf_cuts!(m::PajaritoConicModel, add_viol_cuts::Bool, logs::
     max_n = 0
     for n in 1:m.num_sdp
         # Convert solution to lower smat space and store in preallocated smat matrix
-        vars_smat = m.vars_smat_sdp[max_n]
+        vars_smat = m.vars_smat_sdp[n]
         smat = m.smat_sdp[n]
         for j in 1:dim, i in j:dim
             smat[i, j] = getvalue(vars_smat[i, j])
