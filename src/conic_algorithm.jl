@@ -61,10 +61,10 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     prim_cuts_only::Bool        # (Conic only) Do not add dual cuts
     prim_cuts_always::Bool      # (Conic only) Add primal cuts at each iteration or in each lazy callback
     prim_cuts_assist::Bool      # (Conic only) Add primal cuts only when integer solutions are repeating
-    prim_viol_cuts_only::Bool
-    prim_max_viol_only::Bool
-    prim_soc_disagg::Bool
-    prim_sdp_eig::Bool
+    prim_viol_cuts_only::Bool   # (Conic only) Only add primal cuts that are violated (including individual disaggregated cuts)
+    prim_max_viol_only::Bool    # (Conic only) Only add primal cuts for the cone with largest absolute violation
+    prim_soc_disagg::Bool       # (Conic only) Use disaggregated primal cuts for SOCs
+    prim_sdp_eig::Bool          # (Conic only) Use eigenvector cuts for SDPs
 
     tol_zero::Float64           # (Conic only) Tolerance for small epsilons as zeros
     tol_prim_infeas::Float64    # (Conic only) Tolerance level for cone outer infeasibilities for primal cut adding functions (must be at least 1e-5)
