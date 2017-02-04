@@ -2103,6 +2103,7 @@ function calc_outer_inf_cuts!(m::PajaritoConicModel, add_viol_cuts::Bool, logs::
         # Convert solution to lower smat space and store in preallocated smat matrix
         vars_smat = m.vars_smat_sdp[n]
         smat = m.smat_sdp[n]
+        dim = m.dim_sdp[n]
         for j in 1:dim, i in j:dim
             smat[i, j] = getvalue(vars_smat[i, j])
         end
@@ -2121,7 +2122,7 @@ function calc_outer_inf_cuts!(m::PajaritoConicModel, add_viol_cuts::Bool, logs::
 
         # If adding all viol cuts, add, else record largest violation seen
         if !m.prim_max_viol_only
-            add_prim_cuts_sdp!(m, m.dim_sdp[n], vars_smat, smat)
+            add_prim_cuts_sdp!(m, dim, vars_smat, smat)
         elseif inf_outer > max_inf
             max_inf = inf_outer
             max_n = n
