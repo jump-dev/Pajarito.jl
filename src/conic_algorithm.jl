@@ -176,9 +176,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
             if prim_cuts_only
                 warn("Using primal cuts only may cause convergence issues\n")
             end
-            if (prim_cuts_only || prim_cuts_assist) && (tol_prim_zero < 1e-5)
-                warn("When using primal cuts, primal cut zero tolerance should be at least 1e-5 to avoid numerical issues\n")
-            end
         end
 
         # Initialize model
