@@ -1937,7 +1937,7 @@ function add_dual_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars_smat::Array{Ju
 
             # Add one SDP SOC eigenvector cut (derived from Schur complement)
             # Calculate most violated cut over all dim possible cuts (one per diagonal element)
-            vvT_soln = (smat[:, v] * smat[:, v]') .* soln_smat
+            vvT_soln = eigvals[v] * (smat[:, v] * smat[:, v]') .* soln_smat
             val_min = Inf
             ind_min = 0
             for iSD in 1:dim
@@ -1951,8 +1951,8 @@ function add_dual_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars_smat::Array{Ju
 
             # Use norm and transformation from RSOC to SOC
             # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
-            @expression(m.model_mip, z_expr, sum(smat[k, v] * smat[l, v] * vars_smat[k, l] for k in 1:dim, l in 1:dim if (k != ind_min && l != ind_min)))
-            @expression(m.model_mip, cut_expr, vars_smat[ind_min, ind_min] + z_expr - norm(((k == ind_min) ? (vars_smat[ind_min, ind_min] - z_expr) : (2 * smat[k, ind_min] * smat[k, v] * vars_smat[k, ind_min])) for k in 1:dim))
+            @expression(m.model_mip, z_expr, sum(eigvals[v] * smat[k, v] * smat[l, v] * vars_smat[k, l] for k in 1:dim, l in 1:dim if (k != ind_min && l != ind_min)))
+            @expression(m.model_mip, cut_expr, vars_smat[ind_min, ind_min] + z_expr - norm(((k == ind_min) ? (vars_smat[ind_min, ind_min] - z_expr) : (2 * eigvals[v] * smat[k, ind_min] * smat[k, v] * vars_smat[k, ind_min])) for k in 1:dim))
 
             if !m.viol_cuts_only || !m.oa_started || (-getvalue(cut_expr) > m.tol_zero)
                 if m.mip_solver_drives && m.oa_started
@@ -1970,7 +1970,7 @@ function add_dual_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars_smat::Array{Ju
             end
 
             # Add non-sparse rank-1 cut from smat eigenvector v
-            @expression(m.model_mip, cut_expr, sum(smat[vi, v] * smat[vj, v] * vars_smat[vi, vj] for vj in 1:dim, vi in 1:dim))
+            @expression(m.model_mip, cut_expr, sum(eigvals[v] * smat[vi, v] * smat[vj, v] * vars_smat[vi, vj] for vj in 1:dim, vi in 1:dim))
             if !m.viol_cuts_only || !m.oa_started || (-getvalue(cut_expr) > m.tol_zero)
                 if m.mip_solver_drives && m.oa_started
                     @lazyconstraint(m.cb_lazy, cut_expr >= 0.)
@@ -1986,7 +1986,7 @@ function add_dual_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars_smat::Array{Ju
                     smat[vi, v] = 0.
                 end
             end
-            @expression(m.model_mip, cut_expr, sum(smat[vi, v] * smat[vj, v] * vars_smat[vi, vj] for vj in 1:dim, vi in 1:dim))
+            @expression(m.model_mip, cut_expr, sum(eigvals[v] * smat[vi, v] * smat[vj, v] * vars_smat[vi, vj] for vj in 1:dim, vi in 1:dim))
             if !m.viol_cuts_only || !m.oa_started || (-getvalue(cut_expr) > m.tol_zero)
                 if m.mip_solver_drives && m.oa_started
                     @lazyconstraint(m.cb_lazy, cut_expr >= 0.)
@@ -2096,6 +2096,7 @@ function calc_outer_inf_cuts!(m::PajaritoConicModel, add_viol_cuts::Bool, logs::
 
     max_inf = 0.
     max_n = 0
+    max_eig = Vector{Float64}()
     for n in 1:m.num_sdp
         # Convert solution to lower smat space and store in preallocated smat matrix
         vars_smat = m.vars_smat_sdp[n]
@@ -2105,7 +2106,7 @@ function calc_outer_inf_cuts!(m::PajaritoConicModel, add_viol_cuts::Bool, logs::
             smat[i, j] = getvalue(vars_smat[i, j])
         end
 
-        # Get eigendecomposition of smat solution (use symmetric property), save eigenvectors in smat matrix
+        # Get eigendecomposition of smat solution (use symmetric property), save eigenvectors in smat matrix, rescale eigenvalues
         (eigvals, _) = LAPACK.syev!('V', 'L', smat)
         inf_outer = -minimum(eigvals)
         update_inf_outer!(m, inf_outer, m.summ_sdp)
@@ -2119,14 +2120,15 @@ function calc_outer_inf_cuts!(m::PajaritoConicModel, add_viol_cuts::Bool, logs::
 
         # If adding all viol cuts, add, else record largest violation seen
         if !m.prim_max_viol_only
-            add_prim_cuts_sdp!(m, dim, vars_smat, smat)
+            add_prim_cuts_sdp!(m, dim, vars_smat, smat, eigvals)
         elseif inf_outer > max_inf
             max_inf = inf_outer
             max_n = n
+            max_eig = eigvals
         end
     end
     if m.prim_max_viol_only && (max_n > 0)
-        add_prim_cuts_sdp!(m, m.dim_sdp[max_n], m.vars_smat_sdp[max_n], m.smat_sdp[max_n])
+        add_prim_cuts_sdp!(m, m.dim_sdp[max_n], m.vars_smat_sdp[max_n], m.smat_sdp[max_n], eigvals)
     end
 
     logs[:outer_inf] += toq()
@@ -2225,10 +2227,11 @@ function add_prim_cuts_exp!(m::PajaritoConicModel, vars::Vector{JuMP.Variable})
 end
 
 # Add primal cuts for a SDP cone
-function add_prim_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars_smat::Array{JuMP.AffExpr,2}, prim::Array{Float64,2})
-    # 0 Rescale by largest absolute value or discard if near zero
-    if maxabs(prim) > m.tol_zero
+function add_prim_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars_smat::Array{JuMP.AffExpr,2}, prim::Array{Float64,2}, eigvals::Vector{Float64})
+    # 0 Rescale smat and eigvals by largest absolute value or discard if near zero
+    if (maxabs(prim) > m.tol_zero) && (maxabs(eigvals) > m.tol_zero)
         scale!(prim, (1. / maxabs(prim)))
+        scale!(eigvals, (1. / maxabs(eigvals)))
     else
         return
     end
@@ -2257,7 +2260,7 @@ function add_prim_cuts_sdp!(m::PajaritoConicModel, dim::Int, vars_smat::Array{Ju
             end
 
             # Add non-sparse rank-1 cut from smat eigenvector v
-            @expression(m.model_mip, cut_expr, sum(prim[vi, v] * prim[vj, v] * vars_smat[vi, vj] for vj in 1:dim, vi in 1:dim))
+            @expression(m.model_mip, cut_expr, sum(-eigvals[v] * prim[vi, v] * prim[vj, v] * vars_smat[vi, vj] for vj in 1:dim, vi in 1:dim))
             if !m.prim_viol_cuts_only || (-getvalue(cut_expr) > m.tol_zero)
                 if m.mip_solver_drives
                     @lazyconstraint(m.cb_lazy, cut_expr >= 0.)
