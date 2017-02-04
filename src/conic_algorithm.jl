@@ -440,7 +440,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
     end
 
-    if (m.status != :Infeasible) && (m.status != :UnboundedRelaxation) && (m.status != :ConicFailure)
+    if (m.status != :Infeasible) && (m.status != :UnboundedRelaxation) 
         if !m.prim_cuts_only
             tic()
             if m.log_level > 1
