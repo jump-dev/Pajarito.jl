@@ -1498,19 +1498,6 @@ function solve_mip_driven!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
         addheuristiccallback(m.model_mip, callback_heur)
     end
 
-    # Add info callback to stop MIP solver when converged
-    function callback_info(cb)
-        # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
-        m.mip_obj = MathProgBase.cbgetbestbound(cb)
-        m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-        print_gap_MSD(m, logs)
-        if m.gap_rel_opt < m.rel_gap
-            m.status = :Optimal
-            return JuMP.StopTheSolver
-        end
-    end
-    addinfocallback(m.model_mip, callback_info, when = :Intermediate)
-
     # Start MIP solver
     logs[:mip_solve] = time()
     status_mip = solve(m.model_mip)#, suppress_warnings=true)
