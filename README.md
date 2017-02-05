@@ -78,10 +78,10 @@ The following options can be passed to `PajaritoSolver()` to modify its behavior
 
 ## Bug reports and support
 
-Please report any issues via the Github **[issue tracker]**. All types of issues are welcome and encouraged; this includes bug reports, documentation typos, feature requests, etc. The **[julia-opt]** mailing list is appropriate for general discussion.
+Please report any issues via the Github **[issue tracker]**. All types of issues are welcome and encouraged; this includes bug reports, documentation typos, feature requests, etc. The **[Optimization (Mathematical)]** category on Discourse is appropriate for general discussion.
 
 [issue tracker]: https://github.com/mlubin/Pajarito.jl/issues
-[julia-opt]: https://groups.google.com/forum/#!forum/julia-opt
+[Optimization (Mathematical)]: https://discourse.julialang.org/c/domain/opt
 
 ## We need your challenging MICP problems
 
