@@ -1755,7 +1755,7 @@ function add_dual_cuts_soc!(m::PajaritoConicModel, dim::Int, vars::Vector{JuMP.V
     end
 
     # 1 Calculate dual inf
-    inf_dual = sumabs2(dual[j] for j in 2:dim) - dual[1]^2
+    inf_dual = vecnorm(dual[j] for j in 2:dim) - dual[1]
     update_inf_dual!(m, inf_dual, spec_summ)
 
     # 2 Sanitize: remove near-zeros
@@ -2033,7 +2033,7 @@ function calc_outer_inf_cuts!(m::PajaritoConicModel, add_viol_cuts::Bool, logs::
     for n in 1:m.num_soc
         # Calculate and update outer infeasibility
         vars = m.vars_soc[n]
-        inf_outer = sumabs2(getvalue(vars[j]) for j in 2:length(vars)) - getvalue(vars[1])^2
+        inf_outer = vecnorm(getvalue(vars[j]) for j in 2:length(vars)) - getvalue(vars[1])
         update_inf_outer!(m, inf_outer, m.summ_soc)
         if inf_outer < m.tol_prim_infeas
             continue
