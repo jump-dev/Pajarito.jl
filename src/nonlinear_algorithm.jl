@@ -22,6 +22,7 @@ type PajaritoNonlinearModel <: MathProgBase.AbstractNonlinearModel
     solution::Vector{Float64}
     status
     objval::Float64
+    objbound::Float64
     iterations::Int
     numVar::Int
     numIntVar::Int              # Number of integer or binary variables
@@ -539,7 +540,7 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
             mip_objval = -Inf #MathProgBase.cbgetobj(cb)
             mip_solution = MathProgBase.cbgetmipsolution(cb)[1:m.numVar+1]
         else
-            mip_objval = getobjectivevalue(mip_model)
+            m.objbound = mip_objval = getobjbound(mip_model)
             mip_solution = getvalue(m.mip_x)
         end
         #MathProgBase.getsolution(internalmodel(mip_model))
@@ -685,6 +686,7 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
         addlazycallback(mip_model, nonlinearcallback)
         addheuristiccallback(mip_model, heuristiccallback)
         m.status = solve(mip_model)
+        m.objbound = getobjbound(mip_model)
     elseif m.algorithm == "OA"
         (m.verbose > 0) && println("Iteration   MIP Objective     NLP Objective   Optimality Gap   Best Solution    Primal Inf.      OA Inf.")
         while (time() - start) < m.time_limit
@@ -727,6 +729,7 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
 
     if m.objsense == :Max
         m.objval = -m.objval
+        m.objbound = -m.objbound
     end
 
     (m.verbose > 0) && println("\nPajarito finished...\n")
@@ -746,4 +749,5 @@ MathProgBase.setvartype!(m::PajaritoNonlinearModel, v::Vector{Symbol}) = (m.vart
 
 MathProgBase.status(m::PajaritoNonlinearModel) = m.status
 MathProgBase.getobjval(m::PajaritoNonlinearModel) = m.objval
+MathProgBase.getobjbound(m::PajaritoNonlinearModel) = m.objbound
 MathProgBase.getsolution(m::PajaritoNonlinearModel) = m.solution
