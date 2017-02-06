@@ -336,7 +336,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         @printf "\nTransforming original data..."
     end
     tic()
-    (c_new, A_new, b_new, cone_con_new, cone_var_new, keep_cols, var_types_new) = transform_data(m.c_orig, m.A_orig, m.b_orig, m.cone_con_orig, m.cone_var_orig, m.var_types, m.solve_relax)
+    (c_new, A_new, b_new, cone_con_new, cone_var_new, keep_cols, var_types_new) = transform_data(copy(m.c_orig), copy(m.A_orig), copy(m.b_orig), m.cone_con_orig, m.cone_var_orig, m.var_types, m.solve_relax)
     logs[:data_trans] += toq()
     if m.log_level > 1
         @printf "...Done %8.2fs\n" logs[:data_trans]
