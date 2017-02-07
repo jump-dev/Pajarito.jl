@@ -188,7 +188,9 @@ function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver, log)
 
             status = solve(m)
 
-            @fact round(getobjectivevalue(m) + 2.0) --> 0.0
+            @fact status --> :Optimal
+            @fact isapprox(getobjectivevalue(m), -2.0, atol=1e-5) --> true
+            @fact isapprox(getobjbound(m), -2.0, atol=1e-5) --> true
         end
     end
 end
