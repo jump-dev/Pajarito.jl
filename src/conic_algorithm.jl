@@ -2482,7 +2482,6 @@ end
 # Print after finish
 function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     if m.log_level < 0
-        @printf "\n"
         flush(STDOUT)
         return
     end
