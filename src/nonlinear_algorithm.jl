@@ -426,12 +426,10 @@ function checkInfeasibility(m::PajaritoNonlinearModel, solution)
     g_val = -1e+5*ones(m.numConstr)
     MathProgBase.eval_g(m.d, g, solution[1:m.numVar])
     for i = 1:m.numConstr
-        if !m.constrlinear[i]
-            if m.constrtype[i] == :(<=)
-                g_val[i] = g[i] - m.ub[i]
-            else
-                g_val[i] = m.lb[i] - g[i]
-            end
+        if m.constrtype[i] == :(<=)
+            g_val[i] = g[i] - m.ub[i]
+        else
+            g_val[i] = m.lb[i] - g[i]
         end
     end
 
@@ -529,7 +527,7 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
     m.status = :UserLimit
     m.objval = Inf
     iter = 0
-    prev_mip_solution = zeros(m.numVar)
+    prev_mip_solution = fill(NaN,m.numVar)
     cut_added = false
 
     nlp_status = :Infeasible
@@ -647,11 +645,8 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
         end
         # add supporting hyperplanes
         cycle_indicator = (m.algorithm == "OA" ? compareIntegerSolutions(m, prev_mip_solution, mip_solution) : false)
-        if m.objsense == :Min
-            optimality_gap = m.objval - mip_objval
-        else
-            optimality_gap = -m.objval - mip_objval
-        end
+        # m.objval and mip_objval are always in minimization sense
+        optimality_gap = m.objval - mip_objval
         primal_infeasibility = checkInfeasibility(m, mip_solution)
         OA_infeasibility = 0.0
         if (optimality_gap > (abs(mip_objval) + 1e-5)*m.opt_tolerance && !cycle_indicator) || cb != []
@@ -669,7 +664,8 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
                 m.status = :Suboptimal
             end
         end
-        (m.verbose > 0) && (m.algorithm == "OA") && OAprintLevel(iter, mip_objval, nlp_objval, optimality_gap, m.objval, primal_infeasibility, OA_infeasibility)
+        fixsense = (m.objsense == :Max) ? -1 : 1
+        (m.verbose > 0) && (m.algorithm == "OA") && OAprintLevel(iter, fixsense*mip_objval, nlp_objval, optimality_gap, fixsense*m.objval, primal_infeasibility, OA_infeasibility)
         (cycle_indicator && m.status != :Optimal) && warn("Mixed-integer cycling detected, terminating Pajarito...")
     end
 
@@ -689,6 +685,14 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
         m.objbound = getobjbound(mip_model)
     elseif m.algorithm == "OA"
         (m.verbose > 0) && println("Iteration   MIP Objective     NLP Objective   Optimality Gap   Best Solution    Primal Inf.      OA Inf.")
+        # Check if we've been provided with an initial feasible solution
+        if all(isfinite,m.solution) && checkInfeasibility(m, m.solution) < 1e-5
+            if m.objsense == :Max
+                m.objval = -MathProgBase.eval_f(m.d, m.solution)
+            else
+                m.objval = MathProgBase.eval_f(m.d, m.solution)
+            end
+        end
         while (time() - start) < m.time_limit
             flush(STDOUT)
             cut_added = false
