@@ -4,139 +4,122 @@
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 function runconicdefaulttests(mip_solver_drives, log)
-    facts("Default solvers test") do
-        context("With $(mip_solver_drives ? "MIP-driven" : "Iterative"), defaulting to $(typeof(MathProgBase.defaultMIPsolver)) and $(typeof(MathProgBase.defaultConicsolver))") do
-            x = Convex.Variable(1,:Int)
+    @testset "Default solvers test" begin
+        x = Convex.Variable(1,:Int)
 
-            problem = Convex.maximize(3x,
-                                x <= 10,
-                                x^2 <= 9)
+        problem = Convex.maximize(3x,
+                            x <= 10,
+                            x^2 <= 9)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, log_level=log))
 
-            @fact problem.optval --> roughly(9.0, TOL)
-            @fact problem.status --> :Optimal
-        end
+        @test isapprox(problem.optval, 9.0, atol=TOL)
+        @test problem.status == :Optimal
     end
 end
 
 function runconictests(mip_solver_drives, mip_solver, conic_solver, log)
-    algorithm = mip_solver_drives ? "MIP-driven" : "Iterative"
 
-    facts("Infeasible conic problem") do
-        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
-            x = Convex.Variable(1,:Int)
+    @testset "Infeasible conic problem" begin
+        x = Convex.Variable(1,:Int)
 
-            problem = Convex.maximize(3x,
-                                x >= 4,
-                                x^2 <= 9)
+        problem = Convex.maximize(3x,
+                            x >= 4,
+                            x^2 <= 9)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log), verbose=false)
 
-            @fact problem.status --> :Infeasible
-        end
+        @test problem.status == :Infeasible
     end
 
-    facts("Univariate maximization problem") do
-        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
-            x = Convex.Variable(1,:Int)
+    @testset "Univariate maximization" begin
+        x = Convex.Variable(1,:Int)
 
-            problem = Convex.maximize(3x,
-                                x <= 10,
-                                x^2 <= 9)
+        problem = Convex.maximize(3x,
+                            x <= 10,
+                            x^2 <= 9)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
 
-            @fact problem.optval --> roughly(9.0, TOL)
-            @fact problem.status --> :Optimal
-        end
+        @test isapprox(problem.optval, 9.0, atol=TOL)
+        @test problem.status == :Optimal
     end
 
-    facts("Continuous problem") do
-        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
-            x = Convex.Variable(1)
-            y = Convex.Variable(1, Convex.Positive())
+    @testset "Continuous problem" begin
+        x = Convex.Variable(1)
+        y = Convex.Variable(1, Convex.Positive())
 
-            problem = Convex.maximize(3x + y,
-                                x >= 0,
-                                3x + 2y <= 10,
-                                exp(x) <= 10)
+        problem = Convex.maximize(3x + y,
+                            x >= 0,
+                            3x + 2y <= 10,
+                            exp(x) <= 10)
 
-           @fact_throws ErrorException Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
-       end
+       @test_throws ErrorException Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
     end
 
-    facts("Maximization problem") do
-        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
-            x = Convex.Variable(1,:Int)
-            y = Convex.Variable(1, Convex.Positive())
+    @testset "Maximization problem" begin
+        x = Convex.Variable(1,:Int)
+        y = Convex.Variable(1, Convex.Positive())
 
-            problem = Convex.maximize(3x + y,
-                                x >= 0,
-                                3x + 2y <= 10,
-                                exp(x) <= 10)
+        problem = Convex.maximize(3x + y,
+                            x >= 0,
+                            3x + 2y <= 10,
+                            exp(x) <= 10)
 
-           Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
+       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
 
-           @fact problem.optval --> roughly(8.0, TOL)
-           @fact problem.status --> :Optimal
-       end
+       @test isapprox(problem.optval, 8.0, atol=TOL)
+       @test problem.status == :Optimal
     end
 
-    facts("Solver test") do
-        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
-            x = Convex.Variable(1,:Int)
-            y = Convex.Variable(1)
+    @testset "Solver test" begin
+        x = Convex.Variable(1,:Int)
+        y = Convex.Variable(1)
 
-            problem = Convex.minimize(-3x - y,
-                               x >= 1,
-                               y >= 0,
-                               3x + 2y <= 10,
-                               x^2 <= 5,
-                               exp(y) + x <= 7)
+        problem = Convex.minimize(-3x - y,
+                           x >= 1,
+                           y >= 0,
+                           3x + 2y <= 10,
+                           x^2 <= 5,
+                           exp(y) + x <= 7)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
 
-            @fact problem.status --> :Optimal
-            @fact Convex.evaluate(x) --> roughly(2.0, TOL)
-        end
+        @test problem.status == :Optimal
+        @test isapprox(Convex.evaluate(x), 2.0, atol=TOL)
     end
 
-    facts("No SOC disaggregation test") do
-        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
-            x = Convex.Variable(1,:Int)
-            y = Convex.Variable(1)
+    @testset "No SOC disaggregation" begin
+        x = Convex.Variable(1,:Int)
+        y = Convex.Variable(1)
 
-            problem = Convex.minimize(-3x - y,
-                               x >= 1,
-                               y >= 0,
-                               3x + 2y <= 10,
-                               x^2 <= 5,
-                               exp(y) + x <= 7)
+        problem = Convex.minimize(-3x - y,
+                           x >= 1,
+                           y >= 0,
+                           3x + 2y <= 10,
+                           x^2 <= 5,
+                           exp(y) + x <= 7)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, soc_disagg=false, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, soc_disagg=false, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
 
-            @fact problem.status --> :Optimal
-            @fact Convex.evaluate(x) --> roughly(2.0, TOL)
-        end
+        @test problem.status == :Optimal
+        @test isapprox(Convex.evaluate(x), 2.0, atol=TOL)
     end
 
     if !contains(string(typeof(conic_solver)),"ECOS")# ECOS reports "close to optimal" on this tiny problem
-        facts("Solver test 2") do
-            context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
-                x = Convex.Variable(1,:Int)
-                y = Convex.Variable(1, Convex.Positive())
+        @testset "Solver test 2" begin
+            x = Convex.Variable(1,:Int)
+            y = Convex.Variable(1, Convex.Positive())
 
-                problem = Convex.minimize(-3x - y,
-                                   x >= 1,
-                                   3x + 2y <= 30,
-                                   exp(y^2) + x <= 7)
+            problem = Convex.minimize(-3x - y,
+                               x >= 1,
+                               3x + 2y <= 30,
+                               exp(y^2) + x <= 7)
 
-                Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log, rel_gap=1e-4))
+            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log, rel_gap=1e-4))
 
-                @fact problem.status --> :Optimal
-                @fact Convex.evaluate(x) --> roughly(6.0, TOL)
-            end
+            @test problem.status == :Optimal
+            @test isapprox(Convex.evaluate(x), 6.0, atol=TOL)
         end
     end
 
@@ -192,83 +175,79 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver, log)
     #    end
     # end
 
-    facts("Variable not in zero cone problem") do
-        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
-            # max  y + z
-            # st   x == 1
-            #     (x,y,z) in SOC
-            #      x in {0,1}
-            m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
-            MathProgBase.loadproblem!(m,
-            [ 0.0, -1.0, -1.0],
-            [ 1.0  0.0  0.0;
-             -1.0  0.0  0.0;
-              0.0 -1.0  0.0;
-              0.0  0.0 -1.0],
-            [ 1.0, 0.0, 0.0, 0.0],
-            Any[(:Zero,1:1),(:SOC,2:4)],
-            Any[(:Free,[1,2,3])])
-            MathProgBase.setvartype!(m, [:Int,:Cont,:Cont])
+    @testset "Variable not in zero cone" begin
+        # max  y + z
+        # st   x == 1
+        #     (x,y,z) in SOC
+        #      x in {0,1}
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
+        MathProgBase.loadproblem!(m,
+        [ 0.0, -1.0, -1.0],
+        [ 1.0  0.0  0.0;
+         -1.0  0.0  0.0;
+          0.0 -1.0  0.0;
+          0.0  0.0 -1.0],
+        [ 1.0, 0.0, 0.0, 0.0],
+        Any[(:Zero,1:1),(:SOC,2:4)],
+        Any[(:Free,[1,2,3])])
+        MathProgBase.setvartype!(m, [:Int,:Cont,:Cont])
 
-            MathProgBase.optimize!(m)
-            @fact MathProgBase.status(m) --> :Optimal
-            @fact MathProgBase.getobjval(m) --> roughly(-sqrt(2.0), TOL)
-            vals = MathProgBase.getsolution(m)
-            @fact vals[1] --> roughly(1, TOL)
-            @fact vals[2] --> roughly(1.0/sqrt(2.0), TOL)
-            @fact vals[3] --> roughly(1.0/sqrt(2.0), TOL)
-       end
+        MathProgBase.optimize!(m)
+        @test MathProgBase.status(m) == :Optimal
+        @test isapprox(MathProgBase.getobjval(m), -sqrt(2.0), atol=TOL)
+        @test isapprox(MathProgBase.getobjbound(m), -sqrt(2.0), atol=TOL)
+        vals = MathProgBase.getsolution(m)
+        @test isapprox(vals[1], 1, atol=TOL)
+        @test isapprox(vals[2], 1.0/sqrt(2.0), atol=TOL)
+        @test isapprox(vals[3], 1.0/sqrt(2.0), atol=TOL)
     end
 
-    facts("Variable in zero cone problem") do
-        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
+    @testset "Variable in zero cone" begin
             # Same as "Variable not in zero cone problem" but with variables 2 and 4 added and in zero cones
-            m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
-            MathProgBase.loadproblem!(m,
-            [ 0.0, 0.0, -1.0, 1.0, -1.0],
-            [ 1.0  1.0  0.0  0.0  0.0;
-             -1.0  0.0  0.0 -0.5  0.0;
-              0.0  2.0 -1.0  0.0  0.0;
-              0.0  0.0  0.0 0.5  -1.0],
-            [ 1.0, 0.0, 0.0, 0.0],
-            Any[(:Zero,1:1),(:SOC,2:4)],
-            Any[(:Free,[1,3,5]),(:Zero,[2,4])])
-            MathProgBase.setvartype!(m, [:Int,:Int,:Cont,:Cont,:Cont])
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
+        MathProgBase.loadproblem!(m,
+        [ 0.0, 0.0, -1.0, 1.0, -1.0],
+        [ 1.0  1.0  0.0  0.0  0.0;
+         -1.0  0.0  0.0 -0.5  0.0;
+          0.0  2.0 -1.0  0.0  0.0;
+          0.0  0.0  0.0 0.5  -1.0],
+        [ 1.0, 0.0, 0.0, 0.0],
+        Any[(:Zero,1:1),(:SOC,2:4)],
+        Any[(:Free,[1,3,5]),(:Zero,[2,4])])
+        MathProgBase.setvartype!(m, [:Int,:Int,:Cont,:Cont,:Cont])
 
-            MathProgBase.optimize!(m)
-            @fact MathProgBase.status(m) --> :Optimal
-            @fact MathProgBase.getobjval(m) --> roughly(-sqrt(2.0), TOL)
-            vals = MathProgBase.getsolution(m)
-            @fact vals[1] --> roughly(1, TOL)
-            @fact vals[2] --> roughly(0, TOL)
-            @fact vals[3] --> roughly(1.0/sqrt(2.0), TOL)
-            @fact vals[4] --> roughly(0.0, TOL)
-            @fact vals[5] --> roughly(1.0/sqrt(2.0), TOL)
-       end
+        MathProgBase.optimize!(m)
+        @test MathProgBase.status(m) == :Optimal
+        @test isapprox(MathProgBase.getobjval(m), -sqrt(2.0), atol=TOL)
+        vals = MathProgBase.getsolution(m)
+        @test isapprox(vals[1], 1, atol=TOL)
+        @test isapprox(vals[2], 0, atol=TOL)
+        @test isapprox(vals[3], 1.0/sqrt(2.0), atol=TOL)
+        @test isapprox(vals[4], 0.0, atol=TOL)
+        @test isapprox(vals[5], 1.0/sqrt(2.0), atol=TOL)
     end
 
-    facts("Rotated SOC problem") do
-        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(conic_solver))") do
-            problem = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
+    @testset "Rotated SOC problem" begin
+        problem = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
 
-            c = [-3.0, 0.0, 0.0, 0.0]
-            A = zeros(4,4)
-            A[1,1] = 1.0
-            A[2,2] = 1.0
-            A[3,3] = 1.0
-            A[4,1] = 1.0
-            A[4,4] = -1.0
-            b = [10.0, 1.5, 3.0, 0.0]
+        c = [-3.0, 0.0, 0.0, 0.0]
+        A = zeros(4,4)
+        A[1,1] = 1.0
+        A[2,2] = 1.0
+        A[3,3] = 1.0
+        A[4,1] = 1.0
+        A[4,4] = -1.0
+        b = [10.0, 1.5, 3.0, 0.0]
 
-            constr_cones = Any[(:NonNeg,[1,2,3]),(:Zero,[4])]
-            var_cones = Any[(:SOCRotated,[2,3,1]),(:Free,[4])]
-            vartypes = [:Cont, :Cont, :Cont, :Int]
+        constr_cones = Any[(:NonNeg,[1,2,3]),(:Zero,[4])]
+        var_cones = Any[(:SOCRotated,[2,3,1]),(:Free,[4])]
+        vartypes = [:Cont, :Cont, :Cont, :Int]
 
-            MathProgBase.loadproblem!(problem, c, A, b, constr_cones, var_cones)
-            MathProgBase.setvartype!(problem, vartypes)
-            MathProgBase.optimize!(problem)
+        MathProgBase.loadproblem!(problem, c, A, b, constr_cones, var_cones)
+        MathProgBase.setvartype!(problem, vartypes)
+        MathProgBase.optimize!(problem)
 
-            @fact MathProgBase.getobjval(problem) --> roughly(-9.0, TOL)
-        end
+        @test isapprox(MathProgBase.getobjval(problem), -9.0, atol=TOL)
+        @test isapprox(MathProgBase.getobjbound(problem), -9.0, atol=TOL)
     end
 end

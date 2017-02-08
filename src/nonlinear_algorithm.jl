@@ -504,7 +504,7 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
         separator = MathProgBase.getsolution(ini_nlp_model)
         addCuttingPlanes!(m, mip_model, separator, jac_I, jac_J, jac_V, grad_f, [], zeros(m.numVar+1))
     elseif ini_nlp_status == :Infeasible
-        warn("Initial NLP Relaxation Infeasible.")
+        (m.verbose > 0) && println("Initial NLP Relaxation Infeasible.")
         m.status = :Infeasible
         return
     # TODO Figure out the conditions for this to hold!
@@ -681,7 +681,7 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
     if m.algorithm == "BC"
         addlazycallback(mip_model, nonlinearcallback)
         addheuristiccallback(mip_model, heuristiccallback)
-        m.status = solve(mip_model)
+        m.status = solve(mip_model, suppress_warnings=true)
         m.objbound = getobjbound(mip_model)
     elseif m.algorithm == "OA"
         (m.verbose > 0) && println("Iteration   MIP Objective     NLP Objective   Optimality Gap   Best Solution    Primal Inf.      OA Inf.")
@@ -705,7 +705,7 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
             end
             # solve MIP model
             start_mip = time()
-            mip_status = solve(mip_model)
+            mip_status = solve(mip_model, suppress_warnings=true)
             cputime_mip += time() - start_mip
             #mip_objval = Inf
             #mip_solution = zeros(m.numVar+1)

@@ -4,41 +4,35 @@
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 function runsdptests(mip_solver_drives, mip_solver, sdp_solver, log)
-    algorithm = mip_solver_drives ? "MIP-driven" : "Iterative"
+    @testset "Max problem with SDP defaults" begin
+        x = Convex.Variable(1,:Int)
+        y = Convex.Variable(1, Convex.Positive())
+        z = Convex.Semidefinite(2)
 
-    facts("Max problem with SDP defaults") do
-        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(sdp_solver))") do
-            x = Convex.Variable(1,:Int)
-            y = Convex.Variable(1, Convex.Positive())
-            z = Convex.Semidefinite(2)
+        problem = Convex.maximize(3x + y,
+                            x >= 0,
+                            3x + 2y <= 10,
+                            x^2 <= 4,
+                            y >= z[2,2])
 
-            problem = Convex.maximize(3x + y,
-                                x >= 0,
-                                3x + 2y <= 10,
-                                x^2 <= 4,
-                                y >= z[2,2])
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=sdp_solver, log_level=log))
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=sdp_solver, log_level=log))
-
-            @fact problem.optval --> roughly(8.0, TOL)
-        end
+        @test isapprox(problem.optval, 8.0, atol=TOL)
     end
 
-    facts("Max problem without eig cuts") do
-        context("With $algorithm, $(typeof(mip_solver)) and $(typeof(sdp_solver))") do
-            x = Convex.Variable(1,:Int)
-            y = Convex.Variable(1, Convex.Positive())
-            z = Convex.Semidefinite(2)
+    @testset "Max problem without eig cuts" begin
+        x = Convex.Variable(1,:Int)
+        y = Convex.Variable(1, Convex.Positive())
+        z = Convex.Semidefinite(2)
 
-            problem = Convex.maximize(3x + y,
-                                x >= 0,
-                                3x + 2y <= 10,
-                                x^2 <= 4,
-                                y >= z[2,2])
+        problem = Convex.maximize(3x + y,
+                            x >= 0,
+                            3x + 2y <= 10,
+                            x^2 <= 4,
+                            y >= z[2,2])
 
-            Convex.solve!(problem, PajaritoSolver(sdp_eig=false, mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=sdp_solver, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(sdp_eig=false, mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=sdp_solver, log_level=log))
 
-            @fact problem.optval --> roughly(8.0, TOL)
-        end
+        @test isapprox(problem.optval, 8.0, atol=TOL)
     end
 end
