@@ -1234,76 +1234,33 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
             break
         end
 
-        # Get current integer solution
-        is_viol_subp = false
+        # Get current integer solution, if any NaNs, proceed to next optimal solve
         soln_int = getvalue(m.x_int)
+        if any(isnan(soln_int))
+            count_subopt = m.mip_subopt_count
+            warn("Solution has NaN values, proceeding to next optimal MIP solve\n")
+            continue
+        end
         if m.round_mip_sols
             # Round the integer values
             soln_int = map!(round, soln_int)
         end
 
+        # Add subproblem cuts on new integer solutions, check convergence on old integer solutions
+        is_viol_subp = false
+        is_repeat = false
         if soln_int in cache_soln
             # Integer solution has been seen before
             logs[:n_repeat] += 1
 
+            if count_subopt == 0
+                # Solve was optimal solve but we have not converged, must try primal cuts
+                warn("Integer solution has repeated but optimality gap condition is not satisfied\n")
+                is_repeat = true
+            end
 
-
-            # # Calculate cone outer infeasibilities of MIP solution, add any violated primal cuts if using primal cuts
-            # calc_outer_inf_cuts!(m, (m.prim_cuts_always || m.prim_cuts_assist), logs)
-            # print_inf_outer(m)
-            #
-            # if count_subopt == 0
-            #     # MIP was just solved to optimality
-            #     m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-            #
-            #     if m.gap_rel_opt < m.rel_gap
-            #         # Converged hence optimal
-            #         m.status = :Optimal
-            #         print_gap(m, logs)
-            #         break
-            #     elseif !m.prim_cuts_always && !m.prim_cuts_assist
-            #         # Not converged and not using primal cuts
-            #         if m.best_obj < Inf
-            #             # Use best feasible
-            #             m.status = :Suboptimal
-            #         else
-            #             # No feasible solution is known
-            #             m.status = :NoKnownFeasible
-            #         end
-            #         print_gap(m, logs)
-            #         if m.round_mip_sols
-            #             warn("Rounded integer solutions are cycling before convergence tolerance is reached: aborting iterative algorithm\n")
-            #         else
-            #             warn("Non-rounded integer solutions are cycling before convergence tolerance is reached: aborting iterative algorithm\n")
-            #         end
-            #         break
-            #     elseif !m.viol_oa
-            #         # Current MIP solution has no OA violation, so solution is optimal
-            #         m.best_int = soln_int
-            #         m.best_cont = getvalue(m.x_cont)
-            #         m.best_obj = dot(m.c_sub_int, m.best_int) + dot(m.c_sub_cont, m.best_cont)
-            #
-            #         m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-            #         m.status = :Optimal
-            #         print_gap(m, logs)
-            #         break
-            #     elseif !m.viol_cut
-            #         # Solution has OA violation but no primal cuts could be added
-            #         if m.best_obj < Inf
-            #             # Use best feasible
-            #             m.status = :Suboptimal
-            #         else
-            #             # No feasible solution is known
-            #             m.status = :NoKnownFeasible
-            #         end
-            #         print_gap(m, logs)
-            #         break
-            #     end
-            # end
-            #
-            # # Either last MIP solve wasn't optimal, or there was cut violation: resolve and run MIP to optimality next iteration
-            # print_gap(m, logs)
-            # count_subopt = m.mip_subopt_count
+            # Add primal cuts and make next solve optimal
+            count_subopt = m.mip_subopt_count
         else
             # Integer solution is new: solve new conic subproblem, update incumbent solution if feasible
             push!(cache_soln, soln_int)
@@ -1349,24 +1306,17 @@ function solve_iterative!(m::PajaritoConicModel, logs::Dict{Symbol,Real})
                         break
                     end
                 end
-            elseif !is_viol_prim && !is_viol_subp
-                # Solution is conic infeasible but no violated cuts have been added, fail
+            elseif is_repeat && !is_viol_prim
+                # Repeated solution is conic infeasible but no violated cuts have been added, fail
                 warn("No violated subproblem cuts or primal cuts could be added on conic-infeasible OA solution; terminating Pajarito (this should not happen: please submit an issue)\n")
                 m.status = :CutsFailure
                 break
             end
-        elseif !is_viol_subp && !m.prim_cuts_assist
-            # No subproblem cuts were violated and not using primal cuts,
-            if count_subopt == 0
-                # MIP was just solved to optimality, fail
-                warn("No violated subproblem cuts could be added, and primal cuts are turned off; terminating Pajarito (try using prim_cuts_assist = true)\n")
-                m.status = :CutsFailure
-                break
-            else
-                # MIP was not solved to optimality, force next solve to optimality
-                warn("No violated subproblem cuts could be added, and primal cuts are turned off; forcing next MIP solve to optimality\n")
-                count_subopt = m.mip_subopt_count
-            end
+        elseif is_repeat && !m.prim_cuts_assist
+            # Repeated integer solution and no primal cuts, so fail
+            warn("No violated subproblem cuts could be added, and primal cuts are turned off; terminating Pajarito (try using prim_cuts_assist = true)\n")
+            m.status = :CutsFailure
+            break
         end
 
         # Finish if exceeded timeout option
