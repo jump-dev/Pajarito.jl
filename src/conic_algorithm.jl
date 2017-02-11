@@ -1821,26 +1821,31 @@ function add_cut_soc!(m, t, v, d, a, vdual)
             # TODO is the coeff on a or v supposed to be negative?
             if m.soc_abslift
                 # Using SOC absvalue lifting, so add two-sided cut
-                # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j + 2*v'_j*a_j >= 0
-                # Scale by dim
-                @expression(m.model_mip, cut_expr, dim*(vdual[j]^2/vdualnorm*t + 2*vdualnorm*d[j] + 2*vdual[j]*a[j]))
+                # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j - 2*|v'_j|*a_j >= 0
+                # Scale by 2*dim
+                @expression(m.model_mip, cut_expr, 2*dim*(vdual[j]^2/vdualnorm*t + 2*vdualnorm*d[j] - 2*abs(vdual[j])*a[j]))
             else
                 # Not using SOC absvalue lifting, so add a single one-sided cut
                 # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j + 2*v'_j*v_j >= 0
-                # Scale by dim
-                @expression(m.model_mip, cut_expr, dim*(vdual[j]^2/vdualnorm*t + 2*vdualnorm*d[j] + 2*vdual[j]*v[j]))
+                # Scale by 2*dim
+                @expression(m.model_mip, cut_expr, 2*dim*(vdual[j]^2/vdualnorm*t + 2*vdualnorm*d[j] + 2*vdual[j]*v[j]))
             end
             add_cut!(m, cut_expr, m.summary[:SOC_dis])
         end
     end
 
     if add_full || !m.soc_disagg
+        # Using full SOC cut
         if m.soc_abslift
-
+            # Using SOC absvalue lifting, so add many-sided cut
+            # norm(v')*t - dot(|v'|,a) >= 0
+            # Scale by 2
+            @expression(m.model_mip, cut_expr, 2*(vdualnorm*t - vecdot(abs(vdual), a)))
         else
-            # Add full SOC cut
+            # Not using SOC absvalue lifting, so add a single one-sided cut
             # norm(v')*t + dot(v',v) >= 0
-            @expression(m.model_mip, cut_expr, vdualnorm*t + vecdot(vdual, v))
+            # Scale by 2
+            @expression(m.model_mip, cut_expr, 2*(vdualnorm*t + vecdot(vdual, v)))
         end
         add_cut!(m, cut_expr, m.summary[:SOC])
     end
