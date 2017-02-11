@@ -111,8 +111,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     rows_sub_psd::Vector{Vector{Int}} # Row indices in subproblem
     dim_psd::Vector{Int}        # Dimensions
     # vars_svec_psd::Vector{Vector{JuMP.Variable}} # Slack variables in svec form (newly added or detected)
-    vars_smat_psd::Vector{Array{JuMP.AffExpr,2}} # Slack variables in smat form (newly added or detected)
-    smat_psd::Vector{Array{Float64,2}} # Preallocated matrix to help with memory for SDP cut generation
+    vars_psd::Vector{Array{JuMP.AffExpr,2}} # Slack variables in smat form (newly added or detected)
+    smat::Vector{Array{Float64,2}} # Preallocated matrix to help with memory for SDP cut generation
 
     # Miscellaneous for algorithms
     update_conicsub::Bool       # Indicates whether to use setbvec! to update an existing conic subproblem model
@@ -156,6 +156,9 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         end
         if prim_cuts_always && !prim_cuts_assist
             error("When using primal cuts always, they are also added for assistance (set prim_cuts_assist = true)\n")
+        end
+        if m.init_soc_one && !(m.soc_disagg || m.soc_abslift)
+            error("Cannot use initial SOC L_1 constraints if not using SOC disaggregation or SOC absvalue lifting\n")
         end
 
         # Warnings
@@ -413,7 +416,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 add_cut_exp!(m, m.vars_exp[n], dual[m.rows_relax_exp[n]], false, m.summ_exp)
             end
             for n in 1:m.num_psd
-                add_cut_psd!(m, m.dim_psd[n], m.vars_smat_psd[n], dual[m.rows_relax_psd[n]], m.smat_psd[n], false, m.summ_psd)
+                add_cut_psd!(m, m.dim_psd[n], m.vars_psd[n], dual[m.rows_relax_psd[n]], m.smat[n], false, m.summ_psd)
             end
 
             print_inf_dual(m)
@@ -946,7 +949,7 @@ function create_mip_data!(m::PajaritoConicModel, c_new::Vector{Float64}, A_new::
             num_exp += 1
         elseif spec == :SDP
             num_psd += 1
-            dim = round(Int, sqrt(1/4 + 2 * length(rows)) - 1/2) # smat space dimension
+            dim = round(Int, sqrt(1/4 + 2*length(rows)) - 1/2) # smat space dimension
             if summ_psd[:max_dim] < dim
                 summ_psd[:max_dim] = dim
             end
@@ -976,146 +979,212 @@ function create_mip_data!(m::PajaritoConicModel, c_new::Vector{Float64}, A_new::
     rows_sub_psd = Vector{Vector{Int}}(num_psd)
     dim_psd = Vector{Int}(num_psd)
     # vars_svec_psd = Vector{Vector{JuMP.Variable}}(num_psd)
-    vars_smat_psd = Vector{Array{JuMP.AffExpr,2}}(num_psd)
-    smat_psd = Vector{Array{Float64,2}}(num_psd)
+    vars_psd = Vector{Array{JuMP.AffExpr,2}}(num_psd)
+    smat = Vector{Array{Float64,2}}(num_psd)
 
     # Set up a SOC cone in the MIP
-    function add_soc!(n_soc, len, rows, vars)
+    # t >= norm(v)
+    function add_soc!(n_soc, rows, vars)
+        # Define
+        t = vars[1]
+        v = vars[2:end]
+        d = Vector{JuMP.Variable}()
+        a = Vector{JuMP.Variable}()
+        dim = length(v)
+
         if m.soc_in_mip
-            # If putting SOCs in the MIP directly, don't need to use other SOC infrastructure in Pajarito so return
-            @constraint(model_mip, norm(vars[j] for j in 2:len) <= vars[1])
+            # If putting SOCs in the MIP directly, don't need to use other SOC infrastructure so return
+            @constraint(model_mip, t >= norm(v))
             return
         end
 
-        dim_soc[n_soc] = len
-        rows_relax_soc[n_soc] = rows
-        rows_sub_soc[n_soc] = map_rows_sub[rows]
-        vars_soc[n_soc] = vars
-        vars_dagg_soc[n_soc] = Vector{JuMP.Variable}(0)
-
         # Set bounds
-        @constraint(model_mip, vars[1] >= 0)
+        @constraint(model_mip, t >= 0)
 
         if m.soc_disagg
-            # Add disaggregated SOC variables
-            # 2*d_j >= y_j^2/x
-            vars_dagg = @variable(model_mip, [j in 1:(len - 1)], lowerbound=0.)
-            vars_dagg_soc[n_soc] = vars_dagg
+            # Add disaggregated SOC variables d_j
+            # 2*d_j >= v_j^2/t, all j
+            d = @variable(model_mip, [j in 1:dim], lowerbound=0)
+            for j in 1:dim
+                setname(d[j], "d$(j)_soc$(n_soc)")
+            end
 
             # Add disaggregated SOC constraint
-            # x >= sum(2*d_j)
-            @constraint(model_mip, 2. * vars[1] >= 4. * sum(vars_dagg))
+            # t >= sum(2*d_j)
+            # Scale by 2
+            @constraint(model_mip, 2*(t - 2*sum(d)) >= 0)
+        end
 
-            # Set names
-            for j in 1:(len - 1)
-                setname(vars_dagg[j], "d$(j+1)_soc$(n_soc)")
+        if m.soc_abslift
+            # Add absolute value SOC variables a_j
+            # a_j >= |v_j|
+            a = @variable(model_mip, [j in 1:dim], lowerbound=0)
+            for j in 1:dim
+                setname(a[j], "a$(j)_soc$(n_soc)")
             end
 
+            # Add absolute value SOC constraints
+            # a_j >= v_j, a_j >= -v_j
+            # Scale by 2
+            for j in 1:dim
+                @constraint(model_mip, 2*(a[j] - v[j]) >= 0)
+                @constraint(model_mip, 2*(a[j] + v[j]) >= 0)
+            end
+        end
 
-
-
-            #TODO add these initial cuts using K* cuts function
-            # what about a lifting for abs value
-
-
-
-
-
-            # Add initial SOC linearizations
-            if m.init_soc_one
-                # Add initial L_1 SOC cuts
-                # 2*d_j >= 2*|y_j|/sqrt(len - 1) - x/(len - 1)
-                # for all j, implies x*sqrt(len - 1) >= sum(|y_j|)
-                # linearize y_j^2/x at x = 1, y_j = 1/sqrt(len - 1) for all j
-                for j in 2:len
-                    @constraint(model_mip, 2. * (len - 1) * vars_dagg[j-1] - 2. * sqrt(len - 1) * vars[j] + vars[1] >= 0)
-                    @constraint(model_mip, 2. * (len - 1) * vars_dagg[j-1] + 2. * sqrt(len - 1) * vars[j] + vars[1] >= 0)
+        if m.init_soc_one
+            # Add initial L_1 SOC linearizations if using disaggregation or absvalue lifting (otherwise no polynomial number of cuts)
+            # t >= 1/sqrt(dim)*sum(|v_j|)
+            if m.soc_disagg && m.soc_abslift
+                # Using disaggregation and absvalue lifting
+                # 1/dim*t + 2*d_j >= 2/sqrt(dim)*a_j, all j
+                # Scale by 2*dim
+                for j in 1:dim
+                    @constraint(model_mip, 2*(t + 2*dim*d[j] - 2*sqrt(dim)*a[j]) >= 0)
                 end
+            elseif m.soc_disagg
+                # Using disaggregation only
+                # 1/dim*t + 2*d_j >= 2/sqrt(dim)*|v_j|, all j
+                # Scale by 2*dim
+                for j in 1:dim
+                    @constraint(model_mip, 2*(t + 2*dim*d[j] - 2*sqrt(dim)*v[j]) >= 0)
+                    @constraint(model_mip, 2*(t + 2*dim*d[j] + 2*sqrt(dim)*v[j]) >= 0)
+                end
+            else
+                # Using absvalue lifting only
+                # t >= 1/sqrt(dim)*sum(a_j)
+                # Scale by 2
+                @constraint(model_mip, 2*(t - 1/sqrt(dim)*sum(a)) >= 0)
             end
-            if m.init_soc_inf
-                # Add initial L_inf SOC cuts
-                # 2*d_j >= 2|y_j| - x
-                # implies x >= |y_j|, for all j
-                # linearize y_j^2/x at x = 1, y_j = 1 for each j (y_k = 0 for k != j)
-                # equivalent to standard 3-dim rotated SOC linearizations x + d_j >= 2|y_j|
-                for j in 2:len
-                    @constraint(model_mip, 2. * (len - 1) * vars_dagg[j-1] - 2. * (len - 1) * vars[j] + (len - 1) * vars[1]) >= 0)
-                    @constraint(model_mip, 2. * (len - 1) * vars_dagg[j-1] + 2. * (len - 1) * vars[j] + (len - 1) * vars[1]) >= 0)
+        end
+
+        if m.init_soc_inf
+            # Add initial L_inf SOC linearizations
+            # t >= |v_j|, all j
+            if m.soc_disagg && m.soc_abslift
+                # Using disaggregation and absvalue lifting
+                # t + d_j >= 2*a_j, all j
+                # Scale by 2*dim
+                for j in 1:dim
+                    @constraint(model_mip, 2*dim*(t + d[j] - 2*a[j]) >= 0)
+                end
+            elseif m.soc_disagg
+                # Using disaggregation only
+                # t + d_j >= 2*|v_j|, all j
+                # Scale by 2*dim
+                for j in 1:dim
+                    @constraint(model_mip, 2*dim*(t + d[j] - 2*v[j]) >= 0)
+                    @constraint(model_mip, 2*dim*(t + d[j] + 2*v[j]) >= 0)
+                end
+            elseif m.soc_abslift
+                # Using absvalue lifting only
+                # t >= a_j, all j
+                # Scale by 2
+                for j in 1:dim
+                    @constraint(model_mip, 2*(t - a[j]) >= 0)
+                end
+            else
+                # Using no lifting
+                # t >= |v_j|, all j
+                # Scale by 2
+                for j in 1:dim
+                    @constraint(model_mip, 2*(t - v[j]) >= 0)
+                    @constraint(model_mip, 2*(t + v[j]) >= 0)
                 end
             end
         end
+
+        # Save data
+        rows_relax_soc[n_soc] = rows[2:end]
+        rows_sub_soc[n_soc] = map_rows_sub[rows_relax_soc[n_soc]]
+        t_soc[n_soc] = t
+        v_soc[n_soc] = v
+        d_soc[n_soc] = d
+        a_soc[n_soc] = a
     end
 
     # Set up a ExpPrimal cone in the MIP
     function add_exp!(n_exp, rows, vars)
-        rows_relax_exp[n_exp] = rows
-        rows_sub_exp[n_exp] = map_rows_sub[rows]
-        vars_exp[n_exp] = vars
-
-        # Set bounds
-        @constraint(model_mip, vars[2] >= 0)
-        @constraint(model_mip, vars[3] >= 0)
 
 
 
-        #TODO add these initial cuts using K* cuts function
 
 
 
-        # Add initial linearization depending on option
-        if m.init_exp
-            # TODO maybe pick different linearization points
-            # Add initial exp cuts using dual exp cone linearizations
-            # Dual exp cone is  e * z >= -x * exp(y / x), z >= 0, x < 0
-            # at x = -1; y = -1, -1/2, -1/5, 0, 1/5, 1/2, 1; z = exp(-y) / e = exp(-y - 1)
-            for yval in [-1., -0.5, -0.2, 0., 0.2, 0.5, 1.]
-                @constraint(model_mip, -vars[1] + yval * vars[2] + exp(-yval - 1.) * vars[3] >= 0)
-            end
-        end
+        #
+        # rows_relax_exp[n_exp] = rows
+        # rows_sub_exp[n_exp] = map_rows_sub[rows]
+        # vars_exp[n_exp] = vars
+        #
+        # # Set bounds
+        # @constraint(model_mip, vars[2] >= 0)
+        # @constraint(model_mip, vars[3] >= 0)
+        #
+        #
+        #
+        # #TODO add these initial cuts using K* cuts function
+        #
+        #
+        #
+        # # Add initial linearization depending on option
+        # if m.init_exp
+        #     # TODO maybe pick different linearization points
+        #     # Add initial exp cuts using dual exp cone linearizations
+        #     # Dual exp cone is  e * z >= -x * exp(y / x), z >= 0, x < 0
+        #     # at x = -1; y = -1, -1/2, -1/5, 0, 1/5, 1/2, 1; z = exp(-y) / e = exp(-y - 1)
+        #     for yval in [-1., -0.5, -0.2, 0., 0.2, 0.5, 1.]
+        #         @constraint(model_mip, -vars[1] + yval * vars[2] + exp(-yval - 1.) * vars[3] >= 0)
+        #     end
+        # end
     end
 
     # Set up a SDP cone in the MIP
-    function add_psd!(n_psd, dim, rows, vars)
-        dim_psd[n_psd] = dim
-        rows_relax_psd[n_psd] = rows
-        rows_sub_psd[n_psd] = map_rows_sub[rows]
-        # vars_svec_psd[n_psd] = vars
-        smat_psd[n_psd] = temp_psd_smat[dim]
-        vars_smat = Array{JuMP.AffExpr,2}(dim, dim)
-        vars_smat_psd[n_psd] = vars_smat
+    function add_psd!(n_psd, rows, vars)
 
-        # Set up smat arrays and set bounds
-        kSD = 1
-        for jSD in 1:dim, iSD in jSD:dim
-            if jSD == iSD
-                @constraint(model_mip, vars[kSD] >= 0)
-                vars_smat[iSD, jSD] = vars[kSD]
-            else
-                vars_smat[iSD, jSD] = vars_smat[jSD, iSD] = sqrt2inv * vars[kSD]
-            end
-            kSD += 1
-        end
+        # dim = round(Int, sqrt(1/4 + 2 * length(rows)) - 1/2) # smat space dimension
 
 
 
-        #TODO add these initial cuts using K* cuts function
-        # what about a lifting for abs value
-
-
-        # Add initial (linear or SOC) SDP outer approximation cuts
-        for jSD in 1:dim, iSD in (jSD + 1):dim
-            if m.init_psd_soc
-                # Add initial rotated SOC for off-diagonal element to enforce 2x2 principal submatrix PSDness
-                # Use norm and transformation from RSOC to SOC
-                # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
-                @constraint(model_mip, vars_smat[iSD, iSD] + vars_smat[jSD, jSD] >= norm(JuMP.AffExpr[(2. * vars_smat[iSD, jSD]), (vars_smat[iSD, iSD] - vars_smat[jSD, jSD])]))
-            elseif m.init_psd_lin
-                # Add initial SDP linear cuts based on linearization of 3-dim rotated SOCs that enforce 2x2 principal submatrix PSDness (essentially the dual of SDSOS)
-                # 2|m_ij| <= m_ii + m_jj, where m_kk is scaled by sqrt2 in smat space
-                @constraint(model_mip, vars_smat[iSD, iSD] + vars_smat[jSD, jSD] >= 2. * vars_smat[iSD, jSD])
-                @constraint(model_mip, vars_smat[iSD, iSD] + vars_smat[jSD, jSD] >= -2. * vars_smat[iSD, jSD])
-            end
-        end
+        # dim_psd[n_psd] = dim
+        # rows_relax_psd[n_psd] = rows
+        # rows_sub_psd[n_psd] = map_rows_sub[rows]
+        # # vars_svec_psd[n_psd] = vars
+        # smat[n_psd] = temp_psd_smat[dim]
+        # vars_smat = Array{JuMP.AffExpr,2}(dim, dim)
+        # vars_psd[n_psd] = vars_smat
+        #
+        # # Set up smat arrays and set bounds
+        # kSD = 1
+        # for jSD in 1:dim, iSD in jSD:dim
+        #     if jSD == iSD
+        #         @constraint(model_mip, vars[kSD] >= 0)
+        #         vars_smat[iSD, jSD] = vars[kSD]
+        #     else
+        #         vars_smat[iSD, jSD] = vars_smat[jSD, iSD] = sqrt2inv * vars[kSD]
+        #     end
+        #     kSD += 1
+        # end
+        #
+        #
+        #
+        # #TODO add these initial cuts using K* cuts function
+        # # what about a lifting for abs value
+        #
+        #
+        # # Add initial (linear or SOC) SDP outer approximation cuts
+        # for jSD in 1:dim, iSD in (jSD + 1):dim
+        #     if m.init_psd_soc
+        #         # Add initial rotated SOC for off-diagonal element to enforce 2x2 principal submatrix PSDness
+        #         # Use norm and transformation from RSOC to SOC
+        #         # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
+        #         @constraint(model_mip, vars_smat[iSD, iSD] + vars_smat[jSD, jSD] >= norm(JuMP.AffExpr[(2. * vars_smat[iSD, jSD]), (vars_smat[iSD, iSD] - vars_smat[jSD, jSD])]))
+        #     elseif m.init_psd_lin
+        #         # Add initial SDP linear cuts based on linearization of 3-dim rotated SOCs that enforce 2x2 principal submatrix PSDness (essentially the dual of SDSOS)
+        #         # 2|m_ij| <= m_ii + m_jj, where m_kk is scaled by sqrt2 in smat space
+        #         @constraint(model_mip, vars_smat[iSD, iSD] + vars_smat[jSD, jSD] >= 2. * vars_smat[iSD, jSD])
+        #         @constraint(model_mip, vars_smat[iSD, iSD] + vars_smat[jSD, jSD] >= -2. * vars_smat[iSD, jSD])
+        #     end
+        # end
     end
 
     n_soc = 0
@@ -1139,14 +1208,13 @@ function create_mip_data!(m::PajaritoConicModel, c_new::Vector{Float64}, A_new::
             # Set up MIP cones
             if spec == :SOC
                 n_soc += 1
-                add_soc!(n_soc, length(rows), rows, lhs_expr[rows])
+                add_soc!(n_soc, rows, lhs_expr[rows])
             elseif spec == :ExpPrimal
                 n_exp += 1
                 add_exp!(n_exp, rows, lhs_expr[rows])
             elseif spec == :SDP
                 n_psd += 1
-                dim = round(Int, sqrt(1/4 + 2 * length(rows)) - 1/2) # smat space dimension
-                add_psd!(n_psd, dim, rows, lhs_expr[rows])
+                add_psd!(n_psd, rows, lhs_expr[rows])
             end
         end
     end
@@ -1179,8 +1247,8 @@ function create_mip_data!(m::PajaritoConicModel, c_new::Vector{Float64}, A_new::
     m.rows_sub_psd = rows_sub_psd
     m.dim_psd = dim_psd
     # m.vars_svec_psd = vars_svec_psd
-    m.vars_smat_psd = vars_smat_psd
-    m.smat_psd = smat_psd
+    m.vars_psd = vars_psd
+    m.smat = smat
 
     return (rows_relax_soc, rows_relax_exp, rows_relax_psd)
 end
@@ -1675,23 +1743,22 @@ function add_subp_cuts!(m, dual)
     m.is_viol_subp = false
 
     for n in 1:m.num_soc
-        # Project onto dual cone
-        # y' = ||x'||
-        cut[1] = vecnorm(cut[j] for j in 2:dim)
-
-        add_cut_soc!(m, m.dim_soc[n], m.vars_soc[n], m.vars_dagg_soc[n], dual[m.rows_soc[n]], m.summ_soc)
+        # Get v', remove near-zeros, add K* cuts
+        vdual = dual[m.rows_soc[n]]
+        if clean_zeros!(vdual)
+            add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], vdual)
+        end
     end
-    for n in 1:m.num_exp
-
-
-        add_cut_exp!(m, m.vars_exp[n], dual[m.rows_exp[n]], m.summ_exp)
-    end
-    for n in 1:m.num_psd
-
-
-        add_cut_psd!(m, m.dim_psd[n], m.vars_smat_psd[n], dual[m.rows_psd[n]], m.smat_psd[n], m.summ_psd)
-    end
-    return is_viol_subp
+    # for n in 1:m.num_exp
+    #
+    #
+    #     add_cut_exp!(m, m.vars_exp[n], dual[m.rows_exp[n]], m.summ_exp)
+    # end
+    # for n in 1:m.num_psd
+    #
+    #
+    #     add_cut_psd!(m, m.vars_psd[n], dual[m.rows_psd[n]], m.smat[n], m.summ_psd)
+    # end
 end
 
 function add_prim_cuts!(m)
@@ -1699,67 +1766,83 @@ function add_prim_cuts!(m)
 
     for n in 1:m.num_soc
         # getvalue on cone
-        # pass in (1, w/||w||) as dual
-
-        add_cut_soc!(m, m.dim_soc[n], m.vars_soc[n], m.vars_dagg_soc[n], dual[m.rows_soc[n]], m.summ_soc)
-
+        # pass in (1, v'/norm(v')) as dual
+        vdual = dual[m.rows_soc[n]]
+        if clean_zeros!(vdual)
+            scale!(vdual, 1/vecnorm(vdual))
+            add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], vdual)
+        end
     end
-    for n in 1:m.num_exp
-
-
-        add_cut_exp!(m, m.vars_exp[n], dual[m.rows_exp[n]], m.summ_exp)
-
-    end
-    for n in 1:m.num_psd
-
-
-        add_cut_psd!(m, m.dim_psd[n], m.vars_smat_psd[n], dual[m.rows_psd[n]], m.smat_psd[n], m.summ_psd)
-    end
-    return (is_infeas, is_viol_prim)
+    # for n in 1:m.num_exp
+    #
+    #
+    #     add_cut_exp!(m, m.vars_exp[n], dual[m.rows_exp[n]])
+    # end
+    # for n in 1:m.num_psd
+    #
+    #
+    #     add_cut_psd!(m, m.dim_psd[n], m.vars_psd[n], dual[m.rows_psd[n]], m.smat[n])
+    # end
 end
 
-function add_cut_soc!(m, disagg, dim, vars, vars_dagg, cut, summary)
-    # Remove near-zeros, discard if all values are small
+function clean_zeros!(vprime::Vector{Float64})
+    # Remove near-zeros, return false if all values are near-zeros
     keep = false
-    for j in 1:dim
-        if abs(cut[j]) < m.tol_zero
-            cut[j] = 0.
+    for j in 1:length(vprime)
+        if abs(vprime[j]) < m.tol_zero
+            vprime[j] = 0.
         else
             keep = true
         end
     end
-    if !keep
-        continue
-    end
+    return keep
+end
 
-    # Add disagg cuts
+function add_cut_soc!(m, t, v, d, a, vdual)
+    dim = length(v)
+    vdualnorm = vecnorm(vdual)
+
     add_full = false
-    if disagg
-        for j in 2:dim
-            if cut[j] == 0.
-                # Zero cut
+    if m.soc_disagg
+        # Using SOC disaggregation
+        for j in 1:dim
+            if vdual[j] == 0.
+                # Zero cut, don't add
                 continue
-            elseif (dim - 1) * cut[j]^2 / cut[1] < m.tol_zero
-                # Coefficient is too small
+            elseif dim*vdual[j]^2/vdualnorm < m.tol_zero
+                # Coefficient is too small, don't add, add full cut later
                 add_full = true
                 continue
-            elseif (cut[j] / cut[1])^2 < 1e-5
+            elseif (vdual[j]/vdualnorm)^2 < 1e-5
                 # Cut is poorly conditioned, add it but also add full cut
                 add_full = true
             end
 
-            # (x'_j)^2/||x'||*y + 2*||x'||*d_j + 2*x'_j*x_j >= 0
-            # Scale up by number of cuts (dim - 1) to achieve linear tolerances
-            @expression(m.model_mip, cut_expr, (dim - 1) * (cut[j]^2 / cut[1] * vars[1] + 2 * cut[1] * vars_dagg[j-1] + 2 * cut[j] * vars[j]))
-            add_cut!(m, cut_expr, is_viol, summary)
+            # TODO is the coeff on a or v supposed to be negative?
+            if m.soc_abslift
+                # Using SOC absvalue lifting, so add two-sided cut
+                # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j + 2*v'_j*a_j >= 0
+                # Scale by dim
+                @expression(m.model_mip, cut_expr, dim*(vdual[j]^2/vdualnorm*t + 2*vdualnorm*d[j] + 2*vdual[j]*a[j]))
+            else
+                # Not using SOC absvalue lifting, so add a single one-sided cut
+                # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j + 2*v'_j*v_j >= 0
+                # Scale by dim
+                @expression(m.model_mip, cut_expr, dim*(vdual[j]^2/vdualnorm*t + 2*vdualnorm*d[j] + 2*vdual[j]*v[j]))
+            end
+            add_cut!(m, cut_expr, m.summary[:SOC_dis])
         end
     end
 
-    # Add full cut
-    if add_full || !disagg
-        # ||x'||*y + dot(x', x) >= 0
-        @expression(m.model_mip, cut_expr, vecdot(cut, vars))
-        add_cut!(m, cut_expr, is_viol, summary)
+    if add_full || !m.soc_disagg
+        if m.soc_abslift
+
+        else
+            # Add full SOC cut
+            # norm(v')*t + dot(v',v) >= 0
+            @expression(m.model_mip, cut_expr, vdualnorm*t + vecdot(vdual, v))
+        end
+        add_cut!(m, cut_expr, m.summary[:SOC])
     end
 end
 
@@ -1799,11 +1882,9 @@ function add_cut!(m, cut_expr, is_viol, summary)
 end
 
 # Update cut infeasibility values in cone summary
-function update_inf_cut!(m::PajaritoConicModel, cut_expr::JuMP.AffExpr, summary::Dict{Symbol,Real})
+function update_inf_cut!(m::PajaritoConicModel, cut_expr::JuMP.AffExpr, cut_summary::Dict{Symbol,Real})
 
     # add count cuts...
-
-
 
 
     if (m.log_level <= 2) || !m.oa_started
@@ -1812,11 +1893,11 @@ function update_inf_cut!(m::PajaritoConicModel, cut_expr::JuMP.AffExpr, summary:
 
     inf_cut = -getvalue(cut_expr)
     if inf_cut > 0.
-        summary[:cut_max_n] += 1
-        summary[:cut_max] = max(inf_cut, summary[:cut_max])
+        cut_summary[:cut_max_n] += 1
+        cut_summary[:cut_max] = max(inf_cut, cut_summary[:cut_max])
     elseif inf_cut < 0.
-        summary[:cut_min_n] += 1
-        summary[:cut_min] = max(-inf_cut, summary[:cut_min])
+        cut_summary[:cut_min_n] += 1
+        cut_summary[:cut_min] = max(-inf_cut, cut_summary[:cut_min])
     end
 end
 
@@ -2071,8 +2152,8 @@ function calc_outer_inf_cuts!(m::PajaritoConicModel, add_viol_cuts::Bool, logs::
     max_eig = Vector{Float64}()
     for n in 1:m.num_psd
         # Convert solution to lower smat space and store in preallocated smat matrix
-        vars_smat = m.vars_smat_psd[n]
-        smat = m.smat_psd[n]
+        vars_smat = m.vars_psd[n]
+        smat = m.smat[n]
         dim = m.dim_psd[n]
         for j in 1:dim, i in j:dim
             smat[i, j] = getvalue(vars_smat[i, j])
@@ -2100,7 +2181,7 @@ function calc_outer_inf_cuts!(m::PajaritoConicModel, add_viol_cuts::Bool, logs::
         end
     end
     if m.prim_max_viol_only && (max_n > 0)
-        add_prim_cuts_psd!(m, m.dim_psd[max_n], m.vars_smat_psd[max_n], m.smat_psd[max_n], eigvals)
+        add_prim_cuts_psd!(m, m.dim_psd[max_n], m.vars_psd[max_n], m.smat[max_n], eigvals)
     end
 
     logs[:outer_inf] += toq()
