@@ -40,11 +40,12 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     dualize_sub::Bool           # (Conic only) Solve the conic duals of the continuous conic subproblems
 
     soc_disagg::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
+    soc_abslift::Bool           # (Conic only) Use absolute value lifting in the MIP only
     soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
     sdp_eig::Bool               # (Conic SDP only) Use SDP eigenvector-derived cuts
     sdp_soc::Bool               # (Conic SDP only) Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
-    init_soc_one::Bool          # (Conic only) Start with disaggregated L_1 outer approximation cuts for SOCs (if soc_disagg)
-    init_soc_inf::Bool          # (Conic only) Start with disaggregated L_inf outer approximation cuts for SOCs (if soc_disagg)
+    init_soc_one::Bool          # (Conic only) Start with disaggregated L_1 outer approximation cuts for SOCs
+    init_soc_inf::Bool          # (Conic only) Start with disaggregated L_inf outer approximation cuts for SOCs
     init_exp::Bool              # (Conic Exp only) Start with several outer approximation cuts on the exponential cones
     init_sdp_lin::Bool          # (Conic SDP only) Use SDP initial linear cuts
     init_sdp_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
@@ -128,7 +129,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     status::Symbol
 
     # Model constructor
-    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
+    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
         # Errors
         if viol_cuts_only && !mip_solver_drives
             # If using iterative algorithm, must always add non-violated cuts
@@ -181,6 +182,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.mip_subopt_solver = mip_subopt_solver
         m.soc_in_mip = soc_in_mip
         m.soc_disagg = soc_disagg
+        m.soc_abslift = soc_abslift
         m.init_soc_one = init_soc_one
         m.init_soc_inf = init_soc_inf
         m.init_exp = init_exp
@@ -1181,7 +1183,6 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
                 continue
             end
 
-            @show rows
             n_soc += 1
             v_idxs = rows[2:end]
             v_idxs_soc_relx[n_soc] = v_idxs
