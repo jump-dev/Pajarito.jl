@@ -200,7 +200,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.sdp_soc = sdp_soc
 
         m.var_types = Symbol[]
-        m.var_start = Float64[]
+        # m.var_start = Float64[]
         m.num_var_orig = 0
         m.num_con_orig = 0
 
