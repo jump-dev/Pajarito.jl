@@ -1505,11 +1505,11 @@ end
 function set_d_soln!(m, d::Vector{JuMP.Variable}, v_slck::Vector{Float64}, t_slck::Float64)
     if m.mip_solver_drives && m.oa_started
         for j in 1:length(d)
-            setsolutionvalue(m.cb_heur, d[j], (v_slck[j]^2 / (2. * t_slck])))
+            setsolutionvalue(m.cb_heur, d[j], (v_slck[j]^2/(2.*t_slck)))
         end
     else
         for j in 1:length(d)
-            setvalue(d[j], (v_slck[j]^2 / (2. * t_slck])))
+            setvalue(d[j], (v_slck[j]^2/(2.*t_slck)))
         end
     end
 end
