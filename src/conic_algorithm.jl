@@ -50,6 +50,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     init_sdp_lin::Bool          # (Conic SDP only) Use SDP initial linear cuts
     init_sdp_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
 
+    scale_subp_cuts::Bool       # (Conic only) Use scaling for subproblem cuts based on subproblem status
     viol_cuts_only::Bool        # (Conic only) Only add cuts that are violated by the current MIP solution (may be useful for MSD algorithm where many cuts are added)
     prim_cuts_only::Bool        # (Conic only) Do not add subproblem cuts
     prim_cuts_always::Bool      # (Conic only) Add primal cuts at each iteration or in each lazy callback
@@ -129,7 +130,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     status::Symbol
 
     # Model constructor
-    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
+    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
         # Errors
         if viol_cuts_only && !mip_solver_drives
             # If using iterative algorithm, must always add non-violated cuts
@@ -186,6 +187,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.init_soc_one = init_soc_one
         m.init_soc_inf = init_soc_inf
         m.init_exp = init_exp
+        m.scale_subp_cuts = scale_subp_cuts
         m.viol_cuts_only = viol_cuts_only
         m.mip_solver = mip_solver
         m.cont_solver = cont_solver
@@ -378,7 +380,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
             # Optionally rescale dual
             dual_conic = MathProgBase.getdual(model_relax)
-            if m.scale_dual_cuts
+            if m.scale_subp_cuts
                 # Rescale by number of cones / absval of full conic objective
                 scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / (abs(obj_relax) + 1e-5))
             end
@@ -1596,7 +1598,7 @@ function add_subp_incumb_cuts!(m)
     # Determine cut scaling factors and check if have new feasible incumbent solution
     if status_conic == :Infeasible
         # Subproblem infeasible
-        if m.scale_dual_cuts
+        if m.scale_subp_cuts
             # First check infeasible ray has negative value
             ray_value = vecdot(dual_conic, b_sub_int)
             if ray_value > -m.tol_zero
@@ -1614,7 +1616,7 @@ function add_subp_incumb_cuts!(m)
         clean_zeros!(soln_cont)
         obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_cont)
 
-        if m.scale_dual_cuts
+        if m.scale_subp_cuts
             # Rescale by number of cones / abs(objective + 1e-5)
             scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / (abs(obj_full) + 1e-5))
         end
