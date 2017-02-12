@@ -1151,10 +1151,11 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
                 continue
             end
 
+            @show rows
             n_soc += 1
-            t_idx_soc_subp[n_soc] = map_rows_sub[rows[1]]
             v_idxs = rows[2:end]
             v_idxs_soc_relx[n_soc] = v_idxs
+            t_idx_soc_subp[n_soc] = map_rows_sub[rows[1]]
             v_idxs_soc_subp[n_soc] = map_rows_sub[v_idxs]
 
             t = t_soc[n_soc] = lhs_expr[rows[1]]
