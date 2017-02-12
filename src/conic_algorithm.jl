@@ -50,20 +50,12 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     init_psd_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
 
     viol_cuts_only::Bool        # (Conic only) Only add cuts that are violated by the current MIP solution (may be useful for MSD algorithm where many cuts are added)
-    # proj_dual_infeas::Bool      # (Conic only) Project dual cone infeasible dual vectors onto dual cone boundaries
-    # proj_dual_feas::Bool        # (Conic only) Project dual cone strictly feasible dual vectors onto dual cone boundaries
     prim_cuts_only::Bool        # (Conic only) Do not add subproblem cuts
     prim_cuts_always::Bool      # (Conic only) Add primal cuts at each iteration or in each lazy callback
     prim_cuts_assist::Bool      # (Conic only) Add primal cuts only when integer solutions are repeating
-    # prim_viol_cuts_only::Bool   # (Conic only) Only add primal cuts that are violated (including individual disaggregated cuts)
-    # prim_max_viol_only::Bool    # (Conic only) Only add primal cuts for the cone with largest absolute violation
-    # prim_soc_disagg::Bool       # (Conic only) Use disaggregated primal cuts for SOCs
-    # prim_psd_eig::Bool          # (Conic only) Use eigenvector cuts for SDPs
 
     tol_zero::Float64           # (Conic only) Tolerance for small epsilons as zeros
     tol_prim_infeas::Float64    # (Conic only) Tolerance level for cone outer infeasibilities for primal cut adding functions (must be at least 1e-5)
-    # tol_psd_eigvec::Float64     # (Conic SDP only) Tolerance for setting small values in SDP eigenvectors to zeros (for cut sanitation)
-    # tol_psd_eigval::Float64     # (Conic SDP only) Tolerance for ignoring eigenvectors corresponding to small (positive) eigenvalues
 
     # Initial data
     num_var_orig::Int           # Initial number of variables
@@ -136,7 +128,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     status::Symbol
 
     # Model constructor
-    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_in_mip, psd_eig, psd_soc, init_soc_one, init_soc_inf, init_exp, init_psd_lin, init_psd_soc, viol_cuts_only, proj_dual_infeas, proj_dual_feas, prim_cuts_only, prim_cuts_always, prim_cuts_assist, prim_viol_cuts_only, prim_max_viol_only, prim_soc_disagg, prim_psd_eig, tol_zero, tol_prim_infeas, tol_psd_eigvec, tol_psd_eigval)
+    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
         # Errors
         if viol_cuts_only && !mip_solver_drives
             # If using iterative algorithm, must always add non-violated cuts
@@ -192,8 +184,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.init_soc_one = init_soc_one
         m.init_soc_inf = init_soc_inf
         m.init_exp = init_exp
-        # m.proj_dual_infeas = proj_dual_infeas
-        # m.proj_dual_feas = proj_dual_feas
         m.viol_cuts_only = viol_cuts_only
         m.mip_solver = mip_solver
         m.cont_solver = cont_solver
@@ -203,17 +193,11 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.prim_cuts_only = prim_cuts_only
         m.prim_cuts_always = prim_cuts_always
         m.prim_cuts_assist = prim_cuts_assist
-        # m.prim_viol_cuts_only = prim_viol_cuts_only
-        # m.prim_max_viol_only = prim_max_viol_only
-        # m.prim_soc_disagg = prim_soc_disagg
-        # m.prim_psd_eig = prim_psd_eig
         m.tol_prim_infeas = tol_prim_infeas
         m.init_psd_lin = init_psd_lin
         m.init_psd_soc = init_psd_soc
         m.psd_eig = psd_eig
         m.psd_soc = psd_soc
-        # m.tol_psd_eigvec = tol_psd_eigvec
-        # m.tol_psd_eigval = tol_psd_eigval
 
         m.var_types = Symbol[]
         m.var_start = Float64[]
