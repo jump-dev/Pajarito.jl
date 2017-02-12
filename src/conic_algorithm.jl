@@ -1578,7 +1578,7 @@ function add_subp_incumb_cuts!(m)
                 warn("Serious conic solver failure: returned status $status_conic but b'y is not sufficiently negative for infeasible ray y (this should not happen: please submit an issue)\n")
                 return (false, false)
             end
-            
+
             # Rescale by number of cones / value of ray
             scale!(dual_conic, (m.num_soc + m.num_exp + m.num_psd) / ray_value)
         end
@@ -1591,7 +1591,7 @@ function add_subp_incumb_cuts!(m)
 
         if m.scale_dual_cuts
             # Rescale by number of cones / abs(objective + 1e-5)
-            scale!(dual_conic, (m.num_soc + m.num_exp + m.num_psd) / (abs(obj_full) + 1e-5)
+            scale!(dual_conic, (m.num_soc + m.num_exp + m.num_psd) / (abs(obj_full) + 1e-5))
         end
 
         if obj_full < m.best_obj
