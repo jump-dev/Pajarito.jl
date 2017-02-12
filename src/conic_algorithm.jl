@@ -147,7 +147,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         if prim_cuts_always && !prim_cuts_assist
             error("When using primal cuts always, they are also added for assistance (set prim_cuts_assist = true)\n")
         end
-        if m.init_soc_one && !(m.soc_disagg || m.soc_abslift)
+        if init_soc_one && !(soc_disagg || soc_abslift)
             error("Cannot use initial SOC L_1 constraints if not using SOC disaggregation or SOC absvalue lifting\n")
         end
 
