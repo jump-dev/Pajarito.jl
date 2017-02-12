@@ -87,10 +87,10 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # m.logs[:SOC] = logs[:SOC]
     t_idx_soc_subp::Vector{Int} # Row index of t variable in SOCs in subproblems
     v_idxs_soc_subp::Vector{Vector{Int}} # Row indices of v variables in SOCs in subproblem
-    t_soc = t_soc::Vector{JuMP.Variable} # t variable (epigraph) in SOCs
-    v_soc = v_soc::Vector{Vector{JuMP.Variable}} # v variables in SOCs
-    d_soc = d_soc::Vector{Vector{JuMP.Variable}} # d variables (disaggregated) in SOCs
-    a_soc = a_soc::Vector{Vector{JuMP.Variable}} # a variables (absolute values) in SOCs
+    t_soc::Vector{JuMP.Variable} # t variable (epigraph) in SOCs
+    v_soc::Vector{Vector{JuMP.Variable}} # v variables in SOCs
+    d_soc::Vector{Vector{JuMP.Variable}} # d variables (disaggregated) in SOCs
+    a_soc::Vector{Vector{JuMP.Variable}} # a variables (absolute values) in SOCs
 
     # Exp cone data
     num_exp::Int                # Number of ExpPrimal cones
