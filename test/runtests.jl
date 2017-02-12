@@ -33,16 +33,16 @@ end
 TOL = 1e-3
 
 # Option to print with log_level
-log = -1
+log = 2
 
 # Nonlinear models tests in nlptest.jl
-@testset "Nonlinear tests" begin
-    for mip_solver_drives in [false, true], mip in solvers_mip, nlnr in solvers_nlnr
-        @testset "MSD=$mip_solver_drives,mip_solver=$(typeof(mip)),cont_solver=$(typeof(nlnr))" begin
-            runnonlineartests(mip_solver_drives, mip, nlnr, log)
-        end
-    end
-end
+# @testset "Nonlinear tests" begin
+#     for mip_solver_drives in [false, true], mip in solvers_mip, nlnr in solvers_nlnr
+#         @testset "MSD=$mip_solver_drives,mip_solver=$(typeof(mip)),cont_solver=$(typeof(nlnr))" begin
+#             runnonlineartests(mip_solver_drives, mip, nlnr, log)
+#         end
+#     end
+# end
 
 # Conic models test in conictest.jl
 # Default solvers test
