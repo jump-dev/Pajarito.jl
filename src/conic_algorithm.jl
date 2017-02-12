@@ -526,6 +526,10 @@ function verify_data(m, c, A, b, cone_con, cone_var)
     min_soc = 0
     max_soc = 0
 
+    num_rot = 0
+    min_rot = 0
+    max_rot = 0
+
     num_exp = 0
 
     num_sdp = 0
@@ -537,16 +541,32 @@ function verify_data(m, c, A, b, cone_con, cone_var)
         if isempty(inds)
             error("A cone $spec has no associated indices\n")
         end
-        if spec == :SOC && (length(inds) < 2)
-            error("A cone $spec has fewer than 2 indices ($(length(inds)))\n")
+        if spec == :SOC
+            if length(inds) < 2
+                error("A cone $spec has fewer than 2 indices ($(length(inds)))\n")
+            end
+
+            num_soc += 1
+
             if max_soc < length(inds)
                 max_soc = length(inds)
             end
             if (min_soc == 0) || (min_soc > length(inds))
                 min_soc = length(inds)
             end
-        elseif spec == :SOCRotated && (length(inds) < 3)
-            error("A cone $spec has fewer than 3 indices ($(length(inds)))\n")
+        elseif spec == :SOCRotated
+            if length(inds) < 3
+                error("A cone $spec has fewer than 3 indices ($(length(inds)))\n")
+            end
+
+            num_rot += 1
+
+            if max_rot < length(inds)
+                max_rot = length(inds)
+            end
+            if (min_rot == 0) || (min_rot > length(inds))
+                min_rot = length(inds)
+            end
         elseif spec == :SDP
             if length(inds) < 3
                 error("A cone $spec has fewer than 3 indices ($(length(inds)))\n")
@@ -555,18 +575,25 @@ function verify_data(m, c, A, b, cone_con, cone_var)
                     error("A cone $spec (in SD svec form) does not have a valid (triangular) number of indices ($(length(inds)))\n")
                 end
             end
+
+            num_sdp += 1
+
             if max_sdp < length(inds)
                 max_sdp = length(inds)
             end
             if (min_sdp == 0) || (min_sdp > length(inds))
                 min_sdp = length(inds)
             end
-        elseif spec == :ExpPrimal && (length(inds) != 3)
-            error("A cone $spec does not have exactly 3 indices ($(length(inds)))\n")
+        elseif spec == :ExpPrimal
+            if length(inds) != 3
+                error("A cone $spec does not have exactly 3 indices ($(length(inds)))\n")
+            end
+
+            num_exp += 1
         end
     end
 
-    m.num_soc = num_soc
+    m.num_soc = num_soc + num_rot
     m.num_exp = num_exp
     m.num_sdp = num_sdp
 
@@ -576,15 +603,18 @@ function verify_data(m, c, A, b, cone_con, cone_var)
     end
 
     @printf "\nCone types summary:"
-    @printf "\n%-15s | %-8s | %-8s | %-8s\n" "Cone" "Count" "Min dim" "Max dim"
+    @printf "\n%-22s | %-8s | %-8s | %-8s\n" "Cone" "Count" "Min dim" "Max dim"
     if num_soc > 0
-        @printf "%15s | %8d | %8d | %8d\n" "Second Order" num_soc min_soc max_soc
+        @printf "%22s | %8d | %8d | %8d\n" "Second order" num_soc min_soc max_soc
+    end
+    if num_rot > 0
+        @printf "%22s | %8d | %8d | %8d\n" "Rot. second order" num_rot min_rot max_rot
     end
     if num_exp > 0
-        @printf "%15s | %8d | %8d | %8d\n" "Primal Expon" num_exp 3 3
+        @printf "%22s | %8d | %8d | %8d\n" "Primal exponential" num_exp 3 3
     end
     if num_sdp > 0
-        @printf "%15s | %8d | %8d | %8d\n" "Pos Semi Def" num_sdp min_sdp max_sdp
+        @printf "%22s | %8d | %8d | %8d\n" "Positive semidef." num_sdp min_sdp max_sdp
     end
     flush(STDOUT)
 end
