@@ -227,7 +227,7 @@ const sqrt2inv = 1/sqrt2
 # Verify initial conic data and convert appropriate types and store in Pajarito model
 function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, cone_var)
     # Verify consistency of conic data
-    verify_data(c, A, b, cone_con, cone_var)
+    verify_data(m, c, A, b, cone_con, cone_var)
 
     # Verify cone compatibility with solver (if solver is not defaultConicsolver: an MPB issue)
     if m.cont_solver != MathProgBase.defaultConicsolver
@@ -475,7 +475,7 @@ MathProgBase.getsolution(m::PajaritoConicModel) = m.final_soln
 =========================================================#
 
 # Verify consistency of conic data
-function verify_data(c, A, b, cone_con, cone_var)
+function verify_data(m, c, A, b, cone_con, cone_var)
     # Check dimensions of conic problem
     num_con_orig = length(b)
     num_var_orig = length(c)
