@@ -387,7 +387,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
             # Add relaxation cuts
             for n in 1:m.num_soc
-                add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[m.v_idxs_soc_relx[n]])
+                add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[v_idxs_soc_relx[n]])
             end
             # for n in 1:m.num_exp
             #     add_cut_exp!(m, m.vars_exp[n], dual[m.rows_relax_exp[n]], false, m.logs[:ExpPrimal])
