@@ -208,7 +208,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.best_obj = Inf
         m.mip_obj = -Inf
         m.gap_rel_opt = NaN
-        m.solve_time = 0.
         m.status = :NotLoaded
 
         create_logs!(m)
@@ -453,7 +452,6 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     # Finish timer and print summary
     m.logs[:total] = time() - m.logs[:total]
-    m.solve_time = m.logs[:total]
     print_finish(m)
 end
 
@@ -463,7 +461,7 @@ MathProgBase.numvar(m::PajaritoConicModel) = m.num_var_orig
 
 MathProgBase.status(m::PajaritoConicModel) = m.status
 
-MathProgBase.getsolvetime(m::PajaritoConicModel) = m.solve_time
+MathProgBase.getsolvetime(m::PajaritoConicModel) = m.logs[:total]
 
 MathProgBase.getobjval(m::PajaritoConicModel) = m.best_obj
 
