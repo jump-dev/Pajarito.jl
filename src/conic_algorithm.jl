@@ -41,13 +41,13 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
     soc_disagg::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
     soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
-    psd_eig::Bool               # (Conic SDP only) Use SDP eigenvector-derived cuts
-    psd_soc::Bool               # (Conic SDP only) Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
+    sdp_eig::Bool               # (Conic SDP only) Use SDP eigenvector-derived cuts
+    sdp_soc::Bool               # (Conic SDP only) Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
     init_soc_one::Bool          # (Conic only) Start with disaggregated L_1 outer approximation cuts for SOCs (if soc_disagg)
     init_soc_inf::Bool          # (Conic only) Start with disaggregated L_inf outer approximation cuts for SOCs (if soc_disagg)
     init_exp::Bool              # (Conic Exp only) Start with several outer approximation cuts on the exponential cones
-    init_psd_lin::Bool          # (Conic SDP only) Use SDP initial linear cuts
-    init_psd_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
+    init_sdp_lin::Bool          # (Conic SDP only) Use SDP initial linear cuts
+    init_sdp_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
 
     viol_cuts_only::Bool        # (Conic only) Only add cuts that are violated by the current MIP solution (may be useful for MSD algorithm where many cuts are added)
     prim_cuts_only::Bool        # (Conic only) Do not add subproblem cuts
@@ -98,11 +98,11 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # vars_exp::Vector{Vector{JuMP.Variable}} # Slack variables (newly added or detected)
 
     # PSD cone data
-    num_psd::Int                # Number of SDP cones
-    # rows_sub_psd::Vector{Vector{Int}} # Row indices in subproblem
-    # dim_psd::Vector{Int}        # Dimensions
-    # # vars_svec_psd::Vector{Vector{JuMP.Variable}} # Slack variables in svec form (newly added or detected)
-    # vars_psd::Vector{Array{JuMP.AffExpr,2}} # Slack variables in smat form (newly added or detected)
+    num_sdp::Int                # Number of SDP cones
+    # rows_sub_sdp::Vector{Vector{Int}} # Row indices in subproblem
+    # dim_sdp::Vector{Int}        # Dimensions
+    # # vars_svec_sdp::Vector{Vector{JuMP.Variable}} # Slack variables in svec form (newly added or detected)
+    # vars_sdp::Vector{Array{JuMP.AffExpr,2}} # Slack variables in smat form (newly added or detected)
     # smat::Vector{Array{Float64,2}} # Preallocated matrix to help with memory for SDP cut generation
 
     # Miscellaneous for algorithms
@@ -134,7 +134,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
             # If using iterative algorithm, must always add non-violated cuts
             error("If using Iterative algorithm, cannot add only violated cuts\n")
         end
-        if soc_in_mip || init_psd_soc || psd_soc
+        if soc_in_mip || init_sdp_soc || sdp_soc
             # If using MISOCP outer approximation, check MIP solver handles MISOCP
             mip_spec = MathProgBase.supportedcones(mip_solver)
             if !(:SOC in mip_spec)
@@ -156,7 +156,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
             if !solve_relax
                 warn("Not solving the conic continuous relaxation problem; Pajarito may fail if the outer approximation MIP is unbounded\n")
             end
-            if psd_soc && mip_solver_drives
+            if sdp_soc && mip_solver_drives
                 warn("SOC cuts for SDP cones cannot be added during the MIP-solver-driven algorithm, but initial SOC cuts may be used\n")
             end
             if round_mip_sols
@@ -194,10 +194,10 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.prim_cuts_always = prim_cuts_always
         m.prim_cuts_assist = prim_cuts_assist
         m.tol_prim_infeas = tol_prim_infeas
-        m.init_psd_lin = init_psd_lin
-        m.init_psd_soc = init_psd_soc
-        m.psd_eig = psd_eig
-        m.psd_soc = psd_soc
+        m.init_sdp_lin = init_sdp_lin
+        m.init_sdp_soc = init_sdp_soc
+        m.sdp_eig = sdp_eig
+        m.sdp_soc = sdp_soc
 
         m.var_types = Symbol[]
         m.var_start = Float64[]
@@ -331,7 +331,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         @printf "\nCreating MIP model..."
     end
     tic()
-    (v_idxs_soc_relx, rows_relax_exp, rows_relax_psd) = create_mip_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new, map_rows_sub, cols_cont, cols_int)
+    (v_idxs_soc_relx, rows_relax_exp, rows_relax_sdp) = create_mip_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new, map_rows_sub, cols_cont, cols_int)
     m.logs[:data_mip] += toq()
     if m.log_level > 1
         @printf "...Done %8.2fs\n" m.logs[:data_mip]
@@ -379,7 +379,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             dual_conic = MathProgBase.getdual(model_relax)
             if m.scale_dual_cuts
                 # Rescale by number of cones / absval of full conic objective
-                scale!(dual_conic, (m.num_soc + m.num_exp + m.num_psd) / (abs(obj_relax) + 1e-5))
+                scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / (abs(obj_relax) + 1e-5))
             end
 
             # Add relaxation cuts
@@ -389,8 +389,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             # for n in 1:m.num_exp
             #     add_cut_exp!(m, m.vars_exp[n], dual[m.rows_relax_exp[n]], false, m.logs[:ExpPrimal])
             # end
-            # for n in 1:m.num_psd
-            #     add_cut_psd!(m, m.dim_psd[n], m.vars_psd[n], dual[m.rows_relax_psd[n]], m.smat[n], false, m.logs[:SDP])
+            # for n in 1:m.num_sdp
+            #     add_cut_sdp!(m, m.dim_sdp[n], m.vars_sdp[n], dual[m.rows_relax_sdp[n]], m.smat[n], false, m.logs[:SDP])
             # end
         end
 
@@ -530,9 +530,9 @@ function verify_data(c, A, b, cone_con, cone_var)
 
     num_exp = 0
 
-    num_psd = 0
-    min_psd = 0
-    max_psd = 0
+    num_sdp = 0
+    min_sdp = 0
+    max_sdp = 0
 
     # Verify consistency of cone indices and summarize cone info
     for (spec, inds) in vcat(cone_con, cone_var)
@@ -557,11 +557,11 @@ function verify_data(c, A, b, cone_con, cone_var)
                     error("A cone $spec (in SD svec form) does not have a valid (triangular) number of indices ($(length(inds)))\n")
                 end
             end
-            if max_psd < length(inds)
-                max_psd = length(inds)
+            if max_sdp < length(inds)
+                max_sdp = length(inds)
             end
-            if (min_psd == 0) || (min_psd > length(inds))
-                min_psd = length(inds)
+            if (min_sdp == 0) || (min_sdp > length(inds))
+                min_sdp = length(inds)
             end
         elseif spec == :ExpPrimal && (length(inds) != 3)
             error("A cone $spec does not have exactly 3 indices ($(length(inds)))\n")
@@ -581,8 +581,8 @@ function verify_data(c, A, b, cone_con, cone_var)
     if m.num_exp > 0
         @printf "%15s | %8d | %8d | %8d\n" "Primal Expon" num_exp 3 3
     end
-    if m.num_psd > 0
-        @printf "%15s | %8d | %8d | %8d\n" "Pos Semi Def" num_psd min_psd max_psd
+    if m.num_sdp > 0
+        @printf "%15s | %8d | %8d | %8d\n" "Pos Semi Def" num_sdp min_sdp max_sdp
     end
     flush(STDOUT)
 end
@@ -950,12 +950,12 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     # rows_sub_exp = Vector{Vector{Int}}(num_exp)
     # vars_exp = Vector{Vector{JuMP.AffExpr}}(num_exp)
     #
-    rows_relax_psd = Vector{Vector{Int}}(num_psd)
-    # rows_sub_psd = Vector{Vector{Int}}(num_psd)
-    # dim_psd = Vector{Int}(num_psd)
-    # # vars_svec_psd = Vector{Vector{JuMP.Variable}}(num_psd)
-    # vars_psd = Vector{Array{JuMP.AffExpr,2}}(num_psd)
-    # smat = Vector{Array{Float64,2}}(num_psd)
+    rows_relax_sdp = Vector{Vector{Int}}(num_sdp)
+    # rows_sub_sdp = Vector{Vector{Int}}(num_sdp)
+    # dim_sdp = Vector{Int}(num_sdp)
+    # # vars_svec_sdp = Vector{Vector{JuMP.Variable}}(num_sdp)
+    # vars_sdp = Vector{Array{JuMP.AffExpr,2}}(num_sdp)
+    # smat = Vector{Array{Float64,2}}(num_sdp)
 
     # Set up a SOC cone in the MIP
     # t >= norm(v)
@@ -1085,19 +1085,19 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     # end
     #
     # # Set up a SDP cone in the MIP
-    # function add_psd!(n_psd, rows, vars)
+    # function add_sdp!(n_sdp, rows, vars)
     #
     #     # dim = round(Int, sqrt(1/4 + 2 * length(rows)) - 1/2) # smat space dimension
     #
     #
     #
-    #     # dim_psd[n_psd] = dim
-    #     # rows_relax_psd[n_psd] = rows
-    #     # rows_sub_psd[n_psd] = map_rows_sub[rows]
-    #     # # vars_svec_psd[n_psd] = vars
-    #     # smat[n_psd] = zeros(dim, dim)
+    #     # dim_sdp[n_sdp] = dim
+    #     # rows_relax_sdp[n_sdp] = rows
+    #     # rows_sub_sdp[n_sdp] = map_rows_sub[rows]
+    #     # # vars_svec_sdp[n_sdp] = vars
+    #     # smat[n_sdp] = zeros(dim, dim)
     #     # vars_smat = Array{JuMP.AffExpr,2}(dim, dim)
-    #     # vars_psd[n_psd] = vars_smat
+    #     # vars_sdp[n_sdp] = vars_smat
     #     #
     #     # # Set up smat arrays and set bounds
     #     # kSD = 1
@@ -1115,12 +1115,12 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     #     #
     #     # # Add initial (linear or SOC) SDP outer approximation cuts
     #     # for jSD in 1:dim, iSD in (jSD + 1):dim
-    #     #     if m.init_psd_soc
+    #     #     if m.init_sdp_soc
     #     #         # Add initial rotated SOC for off-diagonal element to enforce 2x2 principal submatrix PSDness
     #     #         # Use norm and transformation from RSOC to SOC
     #     #         # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
     #     #         @constraint(model_mip, vars_smat[iSD, iSD] + vars_smat[jSD, jSD] >= norm(JuMP.AffExpr[(2. * vars_smat[iSD, jSD]), (vars_smat[iSD, iSD] - vars_smat[jSD, jSD])]))
-    #     #     elseif m.init_psd_lin
+    #     #     elseif m.init_sdp_lin
     #     #         # Add initial SDP linear cuts based on linearization of 3-dim rotated SOCs that enforce 2x2 principal submatrix PSDness (essentially the dual of SDSOS)
     #     #         # 2|m_ij| <= m_ii + m_jj, where m_kk is scaled by sqrt2 in smat space
     #     #         @constraint(model_mip, vars_smat[iSD, iSD] + vars_smat[jSD, jSD] >= 2. * vars_smat[iSD, jSD])
@@ -1131,7 +1131,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
 
     n_soc = 0
     n_exp = 0
-    n_psd = 0
+    n_sdp = 0
     @expression(model_mip, lhs_expr, b_new - A_new * x_all)
 
     # Add constraint cones to MIP; if linear, add directly, else create slacks if necessary
@@ -1165,8 +1165,8 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
         #     n_exp += 1
         #     add_exp!(n_exp, rows, lhs_expr[rows])
         # elseif spec == :SDP
-        #     n_psd += 1
-        #     add_psd!(n_psd, rows, lhs_expr[rows])
+        #     n_sdp += 1
+        #     add_sdp!(n_sdp, rows, lhs_expr[rows])
         end
     end
 
@@ -1178,7 +1178,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
 
     m.logs[:SOC] = logs_soc
     m.logs[:ExpPrimal] = logs_exp
-    m.logs[:SDP] = logs_psd
+    m.logs[:SDP] = logs_sdp
 
     m.num_soc = num_soc
     m.t_idx_soc_relx = t_idx_soc_relx
@@ -1193,15 +1193,15 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     # m.rows_sub_exp = rows_sub_exp
     # m.vars_exp = vars_exp
     #
-    m.num_psd = num_psd
+    m.num_sdp = num_sdp
     # m.logs[:SDP] = logs[:SDP]
-    # m.rows_sub_psd = rows_sub_psd
-    # m.dim_psd = dim_psd
-    # # m.vars_svec_psd = vars_svec_psd
-    # m.vars_psd = vars_psd
+    # m.rows_sub_sdp = rows_sub_sdp
+    # m.dim_sdp = dim_sdp
+    # # m.vars_svec_sdp = vars_svec_sdp
+    # m.vars_sdp = vars_sdp
     # m.smat = smat
 
-    return (v_idxs_soc_relx, rows_relax_exp, rows_relax_psd)
+    return (v_idxs_soc_relx, rows_relax_exp, rows_relax_sdp)
 end
 
 
@@ -1580,7 +1580,7 @@ function add_subp_incumb_cuts!(m)
             end
 
             # Rescale by number of cones / value of ray
-            scale!(dual_conic, (m.num_soc + m.num_exp + m.num_psd) / ray_value)
+            scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / ray_value)
         end
     elseif (status_conic == :Optimal) || (status_conic == :Suboptimal)
         # Subproblem feasible
@@ -1591,7 +1591,7 @@ function add_subp_incumb_cuts!(m)
 
         if m.scale_dual_cuts
             # Rescale by number of cones / abs(objective + 1e-5)
-            scale!(dual_conic, (m.num_soc + m.num_exp + m.num_psd) / (abs(obj_full) + 1e-5))
+            scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / (abs(obj_full) + 1e-5))
         end
 
         if obj_full < m.best_obj
@@ -1632,10 +1632,10 @@ function add_subp_incumb_cuts!(m)
     #
     #     add_cut_exp!(m, m.vars_exp[n], dual[m.rows_exp[n]], m.logs[:ExpPrimal])
     # end
-    # for n in 1:m.num_psd
+    # for n in 1:m.num_sdp
     #
     #
-    #     add_cut_psd!(m, m.vars_psd[n], dual[m.rows_psd[n]], m.smat[n], m.logs[:SDP])
+    #     add_cut_sdp!(m, m.vars_sdp[n], dual[m.rows_sdp[n]], m.smat[n], m.logs[:SDP])
     # end
 
     return (false, is_viol_subp)
@@ -1734,10 +1734,10 @@ function add_prim_feas_cuts!(m, add_cuts::Bool)
     #
     #     add_cut_exp!(m, m.vars_exp[n], dual[m.rows_exp[n]])
     # end
-    # for n in 1:m.num_psd
+    # for n in 1:m.num_sdp
     #
     #
-    #     add_cut_psd!(m, m.dim_psd[n], m.vars_psd[n], dual[m.rows_psd[n]], m.smat[n])
+    #     add_cut_sdp!(m, m.dim_sdp[n], m.vars_sdp[n], dual[m.rows_sdp[n]], m.smat[n])
     # end
 
     return (is_infeas, is_viol_prim)
@@ -1824,7 +1824,7 @@ function add_cut_exp!(m, vars, cut, is_viol, summary)
 end
 
 
-function add_cut_psd!(m, dim, vars, cut, smat, is_viol, summary)
+function add_cut_sdp!(m, dim, vars, cut, smat, is_viol, summary)
     nothing
 end
 
@@ -1929,11 +1929,11 @@ function create_logs!(m)
     logs_exp[:n_nonviol_total] = 0
     logs[:ExpPrimal] = logs_exp
 
-    logs_psd = Dict{Symbol,Any}()
-    logs_psd[:relax] = 0
-    logs_psd[:n_viol_total] = 0
-    logs_psd[:n_nonviol_total] = 0
-    logs[:SDP] = logs_psd
+    logs_sdp = Dict{Symbol,Any}()
+    logs_sdp[:relax] = 0
+    logs_sdp[:n_viol_total] = 0
+    logs_sdp[:n_nonviol_total] = 0
+    logs[:SDP] = logs_sdp
 
     m.logs = logs
 end
@@ -1964,14 +1964,14 @@ function reset_cone_logs!(m)
         logs_exp[:nonviol_max] = 0.
     end
 
-    if m.num_psd > 0
-        logs_psd = m.logs[:SDP]
-        logs_psd[:n_viol_total] += logs_psd[:n_viol]
-        logs_psd[:n_nonviol_total] += logs_psd[:n_nonviol]
-        logs_psd[:n_viol] = 0
-        logs_psd[:viol_max] = 0.
-        logs_psd[:n_nonviol] = 0
-        logs_psd[:nonviol_max] = 0.
+    if m.num_sdp > 0
+        logs_sdp = m.logs[:SDP]
+        logs_sdp[:n_viol_total] += logs_sdp[:n_viol]
+        logs_sdp[:n_nonviol_total] += logs_sdp[:n_nonviol]
+        logs_sdp[:n_viol] = 0
+        logs_sdp[:viol_max] = 0.
+        logs_sdp[:n_nonviol] = 0
+        logs_sdp[:nonviol_max] = 0.
     end
 end
 
@@ -2061,7 +2061,7 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     viol_soc = 0.0
     viol_rot = 0.0
     viol_exp = 0.0
-    viol_psd = 0.0
+    viol_sdp = 0.0
     vals = m.b_orig - m.A_orig * m.final_soln
 
     for (cone, idx) in m.cone_con_orig
@@ -2088,14 +2088,14 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     @printf " -- Second order        = %10.2e\n" viol_soc
     @printf " -- Rot. second order   = %10.2e\n" viol_rot
     @printf " -- Primal exponential  = %10.2e\n" viol_exp
-    @printf " -- Positive semidef.   = %10.2e\n" viol_psd
+    @printf " -- Positive semidef.   = %10.2e\n" viol_sdp
 
     # Variable cones
     viol_lin = 0.0
     viol_soc = 0.0
     viol_rot = 0.0
     viol_exp = 0.0
-    viol_psd = 0.0
+    viol_sdp = 0.0
     vals = m.final_soln
 
     for (cone, idx) in m.cone_var_orig
@@ -2122,7 +2122,7 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     @printf " -- Second order        = %10.2e\n" viol_soc
     @printf " -- Rot. second order   = %10.2e\n" viol_rot
     @printf " -- Primal exponential  = %10.2e\n" viol_exp
-    @printf " -- Positive semidef.   = %10.2e\n" viol_psd
+    @printf " -- Positive semidef.   = %10.2e\n" viol_sdp
 
     @printf "\n"
     flush(STDOUT)
