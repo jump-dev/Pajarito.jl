@@ -1210,8 +1210,8 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     m.x_cont = x_all[cols_cont]
     # @show model_mip
 
-    m.t_idx_soc_relx = t_idx_soc_relx
     m.v_idxs_soc_subp = v_idxs_soc_subp
+    m.t_idx_soc_subp = t_idx_soc_subp
     m.t_soc = t_soc
     m.v_soc = v_soc
     m.d_soc = d_soc
