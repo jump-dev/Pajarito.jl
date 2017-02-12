@@ -566,6 +566,10 @@ function verify_data(m, c, A, b, cone_con, cone_var)
         end
     end
 
+    m.num_soc = num_soc
+    m.num_exp = num_exp
+    m.num_sdp = num_sdp
+
     # Print cone info
     if m.log_level <= 1
         return
@@ -573,13 +577,13 @@ function verify_data(m, c, A, b, cone_con, cone_var)
 
     @printf "\nCone types summary:"
     @printf "\n%-15s | %-8s | %-8s | %-8s\n" "Cone" "Count" "Min dim" "Max dim"
-    if m.num_soc > 0
+    if num_soc > 0
         @printf "%15s | %8d | %8d | %8d\n" "Second Order" num_soc min_soc max_soc
     end
-    if m.num_exp > 0
+    if num_exp > 0
         @printf "%15s | %8d | %8d | %8d\n" "Primal Expon" num_exp 3 3
     end
-    if m.num_sdp > 0
+    if num_sdp > 0
         @printf "%15s | %8d | %8d | %8d\n" "Pos Semi Def" num_sdp min_sdp max_sdp
     end
     flush(STDOUT)
@@ -936,19 +940,19 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     end
 
     # Allocate data for nonlinear cones
-    t_idx_soc_relx = Vector{Int}(num_soc)
-    v_idxs_soc_relx = Vector{Vector{Int}}(num_soc)
-    v_idxs_soc_subp = Vector{Vector{Int}}(num_soc)
-    t_soc = Vector{JuMP.AffExpr}(num_soc)
-    v_soc = Vector{Vector{JuMP.AffExpr}}(num_soc)
-    d_soc = Vector{Vector{JuMP.AffExpr}}(num_soc)
-    a_soc = Vector{Vector{JuMP.AffExpr}}(num_soc)
+    t_idx_soc_relx = Vector{Int}(m.num_soc)
+    v_idxs_soc_relx = Vector{Vector{Int}}(m.num_soc)
+    v_idxs_soc_subp = Vector{Vector{Int}}(m.num_soc)
+    t_soc = Vector{JuMP.AffExpr}(m.num_soc)
+    v_soc = Vector{Vector{JuMP.AffExpr}}(m.num_soc)
+    d_soc = Vector{Vector{JuMP.AffExpr}}(m.num_soc)
+    a_soc = Vector{Vector{JuMP.AffExpr}}(m.num_soc)
 
-    rows_relax_exp = Vector{Vector{Int}}(num_exp)
+    rows_relax_exp = Vector{Vector{Int}}(m.num_exp)
     # rows_sub_exp = Vector{Vector{Int}}(num_exp)
     # vars_exp = Vector{Vector{JuMP.AffExpr}}(num_exp)
     #
-    rows_relax_sdp = Vector{Vector{Int}}(num_sdp)
+    rows_relax_sdp = Vector{Vector{Int}}(m.num_sdp)
     # rows_sub_sdp = Vector{Vector{Int}}(num_sdp)
     # dim_sdp = Vector{Int}(num_sdp)
     # # vars_svec_sdp = Vector{Vector{JuMP.Variable}}(num_sdp)
@@ -1174,11 +1178,6 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     m.x_cont = x_all[cols_cont]
     # @show model_mip
 
-    m.logs[:SOC] = logs_soc
-    m.logs[:ExpPrimal] = logs_exp
-    m.logs[:SDP] = logs_sdp
-
-    m.num_soc = num_soc
     m.t_idx_soc_relx = t_idx_soc_relx
     m.v_idxs_soc_subp = v_idxs_soc_subp
     m.t_soc = t_soc
@@ -1186,13 +1185,9 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     m.d_soc = d_soc
     m.a_soc = a_soc
 
-    m.num_exp = num_exp
-    # m.logs[:ExpPrimal] = logs[:ExpPrimal]
     # m.rows_sub_exp = rows_sub_exp
     # m.vars_exp = vars_exp
-    #
-    m.num_sdp = num_sdp
-    # m.logs[:SDP] = logs[:SDP]
+
     # m.rows_sub_sdp = rows_sub_sdp
     # m.dim_sdp = dim_sdp
     # # m.vars_svec_sdp = vars_svec_sdp
