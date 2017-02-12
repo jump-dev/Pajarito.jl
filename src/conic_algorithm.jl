@@ -50,20 +50,20 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     init_psd_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
 
     viol_cuts_only::Bool        # (Conic only) Only add cuts that are violated by the current MIP solution (may be useful for MSD algorithm where many cuts are added)
-    proj_dual_infeas::Bool      # (Conic only) Project dual cone infeasible dual vectors onto dual cone boundaries
-    proj_dual_feas::Bool        # (Conic only) Project dual cone strictly feasible dual vectors onto dual cone boundaries
+    # proj_dual_infeas::Bool      # (Conic only) Project dual cone infeasible dual vectors onto dual cone boundaries
+    # proj_dual_feas::Bool        # (Conic only) Project dual cone strictly feasible dual vectors onto dual cone boundaries
     prim_cuts_only::Bool        # (Conic only) Do not add subproblem cuts
     prim_cuts_always::Bool      # (Conic only) Add primal cuts at each iteration or in each lazy callback
     prim_cuts_assist::Bool      # (Conic only) Add primal cuts only when integer solutions are repeating
-    prim_viol_cuts_only::Bool   # (Conic only) Only add primal cuts that are violated (including individual disaggregated cuts)
-    prim_max_viol_only::Bool    # (Conic only) Only add primal cuts for the cone with largest absolute violation
-    prim_soc_disagg::Bool       # (Conic only) Use disaggregated primal cuts for SOCs
-    prim_psd_eig::Bool          # (Conic only) Use eigenvector cuts for SDPs
+    # prim_viol_cuts_only::Bool   # (Conic only) Only add primal cuts that are violated (including individual disaggregated cuts)
+    # prim_max_viol_only::Bool    # (Conic only) Only add primal cuts for the cone with largest absolute violation
+    # prim_soc_disagg::Bool       # (Conic only) Use disaggregated primal cuts for SOCs
+    # prim_psd_eig::Bool          # (Conic only) Use eigenvector cuts for SDPs
 
     tol_zero::Float64           # (Conic only) Tolerance for small epsilons as zeros
     tol_prim_infeas::Float64    # (Conic only) Tolerance level for cone outer infeasibilities for primal cut adding functions (must be at least 1e-5)
-    tol_psd_eigvec::Float64     # (Conic SDP only) Tolerance for setting small values in SDP eigenvectors to zeros (for cut sanitation)
-    tol_psd_eigval::Float64     # (Conic SDP only) Tolerance for ignoring eigenvectors corresponding to small (positive) eigenvalues
+    # tol_psd_eigvec::Float64     # (Conic SDP only) Tolerance for setting small values in SDP eigenvectors to zeros (for cut sanitation)
+    # tol_psd_eigval::Float64     # (Conic SDP only) Tolerance for ignoring eigenvectors corresponding to small (positive) eigenvalues
 
     # Initial data
     num_var_orig::Int           # Initial number of variables
@@ -92,7 +92,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
     # SO cone data
     num_soc::Int                # Number of SOCs
-    # m.summ_soc = summ_soc
+    # m.logs[:SOC] = logs[:SOC]
     v_idxs_soc_subp::Vector{Vector{Int}} # Row indices of SOCs in subproblem
     m.t_soc = t_soc::Vector{JuMP.Variable} # t variable (epigraph) in SOCs
     m.v_soc = v_soc::Vector{Vector{JuMP.Variable}} # v variables in SOCs
@@ -121,7 +121,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cb_heur                     # Heuristic callback reference (MIP-driven only)
     cb_lazy                     # Lazy callback reference (MIP-driven only)
 
-    # Solve information
+    # Solution and bound information
     mip_obj::Float64            # Latest MIP (outer approx) objective value
     best_obj::Float64           # Best feasible objective value
     best_int::Vector{Float64}   # Best feasible integer solution
@@ -129,7 +129,9 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     best_slck::Vector{Float64}  # Best feasible slack vector (for calculating MIP solution)
     gap_rel_opt::Float64        # Relative optimality gap = |mip_obj - best_obj|/|best_obj|
     final_soln::Vector{Float64} # Final solution on original variables
-    solve_time::Float64         # Time between starting loadproblem and ending optimize (seconds)
+
+    # Logging information and status
+    logs::Dict{Symbol,Any}
     status::Symbol
 
     # Model constructor
@@ -159,7 +161,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         # Warnings
         if log_level > 1
             if !solve_relax
-                warn("Not solving the conic continuous relaxation problem; Pajarito may return status :MIPFailure if the outer approximation MIP is unbounded\n")
+                warn("Not solving the conic continuous relaxation problem; Pajarito may fail if the outer approximation MIP is unbounded\n")
             end
             if psd_soc && mip_solver_drives
                 warn("SOC cuts for SDP cones cannot be added during the MIP-solver-driven algorithm, but initial SOC cuts may be used\n")
@@ -189,8 +191,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.init_soc_one = init_soc_one
         m.init_soc_inf = init_soc_inf
         m.init_exp = init_exp
-        m.proj_dual_infeas = proj_dual_infeas
-        m.proj_dual_feas = proj_dual_feas
+        # m.proj_dual_infeas = proj_dual_infeas
+        # m.proj_dual_feas = proj_dual_feas
         m.viol_cuts_only = viol_cuts_only
         m.mip_solver = mip_solver
         m.cont_solver = cont_solver
@@ -200,20 +202,20 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.prim_cuts_only = prim_cuts_only
         m.prim_cuts_always = prim_cuts_always
         m.prim_cuts_assist = prim_cuts_assist
-        m.prim_viol_cuts_only = prim_viol_cuts_only
-        m.prim_max_viol_only = prim_max_viol_only
-        m.prim_soc_disagg = prim_soc_disagg
-        m.prim_psd_eig = prim_psd_eig
+        # m.prim_viol_cuts_only = prim_viol_cuts_only
+        # m.prim_max_viol_only = prim_max_viol_only
+        # m.prim_soc_disagg = prim_soc_disagg
+        # m.prim_psd_eig = prim_psd_eig
         m.tol_prim_infeas = tol_prim_infeas
         m.init_psd_lin = init_psd_lin
         m.init_psd_soc = init_psd_soc
         m.psd_eig = psd_eig
         m.psd_soc = psd_soc
-        m.tol_psd_eigvec = tol_psd_eigvec
-        m.tol_psd_eigval = tol_psd_eigval
+        # m.tol_psd_eigvec = tol_psd_eigvec
+        # m.tol_psd_eigval = tol_psd_eigval
 
         m.var_types = Symbol[]
-        # m.var_start = Float64[]
+        m.var_start = Float64[]
         m.num_var_orig = 0
         m.num_con_orig = 0
 
@@ -223,6 +225,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.gap_rel_opt = NaN
         m.solve_time = 0.
         m.status = :NotLoaded
+
+        create_logs!(m)
 
         return m
     end
@@ -313,8 +317,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         error("Variable types were not specified; must call setvartype! function\n")
     end
 
-    logs = create_logs()
-    logs[:total] = time()
+    m.logs[:total] = time()
 
     # Transform data
     if m.log_level > 1
@@ -322,9 +325,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     end
     tic()
     (c_new, A_new, b_new, cone_con_new, cone_var_new, keep_cols, var_types_new) = transform_data(copy(m.c_orig), copy(m.A_orig), copy(m.b_orig), m.cone_con_orig, m.cone_var_orig, m.var_types, m.solve_relax)
-    logs[:data_trans] += toq()
+    m.logs[:data_trans] += toq()
     if m.log_level > 1
-        @printf "...Done %8.2fs\n" logs[:data_trans]
+        @printf "...Done %8.2fs\n" m.logs[:data_trans]
     end
 
     # Create conic subproblem data
@@ -333,9 +336,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     end
     tic()
     (map_rows_sub, cols_cont, cols_int) = create_conicsub_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new)
-    logs[:data_conic] += toq()
+    m.logs[:data_conic] += toq()
     if m.log_level > 1
-        @printf "...Done %8.2fs\n" logs[:data_conic]
+        @printf "...Done %8.2fs\n" m.logs[:data_conic]
     end
 
     # Create MIP model
@@ -344,9 +347,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     end
     tic()
     (v_idxs_soc_relx, rows_relax_exp, rows_relax_psd) = create_mip_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new, map_rows_sub, cols_cont, cols_int)
-    logs[:data_mip] += toq()
+    m.logs[:data_mip] += toq()
     if m.log_level > 1
-        @printf "...Done %8.2fs\n" logs[:data_mip]
+        @printf "...Done %8.2fs\n" m.logs[:data_mip]
     end
 
     # print_cones(m)
@@ -366,9 +369,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         model_relax = MathProgBase.ConicModel(solver_relax)
         MathProgBase.loadproblem!(model_relax, c_new, A_new, b_new, cone_con_new, cone_var_new)
         MathProgBase.optimize!(model_relax)
-        logs[:relax_solve] += toq()
+        m.logs[:relax_solve] += toq()
         if m.log_level > 0
-            @printf "...Done %8.2fs\n" logs[:relax_solve]
+            @printf "...Done %8.2fs\n" m.logs[:relax_solve]
         end
 
         status_relax = MathProgBase.status(model_relax)
@@ -388,24 +391,22 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             end
 
             # Optionally rescale dual
-            dual = MathProgBase.getdual(model_relax)
+            dual_conic = MathProgBase.getdual(model_relax)
             if m.scale_dual_cuts
                 # Rescale by number of cones / absval of full conic objective
-                scale!(dual, (m.num_soc + m.num_exp + m.num_psd) / (abs(obj_relax) + 1e-5))
+                scale!(dual_conic, (m.num_soc + m.num_exp + m.num_psd) / (abs(obj_relax) + 1e-5))
             end
 
             # Add relaxation cuts
             for n in 1:m.num_soc
-                add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual[m.v_idxs_soc_relx[n]])
+                add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[m.v_idxs_soc_relx[n]])
             end
             # for n in 1:m.num_exp
-            #     add_cut_exp!(m, m.vars_exp[n], dual[m.rows_relax_exp[n]], false, m.summ_exp)
+            #     add_cut_exp!(m, m.vars_exp[n], dual[m.rows_relax_exp[n]], false, m.logs[:ExpPrimal])
             # end
             # for n in 1:m.num_psd
-            #     add_cut_psd!(m, m.dim_psd[n], m.vars_psd[n], dual[m.rows_relax_psd[n]], m.smat[n], false, m.summ_psd)
+            #     add_cut_psd!(m, m.dim_psd[n], m.vars_psd[n], dual[m.rows_relax_psd[n]], m.smat[n], false, m.logs[:SDP])
             # end
-
-            # print_inf_dual(m)
         end
 
         # Free the conic model
@@ -433,12 +434,11 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             m.update_conicsub = false
         end
         if m.log_level > 1
-            @printf "...Done %8.2fs\n" logs[:conic_proc]
+            @printf "...Done %8.2fs\n" toq()
         end
-        logs[:conic_proc] += toq()
 
         # Initialize and begin iterative or MIP-solver-driven algorithm
-        logs[:oa_alg] = time()
+        m.logs[:oa_alg] = time()
         m.oa_started = true
         m.new_incumb = false
         m.cache_soln = Set{Vector{Float64}}()
@@ -447,14 +447,14 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             if m.log_level > 0
                 @printf "\nStarting MIP-solver-driven outer approximation algorithm\n"
             end
-            solve_mip_driven!(m, logs)
+            solve_mip_driven!(m)
         else
             if m.log_level > 0
                 @printf "\nStarting iterative outer approximation algorithm\n"
             end
-            solve_iterative!(m, logs)
+            solve_iterative!(m)
         end
-        logs[:oa_alg] = time() - logs[:oa_alg]
+        m.logs[:oa_alg] = time() - m.logs[:oa_alg]
 
         if m.best_obj < Inf
             # Have a best feasible solution, update final solution on original variables
@@ -467,9 +467,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     end
 
     # Finish timer and print summary
-    logs[:total] = time() - logs[:total]
-    m.solve_time = logs[:total]
-    # print_finish(m, logs)
+    m.logs[:total] = time() - m.logs[:total]
+    m.solve_time = m.logs[:total]
+    print_finish(m)
 end
 
 MathProgBase.numconstr(m::PajaritoConicModel) = m.num_con_orig
@@ -879,6 +879,46 @@ end
 
 # Generate MIP model and maps relating conic model and MIP model variables
 function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Float64,Int64}, b_new::Vector{Float64}, cone_con_new::Vector{Tuple{Symbol,Vector{Int}}}, cone_var_new::Vector{Tuple{Symbol,Vector{Int}}}, var_types_new::Vector{Symbol}, map_rows_sub::Vector{Int}, cols_cont::Vector{Int}, cols_int::Vector{Int})
+    # Loop through nonlinear cones to count and summarize
+    logs_soc = Dict{Symbol,Real}(:max_dim => 0, :min_dim => 0)
+    logs_exp = Dict{Symbol,Real}(:max_dim => 3, :min_dim => 3)
+    logs_psd = Dict{Symbol,Real}(:max_dim => 0, :min_dim => 0)
+
+    num_soc = 0
+    num_exp = 0
+    num_psd = 0
+
+    temp_psd_smat = Dict{Int,Array{Float64,2}}()
+
+    for (spec, rows) in cone_con_new
+        if spec == :SOC
+            num_soc += 1
+            if logs_soc[:max_dim] < length(rows)
+                logs_soc[:max_dim] = length(rows)
+            end
+            if (logs_soc[:min_dim] == 0) || (logs_soc[:min_dim] > length(rows))
+                logs_soc[:min_dim] = length(rows)
+            end
+        # elseif spec == :ExpPrimal
+        #     num_exp += 1
+        # elseif spec == :SDP
+        #     num_psd += 1
+        #     dim = round(Int, sqrt(1/4 + 2*length(rows)) - 1/2) # smat space dimension
+        #     if logs[:SDP][:max_dim] < dim
+        #         logs[:SDP][:max_dim] = dim
+        #     end
+        #     if (logs[:SDP][:min_dim] == 0) || (logs[:SDP][:min_dim] > dim)
+        #         logs[:SDP][:min_dim] = dim
+        #     end
+        #
+        #     # Preallocate smat matrix for SDP cut functions
+        #     if !haskey(temp_psd_smat, dim)
+        #         temp_psd_smat[dim] = Array{Float64,2}(dim, dim)
+        #     end
+        # end
+    end
+
+
     # Initialize JuMP model for MIP outer approximation problem
     model_mip = JuMP.Model(solver=m.mip_solver)
 
@@ -910,43 +950,6 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
         elseif spec == :Zero
             error("Bug: Zero cones should have been removed by transform data function (submit an issue)\n")
         end
-    end
-
-    # Loop through nonlinear cones to count and summarize
-    num_soc = 0
-    num_exp = 0
-    num_psd = 0
-    summ_soc = Dict{Symbol,Real}(:max_dim => 0, :min_dim => 0)
-    summ_exp = Dict{Symbol,Real}(:max_dim => 3, :min_dim => 3)
-    summ_psd = Dict{Symbol,Real}(:max_dim => 0, :min_dim => 0)
-    temp_psd_smat = Dict{Int,Array{Float64,2}}()
-
-    for (spec, rows) in cone_con_new
-        if spec == :SOC
-            num_soc += 1
-            if summ_soc[:max_dim] < length(rows)
-                summ_soc[:max_dim] = length(rows)
-            end
-            if (summ_soc[:min_dim] == 0) || (summ_soc[:min_dim] > length(rows))
-                summ_soc[:min_dim] = length(rows)
-            end
-        # elseif spec == :ExpPrimal
-        #     num_exp += 1
-        # elseif spec == :SDP
-        #     num_psd += 1
-        #     dim = round(Int, sqrt(1/4 + 2*length(rows)) - 1/2) # smat space dimension
-        #     if summ_psd[:max_dim] < dim
-        #         summ_psd[:max_dim] = dim
-        #     end
-        #     if (summ_psd[:min_dim] == 0) || (summ_psd[:min_dim] > dim)
-        #         summ_psd[:min_dim] = dim
-        #     end
-        #
-        #     # Preallocate smat matrix for SDP cut functions
-        #     if !haskey(temp_psd_smat, dim)
-        #         temp_psd_smat[dim] = Array{Float64,2}(dim, dim)
-        #     end
-        # end
     end
 
     # Allocate data for nonlinear cones
@@ -1073,11 +1076,6 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     # # Set up a ExpPrimal cone in the MIP
     # function add_exp!(n_exp, rows, vars)
     #
-    #
-    #
-    #
-    #
-    #
     #     #
     #     # rows_relax_exp[n_exp] = rows
     #     # rows_sub_exp[n_exp] = map_rows_sub[rows]
@@ -1199,8 +1197,11 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     m.x_cont = x_all[cols_cont]
     # @show model_mip
 
+    m.logs[:SOC] = logs_soc
+    m.logs[:ExpPrimal] = logs_exp
+    m.logs[:SDP] = logs_psd
+
     m.num_soc = num_soc
-    # m.summ_soc = summ_soc
     m.v_idxs_soc_subp = v_idxs_soc_subp
     m.t_soc = t_soc
     m.v_soc = v_soc
@@ -1208,12 +1209,12 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     m.a_soc = a_soc
 
     m.num_exp = num_exp
-    # m.summ_exp = summ_exp
+    # m.logs[:ExpPrimal] = logs[:ExpPrimal]
     # m.rows_sub_exp = rows_sub_exp
     # m.vars_exp = vars_exp
     #
     m.num_psd = num_psd
-    # m.summ_psd = summ_psd
+    # m.logs[:SDP] = logs[:SDP]
     # m.rows_sub_psd = rows_sub_psd
     # m.dim_psd = dim_psd
     # # m.vars_svec_psd = vars_svec_psd
@@ -1233,7 +1234,7 @@ function solve_iterative!(m)
     count_subopt = 0
 
     while true
-        # reset_cone_logs!(m)
+        reset_cone_logs!(m)
 
         if count_subopt < m.mip_subopt_count
             # Solve is a partial solve: use subopt MIP solver, trust that user has provided reasonably small time limit
@@ -1242,7 +1243,7 @@ function solve_iterative!(m)
         else
             # Solve is a full solve: use full MIP solver with remaining time limit
             if isfinite(m.timeout) && applicable(MathProgBase.setparameters!, m.mip_solver)
-                MathProgBase.setparameters!(m.mip_solver, TimeLimit=max(0., m.timeout - (time() - logs[:total])))
+                MathProgBase.setparameters!(m.mip_solver, TimeLimit=max(0., m.timeout - (time() - m.logs[:total])))
             end
             setsolver(m.model_mip, m.mip_solver)
             count_subopt = 0
@@ -1251,8 +1252,8 @@ function solve_iterative!(m)
         # Solve MIP
         tic()
         status_mip = solve(m.model_mip)#, suppress_warnings=true)
-        logs[:mip_solve] += toq()
-        logs[:n_mip] += 1
+        m.logs[:mip_solve] += toq()
+        m.logs[:n_mip] += 1
 
         if (status_mip == :Infeasible) || (status_mip == :InfeasibleOrUnbounded)
             # Stop if infeasible
@@ -1275,7 +1276,7 @@ function solve_iterative!(m)
 
                 # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
                 m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-                print_gap(m, logs)
+                print_gap(m)
                 if m.gap_rel_opt < m.rel_gap
                     m.status = :Optimal
                     break
@@ -1283,7 +1284,7 @@ function solve_iterative!(m)
             end
 
             # Timeout if MIP reached time limit
-            if status_mip == :UserLimit && ((time() - logs[:total]) > (m.timeout - 0.01))
+            if status_mip == :UserLimit && ((time() - m.logs[:total]) > (m.timeout - 0.01))
                 m.status = :UserLimit
                 break
             end
@@ -1305,7 +1306,7 @@ function solve_iterative!(m)
         if m.new_incumb
             # Have a new incumbent from conic solver, calculate relative outer approximation gap, finish if satisfy optimality gap condition
             m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-            print_gap(m, logs)
+            print_gap(m)
             if m.gap_rel_opt < m.rel_gap
                 m.status = :Optimal
                 break
@@ -1330,7 +1331,7 @@ function solve_iterative!(m)
 
                     # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
                     m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-                    print_gap(m, logs)
+                    print_gap(m)
                     if m.gap_rel_opt < m.rel_gap
                         m.status = :Optimal
                         break
@@ -1356,14 +1357,14 @@ function solve_iterative!(m)
         end
 
         # Finish if exceeded timeout option
-        if (time() - logs[:oa_alg]) > m.timeout
+        if (time() - m.logs[:oa_alg]) > m.timeout
             m.status = :UserLimit
             break
         end
 
         # Give the best feasible solution to the MIP as a warm-start
         if m.pass_mip_sols && m.new_incumb
-            set_best_soln!(m, logs)
+            set_best_soln!(m)
             m.new_incumb = false
         end
     end
@@ -1372,14 +1373,14 @@ end
 # Solve the MIP model using MIP-solver-driven callback algorithm
 function solve_mip_driven!(m)
     if isfinite(m.timeout) && applicable(MathProgBase.setparameters!, m.mip_solver)
-        MathProgBase.setparameters!(m.mip_solver, TimeLimit=max(0., m.timeout - (time() - logs[:total])))
+        MathProgBase.setparameters!(m.mip_solver, TimeLimit=max(0., m.timeout - (time() - m.logs[:total])))
         setsolver(m.model_mip, m.mip_solver)
     end
 
     # Add lazy cuts callback to add dual and primal conic cuts
     function callback_lazy(cb)
         m.cb_lazy = cb
-        # reset_cone_logs!(m)
+        reset_cone_logs!(m)
 
         # Solve new conic subproblem, update incumbent solution if feasible
         (is_repeat, is_viol_subp) = add_subp_incumb_cuts!(m)
@@ -1415,7 +1416,7 @@ function solve_mip_driven!(m)
             # If have a new best feasible solution since last heuristic solution added, set MIP solution to the new best feasible solution
             if m.new_incumb
                 m.cb_heur = cb
-                set_best_soln!(m, logs)
+                set_best_soln!(m)
                 addsolution(cb)
                 m.new_incumb = false
             end
@@ -1424,9 +1425,9 @@ function solve_mip_driven!(m)
     end
 
     # Start MIP solver
-    logs[:mip_solve] = time()
+    m.logs[:mip_solve] = time()
     status_mip = solve(m.model_mip)#, suppress_warnings=true)
-    logs[:mip_solve] = time() - logs[:mip_solve]
+    m.logs[:mip_solve] = time() - m.logs[:mip_solve]
 
     if (status_mip == :Infeasible) || (status_mip == :InfeasibleOrUnbounded)
         m.status = :Infeasible
@@ -1493,11 +1494,9 @@ function set_best_soln!(m)
     set_soln!(m, m.x_int, m.best_int)
     set_soln!(m, m.x_cont, m.best_cont)
 
-
-
     for n in 1:m.num_soc
         if m.soc_disagg
-            set_dagg_soln!(m, m.vars_dagg_soc[n], m.best_slck, m.rows_sub_soc[n])
+            set_dagg_soln!(m, m.d_soc[n], m.best_slck, m.v_idxs_soc_subp[n])
         end
 
 
@@ -1505,7 +1504,7 @@ function set_best_soln!(m)
 
 
     end
-    logs[:conic_soln] += toq()
+    m.logs[:conic_soln] += toq()
 end
 
 # # Call setvalue or setsolutionvalue solution for a vector of variables and a solution vector and corresponding solution indices
@@ -1560,7 +1559,8 @@ function set_dagg_soln!(m, vars_dagg::Vector{JuMP.Variable}, soln::Vector{Float6
 end
 
 # Transform svec vector into symmetric smat matrix
-function make_smat!(svec::Vector{Float64}, smat::Array{Float64,2}, dim::Int)
+function make_smat!(svec::Vector{Float64}, smat::Array{Float64,2})
+    dim = size(smat, 1)
     kSD = 1
     for jSD in 1:dim, iSD in jSD:dim
         if jSD == iSD
@@ -1588,7 +1588,7 @@ function add_subp_incumb_cuts!(m)
     end
     if soln_int in m.cache_soln
         # Integer solution has been seen before, cannot get new subproblem cuts
-        logs[:n_repeat] += 1
+        m.logs[:n_repeat] += 1
         return (true, false)
     end
 
@@ -1629,7 +1629,7 @@ function add_subp_incumb_cuts!(m)
             # Conic solver solution is a new incumbent
             # Note: perhaps should check feasibility of conic solution with respect to our primal inf tol, but it should be satisfied except rarely
             # warn("Conic solver solution does not satisfy Pajarito's primal infeasibility tolerances (try increasing tol_prim_infeas or decreasing feasibility tolerances on the conic solver)\n")
-            # logs[:n_feas] += 1
+            # m.logs[:n_feas] += 1
             m.best_obj = obj_full
             m.best_int = soln_int
             m.best_cont = soln_cont
@@ -1661,12 +1661,12 @@ function add_subp_incumb_cuts!(m)
     # for n in 1:m.num_exp
     #
     #
-    #     add_cut_exp!(m, m.vars_exp[n], dual[m.rows_exp[n]], m.summ_exp)
+    #     add_cut_exp!(m, m.vars_exp[n], dual[m.rows_exp[n]], m.logs[:ExpPrimal])
     # end
     # for n in 1:m.num_psd
     #
     #
-    #     add_cut_psd!(m, m.vars_psd[n], dual[m.rows_psd[n]], m.smat[n], m.summ_psd)
+    #     add_cut_psd!(m, m.vars_psd[n], dual[m.rows_psd[n]], m.smat[n], m.logs[:SDP])
     # end
 
     return (false, is_viol_subp)
@@ -1692,22 +1692,22 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
     end
 
     MathProgBase.optimize!(m.model_conic)
-    logs[:n_conic] += 1
-    logs[:conic_solve] += toq()
+    m.logs[:n_conic] += 1
+    m.logs[:conic_solve] += toq()
 
     status_conic = MathProgBase.status(m.model_conic)
     if status_conic == :Optimal
-        logs[:n_opt] += 1
+        m.logs[:n_opt] += 1
     elseif status_conic == :Infeasible
-        logs[:n_inf] += 1
+        m.logs[:n_inf] += 1
     elseif status_conic == :Suboptimal
-        logs[:n_sub] += 1
+        m.logs[:n_sub] += 1
     elseif status_conic == :UserLimit
-        logs[:n_lim] += 1
+        m.logs[:n_lim] += 1
     elseif status_conic == :ConicFailure
-        logs[:n_fail] += 1
+        m.logs[:n_fail] += 1
     else
-        logs[:n_other] += 1
+        m.logs[:n_other] += 1
     end
 
     if (status_conic == :Optimal) || (status_conic == :Suboptimal)
@@ -1860,7 +1860,7 @@ function add_cut_psd!(m, dim, vars, cut, smat, is_viol, summary)
 end
 
 # Check and record violation and add cut, return true if violated
-function add_cut!(m, cut_expr::JuMP.AffExpr, cut_summary::Dict{Symbol,Real})
+function add_cut!(m, cut_expr::JuMP.AffExpr, cone_logs::Dict{Symbol,Real})
     if !m.oa_started
         @constraint(m.model_mip, cut_expr >= 0)
         return false
@@ -1876,8 +1876,8 @@ function add_cut!(m, cut_expr::JuMP.AffExpr, cut_summary::Dict{Symbol,Real})
         end
 
         if m.log_level > 2
-            cut_summary[:viol_n] += 1
-            cut_summary[:viol_max] = max(cut_inf, cut_summary[:viol_max])
+            cone_logs[:viol_n] += 1
+            cone_logs[:viol_max] = max(cut_inf, cone_logs[:viol_max])
         end
         return true
     elseif !m.viol_cuts_only
@@ -1888,13 +1888,12 @@ function add_cut!(m, cut_expr::JuMP.AffExpr, cut_summary::Dict{Symbol,Real})
         end
 
         if m.log_level > 2
-            cut_summary[:nonviol_n] += 1
-            cut_summary[:nonviol_max] = max(-cut_inf, cut_summary[:nonviol_max])
+            cone_logs[:nonviol_n] += 1
+            cone_logs[:nonviol_max] = max(-cut_inf, cone_logs[:nonviol_max])
         end
         return false
     end
 end
-
 
 # # Add dual cut for a ExpPrimal cone
 # function add_dual_cuts_exp!(m, vars::Vector{JuMP.Variable}, dual::Vector{Float64}, spec_summ::Dict{Symbol,Real})
@@ -2091,7 +2090,7 @@ end
 #         # Calculate and update outer infeasibility
 #         vars = m.vars_soc[n]
 #         inf_outer = vecnorm(getvalue(vars[j]) for j in 2:length(vars)) - getvalue(vars[1])
-#         update_inf_outer!(m, inf_outer, m.summ_soc)
+#         update_inf_outer!(m, inf_outer, m.logs[:SOC])
 #         if inf_outer < m.tol_prim_infeas
 #             continue
 #         end
@@ -2117,7 +2116,7 @@ end
 #     for n in 1:m.num_exp
 #         vars = m.vars_exp[n]
 #         inf_outer = getvalue(vars[2]) * exp(getvalue(vars[1]) / (getvalue(vars[2]))) - getvalue(vars[3])
-#         update_inf_outer!(m, inf_outer, m.summ_exp)
+#         update_inf_outer!(m, inf_outer, m.logs[:ExpPrimal])
 #         if inf_outer < m.tol_prim_infeas
 #             continue
 #         end
@@ -2153,7 +2152,7 @@ end
 #         # Get eigendecomposition of smat solution (use symmetric property), save eigenvectors in smat matrix, rescale eigenvalues
 #         (eigvals, _) = LAPACK.syev!('V', 'L', smat)
 #         inf_outer = -minimum(eigvals)
-#         update_inf_outer!(m, inf_outer, m.summ_psd)
+#         update_inf_outer!(m, inf_outer, m.logs[:SDP])
 #         if inf_outer < m.tol_prim_infeas
 #             continue
 #         end
@@ -2175,7 +2174,7 @@ end
 #         add_prim_cuts_psd!(m, m.dim_psd[max_n], m.vars_psd[max_n], m.smat[max_n], eigvals)
 #     end
 #
-#     logs[:outer_inf] += toq()
+#     m.logs[:outer_inf] += toq()
 # end
 
 # # Add primal cuts for a SOC
@@ -2337,61 +2336,9 @@ end
  Logging and printing functions
 =========================================================#
 
-# # Reset all summary values for all cones in preparation for next iteration
-# function reset_cone_logs!(m)
-#     if m.log_level <= 2
-#         return
-#     end
-#
-#     if m.num_soc > 0
-#         m.summ_soc[:outer_max_n] = 0
-#         m.summ_soc[:outer_max] = 0.
-#         m.summ_soc[:outer_min_n] = 0
-#         m.summ_soc[:outer_min] = 0.
-#         m.summ_soc[:dual_max_n] = 0
-#         m.summ_soc[:dual_max] = 0.
-#         m.summ_soc[:dual_min_n] = 0
-#         m.summ_soc[:dual_min] = 0.
-#         m.summ_soc[:cut_max_n] = 0
-#         m.summ_soc[:cut_max] = 0.
-#         m.summ_soc[:cut_min_n] = 0
-#         m.summ_soc[:cut_min] = 0.
-#     end
-#
-#     if m.num_exp > 0
-#         m.summ_exp[:outer_max_n] = 0
-#         m.summ_exp[:outer_max] = 0.
-#         m.summ_exp[:outer_min_n] = 0
-#         m.summ_exp[:outer_min] = 0.
-#         m.summ_exp[:dual_max_n] = 0
-#         m.summ_exp[:dual_max] = 0.
-#         m.summ_exp[:dual_min_n] = 0
-#         m.summ_exp[:dual_min] = 0.
-#         m.summ_exp[:cut_max_n] = 0
-#         m.summ_exp[:cut_max] = 0.
-#         m.summ_exp[:cut_min_n] = 0
-#         m.summ_exp[:cut_min] = 0.
-#     end
-#
-#     if m.num_psd > 0
-#         m.summ_psd[:outer_max_n] = 0
-#         m.summ_psd[:outer_max] = 0.
-#         m.summ_psd[:outer_min_n] = 0
-#         m.summ_psd[:outer_min] = 0.
-#         m.summ_psd[:dual_max_n] = 0
-#         m.summ_psd[:dual_max] = 0.
-#         m.summ_psd[:dual_min_n] = 0
-#         m.summ_psd[:dual_min] = 0.
-#         m.summ_psd[:cut_max_n] = 0
-#         m.summ_psd[:cut_max] = 0.
-#         m.summ_psd[:cut_min_n] = 0
-#         m.summ_psd[:cut_min] = 0.
-#     end
-end
-
 # Create dictionary of logs for timing and iteration counts
-function create_logs()
-    logs = Dict{Symbol,Real}()
+function create_logs!(m)
+    logs = Dict{Symbol,Any}()
 
     # Timers
     logs[:total] = 0.       # Performing total optimize algorithm
@@ -2401,7 +2348,6 @@ function create_logs()
     logs[:relax_solve] = 0. # Solving initial conic relaxation model
     logs[:oa_alg] = 0.      # Performing outer approximation algorithm
     logs[:mip_solve] = 0.   # Solving the MIP model
-    logs[:conic_proc] = 0.  # Processing conic b vector and dual and solution
     logs[:conic_solve] = 0. # Solving conic subproblem model
     logs[:conic_soln] = 0.  # Adding new feasible conic solution
     logs[:dual_cuts] = 0.   # Adding subproblem cuts
@@ -2413,7 +2359,36 @@ function create_logs()
     logs[:n_feas] = 0       # Number of feasible solutions encountered
     logs[:n_repeat] = 0     # Number of times integer solution repeats
 
-    return logs
+    # Reset cone logs values for next iteration or lazy callback
+    if m.log_level <= 2
+        return
+    end
+
+    if m.num_soc > 0
+        logs_soc = m.logs[:SOC]
+        logs_soc[:viol_n] = 0
+        logs_soc[:viol_max] = 0.
+        logs_soc[:nonviol_n] = 0
+        logs_soc[:nonviol_max] = 0.
+    end
+
+    if m.num_exp > 0
+        logs_exp = m.logs[:ExpPrimal]
+        logs_exp[:viol_n] = 0
+        logs_exp[:viol_max] = 0.
+        logs_exp[:nonviol_n] = 0
+        logs_exp[:nonviol_max] = 0.
+    end
+
+    if m.num_psd > 0
+        logs_psd = m.logs[:SDP]
+        logs_psd[:viol_n] = 0
+        logs_psd[:viol_max] = 0.
+        logs_psd[:nonviol_n] = 0
+        logs_psd[:nonviol_max] = 0.
+    end
+
+    m.logs = logs
 end
 
 # Print cone dimensions summary
@@ -2425,13 +2400,13 @@ function print_cones(m)
     @printf "\nCone types summary:"
     @printf "\n%-10s | %-8s | %-8s | %-8s\n" "Cone" "Count" "Min dim" "Max dim"
     if m.num_soc > 0
-        @printf "%10s | %8d | %8d | %8d\n" "SOC" m.num_soc m.summ_soc[:min_dim] m.summ_soc[:max_dim]
+        @printf "%10s | %8d | %8d | %8d\n" "SOC" m.num_soc m.logs[:SOC][:min_dim] m.logs[:SOC][:max_dim]
     end
     if m.num_exp > 0
         @printf "%10s | %8d | %8d | %8d\n" "ExpPrimal" m.num_exp 3 3
     end
     if m.num_psd > 0
-        @printf "%10s | %8d | %8d | %8d\n" "SDP" m.num_psd m.summ_psd[:min_dim] m.summ_psd[:max_dim]
+        @printf "%10s | %8d | %8d | %8d\n" "SDP" m.num_psd m.logs[:SDP][:min_dim] m.logs[:SDP][:max_dim]
     end
     flush(STDOUT)
 end
@@ -2446,13 +2421,13 @@ function print_inf_dual(m)
     @printf "\n%-10s | %-32s\n" "Cone" "Dual cone infeas"
     @printf "%-10s | %-6s %-8s  %-6s %-8s\n" "" "Infeas" "Worst" "Feas" "Worst"
     if m.num_soc > 0
-        @printf "%10s | %5d  %8.2e  %5d  %8.2e\n" "SOC" m.summ_soc[:dual_max_n] m.summ_soc[:dual_max] m.summ_soc[:dual_min_n] m.summ_soc[:dual_min]
+        @printf "%10s | %5d  %8.2e  %5d  %8.2e\n" "SOC" m.logs[:SOC][:dual_max_n] m.logs[:SOC][:dual_max] m.logs[:SOC][:dual_min_n] m.logs[:SOC][:dual_min]
     end
     if m.num_exp > 0
-        @printf "%10s | %5d  %8.2e  %5d  %8.2e\n" "ExpPrimal" m.summ_exp[:dual_max_n] m.summ_exp[:dual_max] m.summ_exp[:dual_min_n] m.summ_exp[:dual_min]
+        @printf "%10s | %5d  %8.2e  %5d  %8.2e\n" "ExpPrimal" m.logs[:ExpPrimal][:dual_max_n] m.logs[:ExpPrimal][:dual_max] m.logs[:ExpPrimal][:dual_min_n] m.logs[:ExpPrimal][:dual_min]
     end
     if m.num_psd > 0
-        @printf "%10s | %5d  %8.2e  %5d  %8.2e\n" "SDP" m.summ_psd[:dual_max_n] m.summ_psd[:dual_max] m.summ_psd[:dual_min_n] m.summ_psd[:dual_min]
+        @printf "%10s | %5d  %8.2e  %5d  %8.2e\n" "SDP" m.logs[:SDP][:dual_max_n] m.logs[:SDP][:dual_max] m.logs[:SDP][:dual_min_n] m.logs[:SDP][:dual_min]
     end
     flush(STDOUT)
 end
@@ -2466,13 +2441,13 @@ function print_inf_dualcuts(m)
     @printf "\n%-10s | %-32s | %-32s\n" "Cone" "Dual cone infeas" "Cut infeas"
     @printf "%-10s | %-6s %-8s  %-6s %-8s | %-6s %-8s  %-6s %-8s\n" "" "Infeas" "Worst" "Feas" "Worst" "Infeas" "Worst" "Feas" "Worst"
     if m.num_soc > 0
-        @printf "%10s | %5d  %8.2e  %5d  %8.2e | %5d  %8.2e  %5d  %8.2e\n" "SOC" m.summ_soc[:dual_max_n] m.summ_soc[:dual_max] m.summ_soc[:dual_min_n] m.summ_soc[:dual_min] m.summ_soc[:cut_max_n] m.summ_soc[:cut_max] m.summ_soc[:cut_min_n] m.summ_soc[:cut_min]
+        @printf "%10s | %5d  %8.2e  %5d  %8.2e | %5d  %8.2e  %5d  %8.2e\n" "SOC" m.logs[:SOC][:dual_max_n] m.logs[:SOC][:dual_max] m.logs[:SOC][:dual_min_n] m.logs[:SOC][:dual_min] m.logs[:SOC][:cut_max_n] m.logs[:SOC][:cut_max] m.logs[:SOC][:cut_min_n] m.logs[:SOC][:cut_min]
     end
     if m.num_exp > 0
-        @printf "%10s | %5d  %8.2e  %5d  %8.2e | %5d  %8.2e  %5d  %8.2e\n" "ExpPrimal" m.summ_exp[:dual_max_n] m.summ_exp[:dual_max] m.summ_exp[:dual_min_n] m.summ_exp[:dual_min] m.summ_exp[:cut_max_n] m.summ_exp[:cut_max] m.summ_exp[:cut_min_n] m.summ_exp[:cut_min]
+        @printf "%10s | %5d  %8.2e  %5d  %8.2e | %5d  %8.2e  %5d  %8.2e\n" "ExpPrimal" m.logs[:ExpPrimal][:dual_max_n] m.logs[:ExpPrimal][:dual_max] m.logs[:ExpPrimal][:dual_min_n] m.logs[:ExpPrimal][:dual_min] m.logs[:ExpPrimal][:cut_max_n] m.logs[:ExpPrimal][:cut_max] m.logs[:ExpPrimal][:cut_min_n] m.logs[:ExpPrimal][:cut_min]
     end
     if m.num_psd > 0
-        @printf "%10s | %5d  %8.2e  %5d  %8.2e | %5d  %8.2e  %5d  %8.2e\n" "SDP" m.summ_psd[:dual_max_n] m.summ_psd[:dual_max] m.summ_psd[:dual_min_n] m.summ_psd[:dual_min] m.summ_psd[:cut_max_n] m.summ_psd[:cut_max] m.summ_psd[:cut_min_n] m.summ_psd[:cut_min]
+        @printf "%10s | %5d  %8.2e  %5d  %8.2e | %5d  %8.2e  %5d  %8.2e\n" "SDP" m.logs[:SDP][:dual_max_n] m.logs[:SDP][:dual_max] m.logs[:SDP][:dual_min_n] m.logs[:SDP][:dual_min] m.logs[:SDP][:cut_max_n] m.logs[:SDP][:cut_max] m.logs[:SDP][:cut_min_n] m.logs[:SDP][:cut_min]
     end
     flush(STDOUT)
 end
@@ -2486,13 +2461,13 @@ function print_inf_outer(m)
     @printf "\n%-10s | %-32s\n" "Cone" "Outer approx infeas"
     @printf "%-10s | %-6s %-8s  %-6s %-8s\n" "" "Infeas" "Worst" "Feas" "Worst"
     if m.num_soc > 0
-        @printf "%10s | %5d  %8.2e  %5d  %8.2e\n" "SOC" m.summ_soc[:outer_max_n] m.summ_soc[:outer_max] m.summ_soc[:outer_min_n] m.summ_soc[:outer_min]
+        @printf "%10s | %5d  %8.2e  %5d  %8.2e\n" "SOC" m.logs[:SOC][:outer_max_n] m.logs[:SOC][:outer_max] m.logs[:SOC][:outer_min_n] m.logs[:SOC][:outer_min]
     end
     if m.num_exp > 0
-        @printf "%10s | %5d  %8.2e  %5d  %8.2e\n" "ExpPrimal" m.summ_exp[:outer_max_n] m.summ_exp[:outer_max] m.summ_exp[:outer_min_n] m.summ_exp[:outer_min]
+        @printf "%10s | %5d  %8.2e  %5d  %8.2e\n" "ExpPrimal" m.logs[:ExpPrimal][:outer_max_n] m.logs[:ExpPrimal][:outer_max] m.logs[:ExpPrimal][:outer_min_n] m.logs[:ExpPrimal][:outer_min]
     end
     if m.num_psd > 0
-        @printf "%10s | %5d  %8.2e  %5d  %8.2e\n" "SDP" m.summ_psd[:outer_max_n] m.summ_psd[:outer_max] m.summ_psd[:outer_min_n] m.summ_psd[:outer_min]
+        @printf "%10s | %5d  %8.2e  %5d  %8.2e\n" "SDP" m.logs[:SDP][:outer_max_n] m.logs[:SDP][:outer_max] m.logs[:SDP][:outer_min_n] m.logs[:SDP][:outer_min]
     end
     flush(STDOUT)
 end
@@ -2503,15 +2478,15 @@ function print_gap(m)
         return
     end
 
-    if (logs[:n_mip] == 1) || (m.log_level > 2)
+    if (m.logs[:n_mip] == 1) || (m.log_level > 2)
         @printf "\n%-4s | %-14s | %-14s | %-11s | %-11s\n" "Iter" "Best obj" "OA obj" "Rel gap" "Time (s)"
     end
     if m.gap_rel_opt < 1000
-        @printf "%4d | %+14.6e | %+14.6e | %11.3e | %11.3e\n" logs[:n_mip] m.best_obj m.mip_obj m.gap_rel_opt (time() - logs[:oa_alg])
+        @printf "%4d | %+14.6e | %+14.6e | %11.3e | %11.3e\n" m.logs[:n_mip] m.best_obj m.mip_obj m.gap_rel_opt (time() - m.logs[:oa_alg])
     elseif isnan(m.gap_rel_opt)
-        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" logs[:n_mip] m.best_obj m.mip_obj "Inf" (time() - logs[:oa_alg])
+        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" m.logs[:n_mip] m.best_obj m.mip_obj "Inf" (time() - m.logs[:oa_alg])
     else
-        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" logs[:n_mip] m.best_obj m.mip_obj ">1000" (time() - logs[:oa_alg])
+        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" m.logs[:n_mip] m.best_obj m.mip_obj ">1000" (time() - m.logs[:oa_alg])
     end
     flush(STDOUT)
 end
@@ -2522,16 +2497,16 @@ function print_gap_MSD(m)
         return
     end
 
-    if logs[:n_mip] == 0
+    if m.logs[:n_mip] == 0
         @printf "\n%-14s | %-14s | %-11s | %-11s\n" "Best obj" "OA obj" "Rel gap" "Time (s)"
-        logs[:n_mip] += 1
+        m.logs[:n_mip] += 1
     end
     if m.gap_rel_opt < 1000
-        @printf "%+14.6e | %+14.6e | %11.3e | %11.3e\n" m.best_obj m.mip_obj m.gap_rel_opt (time() - logs[:oa_alg])
+        @printf "%+14.6e | %+14.6e | %11.3e | %11.3e\n" m.best_obj m.mip_obj m.gap_rel_opt (time() - m.logs[:oa_alg])
     elseif isnan(m.gap_rel_opt)
-        @printf "%+14.6e | %+14.6e | %11s | %11.3e\n" m.best_obj m.mip_obj "Inf" (time() - logs[:oa_alg])
+        @printf "%+14.6e | %+14.6e | %11s | %11.3e\n" m.best_obj m.mip_obj "Inf" (time() - m.logs[:oa_alg])
     else
-        @printf "%+14.6e | %+14.6e | %11s | %11.3e\n" m.best_obj m.mip_obj ">1000" (time() - logs[:oa_alg])
+        @printf "%+14.6e | %+14.6e | %11s | %11.3e\n" m.best_obj m.mip_obj ">1000" (time() - m.logs[:oa_alg])
     end
     flush(STDOUT)
 end
@@ -2544,7 +2519,7 @@ function print_finish(m)
     end
 
     @printf "\nPajarito MICP solve summary:\n"
-    @printf " - Total time (s)       = %14.2e\n" logs[:total]
+    @printf " - Total time (s)       = %14.2e\n" m.logs[:total]
     @printf " - Status               = %14s\n" m.status
     @printf " - Best feasible obj.   = %+14.6e\n" m.best_obj
     @printf " - Final OA obj. bound  = %+14.6e\n" m.mip_obj
@@ -2557,28 +2532,27 @@ function print_finish(m)
     end
 
     if !m.mip_solver_drives
-        @printf " - MIP solve count      = %14d\n" logs[:n_mip]
+        @printf " - MIP solve count      = %14d\n" m.logs[:n_mip]
     end
-    @printf " - Conic solve count    = %14d\n" logs[:n_conic]
-    @printf " - Feas. solution count = %14d\n" logs[:n_feas]
-    @printf " - Integer repeat count = %14d\n" logs[:n_repeat]
+    @printf " - Conic solve count    = %14d\n" m.logs[:n_conic]
+    @printf " - Feas. solution count = %14d\n" m.logs[:n_feas]
+    @printf " - Integer repeat count = %14d\n" m.logs[:n_repeat]
     @printf "\nTimers (s):\n"
-    @printf " - Setup                = %14.2e\n" (logs[:total] - logs[:oa_alg])
-    @printf " -- Transform data      = %14.2e\n" logs[:data_trans]
-    @printf " -- Create conic data   = %14.2e\n" logs[:data_conic]
-    @printf " -- Create MIP data     = %14.2e\n" logs[:data_mip]
-    @printf " -- Load/solve relax    = %14.2e\n" logs[:relax_solve]
+    @printf " - Setup                = %14.2e\n" (m.logs[:total] - m.logs[:oa_alg])
+    @printf " -- Transform data      = %14.2e\n" m.logs[:data_trans]
+    @printf " -- Create conic data   = %14.2e\n" m.logs[:data_conic]
+    @printf " -- Create MIP data     = %14.2e\n" m.logs[:data_mip]
+    @printf " -- Load/solve relax    = %14.2e\n" m.logs[:relax_solve]
     if m.mip_solver_drives
-        @printf " - MIP-driven algorithm = %14.2e\n" logs[:oa_alg]
+        @printf " - MIP-driven algorithm = %14.2e\n" m.logs[:oa_alg]
     else
-        @printf " - Iterative algorithm  = %14.2e\n" logs[:oa_alg]
-        @printf " -- Solve MIPs          = %14.2e\n" logs[:mip_solve]
+        @printf " - Iterative algorithm  = %14.2e\n" m.logs[:oa_alg]
+        @printf " -- Solve MIPs          = %14.2e\n" m.logs[:mip_solve]
     end
-    @printf " -- Solve conic model   = %14.2e\n" logs[:conic_solve]
-    @printf " -- Process conic data  = %14.2e\n" logs[:conic_proc]
-    @printf " -- Add conic solution  = %14.2e\n" logs[:conic_soln]
-    @printf " -- Add cuts from dual       = %14.2e\n" logs[:dual_cuts]
-    @printf " -- Use outer inf/cuts  = %14.2e\n" logs[:outer_inf]
+    @printf " -- Solve conic model   = %14.2e\n" m.logs[:conic_solve]
+    @printf " -- Add conic solution  = %14.2e\n" m.logs[:conic_soln]
+    @printf " -- Add cuts from dual       = %14.2e\n" m.logs[:dual_cuts]
+    @printf " -- Use outer inf/cuts  = %14.2e\n" m.logs[:outer_inf]
     @printf "\n"
     flush(STDOUT)
 end
