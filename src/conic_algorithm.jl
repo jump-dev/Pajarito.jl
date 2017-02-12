@@ -940,8 +940,8 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     end
 
     # Allocate data for nonlinear cones
-    t_idx_soc_relx = Vector{Int}(m.num_soc)
     v_idxs_soc_relx = Vector{Vector{Int}}(m.num_soc)
+    t_idx_soc_subp = Vector{Int}(m.num_soc)
     v_idxs_soc_subp = Vector{Vector{Int}}(m.num_soc)
     t_soc = Vector{JuMP.AffExpr}(m.num_soc)
     v_soc = Vector{Vector{JuMP.AffExpr}}(m.num_soc)
@@ -1152,7 +1152,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             end
 
             n_soc += 1
-            t_idx_soc_subp[n_soc] = map_rows_sub[1]
+            t_idx_soc_subp[n_soc] = map_rows_sub[rows[1]]
             v_idxs = rows[2:end]
             v_idxs_soc_relx[n_soc] = v_idxs
             v_idxs_soc_subp[n_soc] = map_rows_sub[v_idxs]
