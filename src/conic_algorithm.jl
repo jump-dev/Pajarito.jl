@@ -1851,12 +1851,12 @@ function add_cut_soc!(m, t, v, d, a, v_dual)
     return is_viol
 end
 
-
+# Add K* cuts for a ExpPrimal, return true if a cut is violated by current solution
 function add_cut_exp!(m, vars, cut, is_viol, summary)
     nothing
 end
 
-
+# Add K* cuts for a PSD, return true if a cut is violated by current solution
 function add_cut_sdp!(m, dim, vars, cut, smat, is_viol, summary)
     nothing
 end
@@ -1895,7 +1895,7 @@ function add_cut!(m, cut_expr::JuMP.AffExpr, cone_logs::Dict{Symbol,Any})
         end
         return false
     end
-    
+
     return false
 end
 
