@@ -1194,12 +1194,12 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             t_idx_soc_subp[n_soc] = map_rows_sub[rows[1]]
             v_idxs_soc_subp[n_soc] = map_rows_sub[v_idxs]
 
-            t = t_soc[n_soc] = lhs_expr[rows[1]]
-            v = v_soc[n_soc] = lhs_expr[v_idxs]
-            d = d_soc[n_soc] = Vector{JuMP.Variable}()
-            a = a_soc[n_soc] = Vector{JuMP.Variable}()
+            t_soc[n_soc] = lhs_expr[rows[1]]
+            v_soc[n_soc] = lhs_expr[v_idxs]
+            d_soc[n_soc] = Vector{JuMP.Variable}()
+            a_soc[n_soc] = Vector{JuMP.Variable}()
 
-            add_soc!(n_soc, t, v, d, a)
+            add_soc!(n_soc, t_soc[n_soc], v_soc[n_soc], d_soc[n_soc], a_soc[n_soc])
         # elseif spec == :ExpPrimal
         #     n_exp += 1
         #     add_exp!(n_exp, rows, lhs_expr[rows])
