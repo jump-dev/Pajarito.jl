@@ -1338,14 +1338,15 @@ function solve_iterative!(m)
 
             if !is_infeas
                 # MIP solver solution is conic-feasible, check if it is a new incumbent
-                soln_conic = getvalue(m.x_cont)
-                obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_conic)
+                soln_int = getvalue(m.x_int)
+                soln_cont = getvalue(m.x_cont)
+                obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_cont)
 
                 if obj_full < m.best_obj
                     # Save new incumbent info
                     m.best_obj = obj_full
                     m.best_int = soln_int
-                    m.best_cont = soln_conic
+                    m.best_cont = soln_cont
 
                     # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
                     m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
@@ -1508,7 +1509,6 @@ end
 
 # Construct and warm-start MIP solution using best solution
 function set_best_soln!(m)
-    tic()
     set_soln!(m, m.x_int, m.best_int)
     set_soln!(m, m.x_cont, m.best_cont)
 
@@ -1522,8 +1522,6 @@ function set_best_soln!(m)
     end
 
     #TODO other cones
-
-    m.logs[:conic_soln] += toq()
 end
 
 # Call setvalue or setsolutionvalue solution for a vector of variables and a solution vector

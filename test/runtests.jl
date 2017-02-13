@@ -56,12 +56,12 @@ runconicdefaulttests(false, log)
             end
         end
 
-        # Conic model with nonlinear solvers
-        for nlnr in solvers_nlnr
-            @testset "MSD=$mip_solver_drives,mip_solver=$(typeof(mip)),cont_solver=$(typeof(nlnr))" begin
-                runconictests(mip_solver_drives, mip, nlnr, log)
-            end
-        end
+        # # Conic model with nonlinear solvers
+        # for nlnr in solvers_nlnr
+        #     @testset "MSD=$mip_solver_drives,mip_solver=$(typeof(mip)),cont_solver=$(typeof(nlnr))" begin
+        #         runconictests(mip_solver_drives, mip, nlnr, log)
+        #     end
+        # end
     end
 end
 
