@@ -1308,7 +1308,7 @@ function solve_iterative!(m)
             end
 
             # If solver doesn't have a feasible solution, must immediately try solving to optimality
-            if isnan(MathProgBase.getobjval(m.model_mip))
+            if isnan(MathProgBase.getobjectivevalue(m.model_mip))
                 count_subopt = m.mip_subopt_count
                 warn("Solution has NaN values, proceeding to next optimal MIP solve\n")
             end
