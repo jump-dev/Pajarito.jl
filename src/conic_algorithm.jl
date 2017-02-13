@@ -1294,8 +1294,8 @@ function solve_iterative!(m)
 
                 # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
                 m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-                print_gap(m)
                 if m.gap_rel_opt < m.rel_gap
+                    print_gap(m)
                     m.status = :Optimal
                     break
                 end
@@ -1324,8 +1324,8 @@ function solve_iterative!(m)
         if m.new_incumb
             # Have a new incumbent from conic solver, calculate relative outer approximation gap, finish if satisfy optimality gap condition
             m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-            print_gap(m)
             if m.gap_rel_opt < m.rel_gap
+                print_gap(m)
                 m.status = :Optimal
                 break
             end
@@ -1350,8 +1350,8 @@ function solve_iterative!(m)
 
                     # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
                     m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-                    print_gap(m)
                     if m.gap_rel_opt < m.rel_gap
+                        print_gap(m)
                         m.status = :Optimal
                         break
                     end
@@ -1374,6 +1374,8 @@ function solve_iterative!(m)
                 count_subopt = m.mip_subopt_count
             end
         end
+
+        print_gap(m)
 
         # Finish if exceeded timeout option
         if (time() - m.logs[:oa_alg]) > m.timeout
