@@ -998,9 +998,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
 
     # Set up a SOC cone in the MIP
     # t >= norm(v)
-    function add_soc!(t, v, d, a)
-        dim = length(v)
-
+    function add_soc!(t, v, d, a, dim)
         # Set bounds
         @constraint(model_mip, t >= 0)
 
@@ -1177,6 +1175,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             n_soc += 1
 
             v_idxs = rows[2:end]
+            dim = length(v_idxs)
             v_idxs_soc_relx[n_soc] = v_idxs
             t_idx_soc_subp[n_soc] = map_rows_sub[rows[1]]
             v_idxs_soc_subp[n_soc] = map_rows_sub[v_idxs]
@@ -1184,11 +1183,12 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             t_soc[n_soc] = lhs_expr[rows[1]]
             v_soc[n_soc] = lhs_expr[v_idxs]
 
+
             if m.soc_disagg
                 # Add disaggregated SOC variables d_j
                 # 2*d_j >= v_j^2/t, all j
-                d_soc[n_soc] = @variable(model_mip, [j in 1:length(v)], lowerbound=0)
-                for j in 1:length(v)
+                d_soc[n_soc] = @variable(model_mip, [j in 1:dim], lowerbound=0)
+                for j in 1:dim
                     setname(d_soc[n_soc][j], "d$(j)_soc$(n_soc)")
                 end
             else
@@ -1198,8 +1198,8 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             if m.soc_abslift
                 # Add absolute value SOC variables a_j
                 # a_j >= |v_j|
-                a_soc[n_soc] = @variable(model_mip, [j in 1:length(v)], lowerbound=0)
-                for j in 1:length(v)
+                a_soc[n_soc] = @variable(model_mip, [j in 1:dim], lowerbound=0)
+                for j in 1:dim
                     setname(d_soc[n_soc][j], "a$(j)_soc$(n_soc)")
                 end
             else
