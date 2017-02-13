@@ -86,7 +86,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
     # SO cone data
     num_soc::Int                # Number of SOCs
-    # m.logs[:SOC] = logs[:SOC]
     t_idx_soc_subp::Vector{Int} # Row index of t variable in SOCs in subproblems
     v_idxs_soc_subp::Vector{Vector{Int}} # Row indices of v variables in SOCs in subproblem
     t_soc::Vector{JuMP.AffExpr} # t variable (epigraph) in SOCs
@@ -1060,8 +1059,8 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
                 # t + d_j >= 2*|v_j|, all j
                 # Scale by 2*dim
                 for j in 1:dim
-                    @constraint(model_mip, 2*dim*(t + d[j] - 2*v[j]) >= 0)
-                    @constraint(model_mip, 2*dim*(t + d[j] + 2*v[j]) >= 0)
+                    @constraint(model_mip, 2*dim*(t + 2*d[j] - 2*v[j]) >= 0)
+                    @constraint(model_mip, 2*dim*(t + 2*d[j] + 2*v[j]) >= 0)
                 end
             elseif m.soc_abslift
                 # Using absvalue lifting only

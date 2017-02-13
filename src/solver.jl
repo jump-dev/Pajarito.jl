@@ -65,7 +65,7 @@ function PajaritoSolver(;
     dualize_relax = false,
     dualize_sub = false,
 
-    soc_disagg = false,
+    soc_disagg = true,
     soc_abslift = false,
     soc_in_mip = false,
     sdp_eig = true,
