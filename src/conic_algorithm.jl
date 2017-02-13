@@ -382,15 +382,24 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
             # Add relaxation cuts
             for n in 1:m.num_soc
+                # Add SOC K* subproblem cuts from solution
                 add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[v_idxs_soc_relx[n]])
             end
 
             for n in 1:m.num_exp
+                # Add ExpPrimal K* subproblem cuts from solution
                 add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], dual_conic[r_idx_exp_relx[n]], dual_conic[s_idx_exp_relx[n]])
             end
 
             for n in 1:m.num_sdp
-                add_cut_sdp!(m, m.V_sdp[n], make_smat!(dual_conic[v_idx_sdp_relx[n]], m.smat_sdp[n]))
+                v_dual = dual_conic[v_idx_sdp_relx[n]]
+                V_dual = make_smat!(v_dual, m.smat_sdp[n])
+                (V_eigvals, V_eigvecs) = LAPACK.syev!('V', 'U', V_dual)
+
+                # Add PSD K* subproblem cuts from solution
+                # Dual is sum_{j: lambda_j > 0} lamda_j V_j V_j'
+                pos_inds = V_eigvals .>= m.tol_zero
+                add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], slice(V_eigvecs, :, pos_inds))
             end
         end
 
