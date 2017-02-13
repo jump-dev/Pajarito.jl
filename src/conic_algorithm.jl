@@ -982,8 +982,8 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     v_idxs_soc_subp = Vector{Vector{Int}}(m.num_soc)
     t_soc = Vector{JuMP.AffExpr}(m.num_soc)
     v_soc = Vector{Vector{JuMP.AffExpr}}(m.num_soc)
-    d_soc = Vector{Vector{JuMP.AffExpr}}(m.num_soc)
-    a_soc = Vector{Vector{JuMP.AffExpr}}(m.num_soc)
+    d_soc = Vector{Vector{JuMP.Variable}}(m.num_soc)
+    a_soc = Vector{Vector{JuMP.Variable}}(m.num_soc)
 
     rows_relax_exp = Vector{Vector{Int}}(m.num_exp)
     # rows_sub_exp = Vector{Vector{Int}}(num_exp)
