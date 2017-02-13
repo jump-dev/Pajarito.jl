@@ -131,10 +131,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # Model constructor
     function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
         # Errors
-        if viol_cuts_only && !mip_solver_drives
-            # If using iterative algorithm, must always add non-violated cuts
-            error("If using Iterative algorithm, cannot add only violated cuts\n")
-        end
         if soc_in_mip || init_sdp_soc || sdp_soc
             # If using MISOCP outer approximation, check MIP solver handles MISOCP
             mip_spec = MathProgBase.supportedcones(mip_solver)
