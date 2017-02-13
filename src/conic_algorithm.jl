@@ -1180,33 +1180,34 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             t_idx_soc_subp[n_soc] = map_rows_sub[rows[1]]
             v_idxs_soc_subp[n_soc] = map_rows_sub[v_idxs]
 
-            t_soc[n_soc] = lhs_expr[rows[1]]
-            v_soc[n_soc] = lhs_expr[v_idxs]
-
-
             if m.soc_disagg
                 # Add disaggregated SOC variables d_j
                 # 2*d_j >= v_j^2/t, all j
-                d_soc[n_soc] = @variable(model_mip, [j in 1:dim], lowerbound=0)
+                d = @variable(model_mip, [j in 1:dim], lowerbound=0)
                 for j in 1:dim
-                    setname(d_soc[n_soc][j], "d$(j)_soc$(n_soc)")
+                    setname(d[j], "d$(j)_soc$(n_soc)")
                 end
             else
-                d_soc[n_soc] = Vector{JuMP.Variable}()
+                d = Vector{JuMP.Variable}()
             end
 
             if m.soc_abslift
                 # Add absolute value SOC variables a_j
                 # a_j >= |v_j|
-                a_soc[n_soc] = @variable(model_mip, [j in 1:dim], lowerbound=0)
+                a = @variable(model_mip, [j in 1:dim], lowerbound=0)
                 for j in 1:dim
-                    setname(d_soc[n_soc][j], "a$(j)_soc$(n_soc)")
+                    setname(a[j], "a$(j)_soc$(n_soc)")
                 end
             else
-                a_soc[n_soc] = Vector{JuMP.Variable}()
+                a = Vector{JuMP.Variable}()
             end
 
-            add_soc!(t_soc[n_soc], v_soc[n_soc], d_soc[n_soc], a_soc[n_soc])
+            t_soc[n_soc] = t = lhs_expr[rows[1]]
+            v_soc[n_soc] = v = lhs_expr[v_idxs]
+            d_soc[n_soc] = d
+            a_soc[n_soc] = a
+
+            add_soc!(t, v, d, a, dim)
         # elseif spec == :ExpPrimal
         #     n_exp += 1
         #     add_exp!(n_exp, rows, lhs_expr[rows])
