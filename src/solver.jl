@@ -66,19 +66,19 @@ function PajaritoSolver(;
     dualize_sub = false,
 
     soc_disagg = true,
-    soc_abslift = false,
+    soc_abslift = true,
     soc_in_mip = false,
     sdp_eig = true,
     sdp_soc = false,
 
-    init_soc_one = false,
-    init_soc_inf = false,
+    init_soc_one = true,
+    init_soc_inf = true,
     init_exp = true,
     init_sdp_lin = true,
     init_sdp_soc = false,
 
     scale_subp_cuts = true,
-    viol_cuts_only = false,
+    viol_cuts_only = true,
     prim_cuts_only = false,
     prim_cuts_always = false,
     prim_cuts_assist = true,
