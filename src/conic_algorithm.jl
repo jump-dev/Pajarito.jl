@@ -1895,6 +1895,8 @@ function add_cut!(m, cut_expr::JuMP.AffExpr, cone_logs::Dict{Symbol,Any})
         end
         return false
     end
+    
+    return false
 end
 
 
