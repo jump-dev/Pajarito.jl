@@ -998,20 +998,13 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
 
     # Set up a SOC cone in the MIP
     # t >= norm(v)
-    function add_soc!(n_soc, t, v, d, a)
+    function add_soc!(t, v, d, a)
         dim = length(v)
 
         # Set bounds
         @constraint(model_mip, t >= 0)
 
         if m.soc_disagg
-            # Add disaggregated SOC variables d_j
-            # 2*d_j >= v_j^2/t, all j
-            d = @variable(model_mip, [j in 1:dim], lowerbound=0)
-            for j in 1:dim
-                setname(d[j], "d$(j)_soc$(n_soc)")
-            end
-
             # Add disaggregated SOC constraint
             # t >= sum(2*d_j)
             # Scale by 2
@@ -1019,13 +1012,6 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
         end
 
         if m.soc_abslift
-            # Add absolute value SOC variables a_j
-            # a_j >= |v_j|
-            a = @variable(model_mip, [j in 1:dim], lowerbound=0)
-            for j in 1:dim
-                setname(a[j], "a$(j)_soc$(n_soc)")
-            end
-
             # Add absolute value SOC constraints
             # a_j >= v_j, a_j >= -v_j
             # Scale by 2
@@ -1189,6 +1175,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             end
 
             n_soc += 1
+
             v_idxs = rows[2:end]
             v_idxs_soc_relx[n_soc] = v_idxs
             t_idx_soc_subp[n_soc] = map_rows_sub[rows[1]]
@@ -1196,10 +1183,30 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
 
             t_soc[n_soc] = lhs_expr[rows[1]]
             v_soc[n_soc] = lhs_expr[v_idxs]
-            d_soc[n_soc] = Vector{JuMP.Variable}()
-            a_soc[n_soc] = Vector{JuMP.Variable}()
 
-            add_soc!(n_soc, t_soc[n_soc], v_soc[n_soc], d_soc[n_soc], a_soc[n_soc])
+            if m.soc_disagg
+                # Add disaggregated SOC variables d_j
+                # 2*d_j >= v_j^2/t, all j
+                d_soc[n_soc] = @variable(model_mip, [j in 1:length(v)], lowerbound=0)
+                for j in 1:length(v)
+                    setname(d_soc[n_soc][j], "d$(j)_soc$(n_soc)")
+                end
+            else
+                d_soc[n_soc] = Vector{JuMP.Variable}()
+            end
+
+            if m.soc_abslift
+                # Add absolute value SOC variables a_j
+                # a_j >= |v_j|
+                a_soc[n_soc] = @variable(model_mip, [j in 1:length(v)], lowerbound=0)
+                for j in 1:length(v)
+                    setname(d_soc[n_soc][j], "a$(j)_soc$(n_soc)")
+                end
+            else
+                a_soc[n_soc] = Vector{JuMP.Variable}()
+            end
+
+            add_soc!(t_soc[n_soc], v_soc[n_soc], d_soc[n_soc], a_soc[n_soc])
         # elseif spec == :ExpPrimal
         #     n_exp += 1
         #     add_exp!(n_exp, rows, lhs_expr[rows])
