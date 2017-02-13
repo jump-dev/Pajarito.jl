@@ -2015,6 +2015,25 @@ function reset_cone_logs!(m)
     end
 end
 
+# Print objective gap information for iterative
+function print_gap(m)
+    if m.log_level <= 1
+        return
+    end
+
+    if (m.logs[:n_mip] == 1) || (m.log_level > 2)
+        @printf "\n%-4s | %-14s | %-14s | %-11s | %-11s\n" "Iter" "Best obj" "OA obj" "Rel gap" "Time (s)"
+    end
+    if m.gap_rel_opt < 1000
+        @printf "%4d | %+14.6e | %+14.6e | %11.3e | %11.3e\n" m.logs[:n_mip] m.best_obj m.mip_obj m.gap_rel_opt (time() - m.logs[:oa_alg])
+    elseif isnan(m.gap_rel_opt)
+        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" m.logs[:n_mip] m.best_obj m.mip_obj "Inf" (time() - m.logs[:oa_alg])
+    else
+        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" m.logs[:n_mip] m.best_obj m.mip_obj ">1000" (time() - m.logs[:oa_alg])
+    end
+    flush(STDOUT)
+end
+
 # Print after finish
 function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
     flush(STDOUT)
