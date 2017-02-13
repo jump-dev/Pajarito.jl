@@ -1007,7 +1007,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
         if m.soc_disagg
             # Add disaggregated SOC variables d_j
             # 2*d_j >= v_j^2/t, all j
-            d = @variable(model_mip, [j in 1:dim], lowerbound=0)
+            append!(d, @variable(model_mip, [j in 1:dim], lowerbound=0))
             for j in 1:dim
                 setname(d[j], "d$(j)_soc$(n_soc)")
             end
@@ -1021,7 +1021,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
         if m.soc_abslift
             # Add absolute value SOC variables a_j
             # a_j >= |v_j|
-            a = @variable(model_mip, [j in 1:dim], lowerbound=0)
+            append!(a, @variable(model_mip, [j in 1:dim], lowerbound=0))
             for j in 1:dim
                 setname(a[j], "a$(j)_soc$(n_soc)")
             end
