@@ -1901,7 +1901,7 @@ end
 
 # Add K* cuts for a PSD, return true if a cut is violated by current solution
 function add_cut_sdp!(m, V, V_dual)
-    nothing
+    return false
 end
 
 # Check and record violation and add cut, return true if violated
