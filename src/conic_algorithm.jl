@@ -387,7 +387,10 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
             # Add relaxation cuts
             for n in 1:m.num_soc
-                add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[v_idxs_soc_relx[n]])
+                v_dual = dual_conic[v_idxs_soc_relx[n]]
+                if clean_zeros!(v_dual)
+                    add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], v_dual)
+                end
             end
             # for n in 1:m.num_exp
             #     add_cut_exp!(m, m.vars_exp[n], dual[m.rows_relax_exp[n]], false, m.logs[:ExpPrimal])
@@ -1647,7 +1650,7 @@ function add_subp_incumb_cuts!(m)
     is_viol_subp = false
     for n in 1:m.num_soc
         # Get SOC v dual, remove near-zeros, scale, add K* cuts
-        v_dual = dual_conic[m.rows_soc[n]]
+        v_dual = dual_conic[m.v_idxs_soc_subp[n]]
         if clean_zeros!(v_dual)
             if add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], v_dual)
                 is_viol_subp = true
