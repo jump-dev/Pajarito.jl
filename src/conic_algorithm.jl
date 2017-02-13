@@ -399,7 +399,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 # Add PSD K* subproblem cuts from solution
                 # Dual is sum_{j: lambda_j > 0} lamda_j V_j V_j'
                 pos_inds = V_eigvals .>= m.tol_zero
-                add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], slice(V_eigvecs, :, pos_inds))
+                add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], view(V_eigvecs, :, pos_inds))
             end
         end
 
@@ -1676,7 +1676,7 @@ function add_subp_incumb_cuts!(m)
         # Add PSD K* subproblem cuts from solution
         # Dual is sum_{j: lambda_j > 0} lamda_j V_j V_j'
         pos_inds = V_eigvals .>= m.tol_zero
-        if add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], slice(V_eigvecs, :, pos_inds))
+        if add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], view(V_eigvecs, :, pos_inds))
             is_viol_subp = true
         end
     end
@@ -1803,7 +1803,7 @@ function add_prim_feas_cuts!(m, add_cuts::Bool)
         # Add PSD K* primal cuts from solution
         # Dual is sum_{j: lambda_j < 0} lamda_j V_j V_j'
         neg_inds = V_eigvals .<= -m.tol_zero
-        if add_cut_sdp!(m, m.V_sdp[n], -V_eigvals[neg_inds], slice(V_eigvecs, :, neg_inds))
+        if add_cut_sdp!(m, m.V_sdp[n], -V_eigvals[neg_inds], view(V_eigvecs, :, neg_inds))
             is_viol_prim = true
         end
     end
