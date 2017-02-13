@@ -1943,13 +1943,13 @@ function create_logs!(m)
     logs[:n_fail] = 0       # Number of conic subproblem conic failure statuses
     logs[:n_other] = 0      # Number of conic subproblem other statuses
 
-    # logs[:n_relax] = 0      # Number of relaxation dual cuts added
-    # logs[:n_dualfullv] = 0  # Number of violated full dual cuts added (after relax)
-    # logs[:n_dualfullnv] = 0 # Number of nonviolated full dual cuts added (after relax)
-    # logs[:n_dualdisv] = 0   # Number of violated disagg dual cuts added (after relax)
-    # logs[:n_dualdisnv] = 0  # Number of nonviolated disagg dual cuts added (after relax)
-    # logs[:n_dualdiscon] = 0 # Number of poorly conditioned disagg dual cuts encountered
-    # logs[:n_dualrev] = 0    # Number of violated full dual cuts RE-added (integer solution repeated)
+    # logs[:n_relax] = 0      # Number of relaxation subproblem cuts added
+    # logs[:n_dualfullv] = 0  # Number of violated full subproblem cuts added (after relax)
+    # logs[:n_dualfullnv] = 0 # Number of nonviolated full subproblem cuts added (after relax)
+    # logs[:n_dualdisv] = 0   # Number of violated disagg subproblem cuts added (after relax)
+    # logs[:n_dualdisnv] = 0  # Number of nonviolated disagg subproblem cuts added (after relax)
+    # logs[:n_dualdiscon] = 0 # Number of poorly conditioned disagg subproblem cuts encountered
+    # logs[:n_dualrev] = 0    # Number of violated full subproblem cuts RE-added (integer solution repeated)
     # logs[:n_primfullv] = 0  # Number of violated full prim cuts added
     # logs[:n_primfullnv] = 0 # Number of nonviolated full prim cuts added
     # logs[:n_primdisv] = 0   # Number of violated disagg prim cuts added
@@ -2080,7 +2080,7 @@ function print_finish(m::PajaritoConicModel)
     @printf " --- UserLimit          = %5d\n" m.logs[:n_lim]
     @printf " --- ConicFailure       = %5d\n" m.logs[:n_fail]
     @printf " --- Other status       = %5d\n" m.logs[:n_other]
-    @printf " -- No viol. dual cut   = %5d\n" m.logs[:n_nodual]
+    @printf " -- No viol. subp. cut  = %5d\n" m.logs[:n_nodual]
     @printf " -- No viol. prim. cut  = %5d\n" m.logs[:n_nocuts]
 
     @printf " - Heuristic callback   = %5d\n" m.logs[:n_heur]
@@ -2089,7 +2089,7 @@ function print_finish(m::PajaritoConicModel)
     @printf " - Incumbent callback   = %5d\n" m.logs[:n_incum]
     @printf " -- Feasible accepted   = %5d\n" m.logs[:n_innew]
 
-    # @printf " - Dual cuts            = %5d\n" (m.logs[:n_relax] + m.logs[:n_dualfullv] + m.logs[:n_dualfullnv] + m.logs[:n_dualdisv] + m.logs[:n_dualdisnv])
+    # @printf " - Subproblem cuts            = %5d\n" (m.logs[:n_relax] + m.logs[:n_dualfullv] + m.logs[:n_dualfullnv] + m.logs[:n_dualdisv] + m.logs[:n_dualdisnv])
     # @printf " -- Relaxation          = %5d\n" m.logs[:n_relax]
     # @printf " -- Full viol.          = %5d\n" m.logs[:n_dualfullv]
     # @printf " -- Full nonviol.       = %5d\n" m.logs[:n_dualfullnv]
@@ -2112,7 +2112,6 @@ function print_finish(m::PajaritoConicModel)
     end
 
     @printf "\nMax absolute primal infeasibilities\n"
-    @printf " - Constraint cones:\n"
 
     # Constraint cones
     viol_lin = 0.0
