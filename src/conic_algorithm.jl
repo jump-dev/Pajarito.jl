@@ -1646,19 +1646,28 @@ function add_subp_incumb_cuts!(m)
     is_viol_subp = false
 
     for n in 1:m.num_soc
+        # Add SOC K* subproblem cuts from solution
         if add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[m.v_idxs_soc_subp[n]])
             is_viol_subp = true
         end
     end
 
     for n in 1:m.num_exp
+        # Add ExpPrimal K* subproblem cuts from solution
         if add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], dual_conic[m.r_idx_exp_subp[n]], dual_conic[m.s_idx_exp_subp[n]])
             is_viol_subp = true
         end
     end
 
     for n in 1:m.num_sdp
-        if add_cut_sdp!(m, m.V_sdp[n], make_smat!(dual_conic[m.v_idx_sdp_subp[n]], m.smat_sdp[n]))
+        v_dual = dual_conic[m.v_idx_sdp_subp[n]]
+        V_dual = make_smat!(v_dual, m.smat_sdp[n])
+        (V_eigvals, V_eigvecs) = LAPACK.syev!('V', 'U', V_dual)
+
+        # Add PSD K* subproblem cuts from solution
+        # Dual is sum_{j: lambda_j > 0} lamda_j V_j V_j'
+        pos_inds = V_eigvals .>= m.tol_zero
+        if add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], slice(V_eigvecs, :, pos_inds))
             is_viol_subp = true
         end
     end
@@ -1772,10 +1781,8 @@ function add_prim_feas_cuts!(m, add_cuts::Bool)
 
     for n in 1:m.num_sdp
         V_vals = getvalue(m.V_sdp[n])
-        inf_outer = 1
-
-        #TODO eigenvalue decomp
-
+        (V_eigvals, V_eigvecs) = LAPACK.syev!('V', 'U', V_vals)
+        inf_outer = -minimum(V_eigvals)
         if inf_outer < m.tol_prim_infeas
             continue
         end
@@ -1785,11 +1792,9 @@ function add_prim_feas_cuts!(m, add_cuts::Bool)
         end
 
         # Add PSD K* primal cuts from solution
-        # Dual is ......
-
-        #TODO pass in eigvals, eigvecs?
-
-        if add_cut_sdp!(m, m.V_sdp[n], V_vals)
+        # Dual is sum_{j: lambda_j < 0} lamda_j V_j V_j'
+        neg_inds = V_eigvals .<= -m.tol_zero
+        if add_cut_sdp!(m, m.V_sdp[n], -V_eigvals[neg_inds], slice(V_eigvecs, :, neg_inds))
             is_viol_prim = true
         end
     end
@@ -1798,7 +1803,7 @@ function add_prim_feas_cuts!(m, add_cuts::Bool)
 end
 
 # Remove near-zeros from a vector, return false if all values are near-zeros
-function clean_zeros!(m, data::Vector{Float64})
+function clean_zeros!{N}(m, data::Array{Float64,N})
     keep = false
     for j in 1:length(data)
         if abs(data[j]) < m.tol_zero
@@ -1900,8 +1905,32 @@ function add_cut_exp!(m, r, s, t, r_dual, s_dual)
 end
 
 # Add K* cuts for a PSD, return true if a cut is violated by current solution
-function add_cut_sdp!(m, V, V_dual)
-    return false
+function add_cut_sdp!(m, V, lam_dual, lamvec_dual)
+    dim = size(lamvec_dual, 1)
+    is_viol = false
+    if m.sdp_eig
+        # Using PSD eigenvector cuts
+        for lam_j in 1:length(lam_dual)
+            V_dual_j = lam_dual[lam_j]*lamvec_dual[:, lam_j]*lamvec_dual[:, lam_j]'
+            if clean_zeros!(m, V_dual_j)
+                @expression(m.model_mip, cut_expr, vecdot(V_dual_j, V))
+                if add_cut!(m, cut_expr, m.logs[:SDP])
+                    is_viol = true
+                end
+            end
+        end
+    else
+        # Using full PSD cut
+        V_dual = lamvec_dual*diagm(lam_dual)*lamvec_dual'
+        if clean_zeros!(m, V_dual)
+            @expression(m.model_mip, cut_expr, vecdot(V_dual, V))
+            if add_cut!(m, cut_expr, m.logs[:SDP])
+                is_viol = true
+            end
+        end
+    end
+
+    return is_viol
 end
 
 # Check and record violation and add cut, return true if violated
