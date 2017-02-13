@@ -1095,7 +1095,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             # (u,v,w) in ExpDual <-> exp(1)*w >= -u*exp(v/u), w >= 0, u < 0
             # at u = -1; v = -1, -1/2, -1/5, 0, 1/5, 1/2, 1; z = exp(-v-1)
             for v in [-1., -0.5, -0.2, 0., 0.2, 0.5, 1.]
-                @constraint(model_mip, -r + v*s + exp(-v-1)*w >= 0)
+                @constraint(model_mip, -r + v*s + exp(-v-1)*t >= 0)
             end
         end
     end
@@ -1206,15 +1206,15 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             # Set up a ExpPrimal cone
             # (r,s,t) in ExpPrimal <-> t >= s*exp(r/s)
             n_exp += 1
-            r_idx_exp_relx[n_soc] = rows[1]
-            s_idx_exp_relx[n_soc] = rows[2]
-            r_idx_exp_subp[n_soc] = map_rows_sub[rows[1]]
-            s_idx_exp_subp[n_soc] = map_rows_sub[rows[2]]
-            t_idx_exp_subp[n_soc] = map_rows_sub[rows[3]]
+            r_idx_exp_relx[n_exp] = rows[1]
+            s_idx_exp_relx[n_exp] = rows[2]
+            r_idx_exp_subp[n_exp] = map_rows_sub[rows[1]]
+            s_idx_exp_subp[n_exp] = map_rows_sub[rows[2]]
+            t_idx_exp_subp[n_exp] = map_rows_sub[rows[3]]
 
-            r_exp[n_soc] = r = lhs_expr[rows[1]]
-            s_exp[n_soc] = s = lhs_expr[rows[2]]
-            t_exp[n_soc] = t = lhs_expr[rows[3]]
+            r_exp[n_exp] = r = lhs_expr[rows[1]]
+            s_exp[n_exp] = s = lhs_expr[rows[2]]
+            t_exp[n_exp] = t = lhs_expr[rows[3]]
 
             add_exp!(r, s, t)
         elseif spec == :SDP
