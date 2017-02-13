@@ -1923,6 +1923,7 @@ function create_logs!(m)
     logs[:conic_solve] = 0. # Solving conic subproblem model
 
     # Counters
+    logs[:n_mip] = 0        # Number of times lazy is called
     logs[:n_lazy] = 0       # Number of times lazy is called
     logs[:n_feas] = 0       # Number of times lazy is called with feasible solution
     logs[:n_repeat] = 0     # Number of times integer solution repeats
