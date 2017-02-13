@@ -1338,14 +1338,14 @@ function solve_iterative!(m)
 
             if !is_infeas
                 # MIP solver solution is conic-feasible, check if it is a new incumbent
-                soln_cont = getvalue(m.x_cont)
-                obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_cont)
+                soln_conic = getvalue(m.x_cont)
+                obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_conic)
 
                 if obj_full < m.best_obj
                     # Save new incumbent info
                     m.best_obj = obj_full
                     m.best_int = soln_int
-                    m.best_cont = soln_cont
+                    m.best_cont = soln_conic
 
                     # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
                     m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
@@ -1624,8 +1624,8 @@ function add_subp_incumb_cuts!(m)
         # Subproblem feasible
         # Note: suboptimal is a poorly defined status for conic solvers, this status should be rare (whether or not the dual is valid, the K* cuts are always valid)
         # Clean zeros and calculate full objective value
-        clean_zeros!(m, soln_cont)
-        obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_cont)
+        clean_zeros!(m, soln_conic)
+        obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_conic)
 
         if m.scale_subp_cuts
             # Rescale by number of cones / abs(objective + 1e-5)
@@ -1639,8 +1639,8 @@ function add_subp_incumb_cuts!(m)
             # m.logs[:n_feas] += 1
             m.best_obj = obj_full
             m.best_int = soln_int
-            m.best_cont = soln_cont
-            m.best_slck = b_sub_int - m.A_sub_cont * soln_cont
+            m.best_cont = soln_conic
+            m.best_slck = b_sub_int - m.A_sub_cont * soln_conic
             m.new_incumb = true
         end
     else
