@@ -390,7 +390,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             end
 
             for n in 1:m.num_sdp
-                add_cut_sdp!(m, m.V_sdp[n], make_smat!(dual_conic[v_idx_sdp_relx[n]]), m.smat_sdp[n])
+                add_cut_sdp!(m, m.V_sdp[n], make_smat!(dual_conic[v_idx_sdp_relx[n]], m.smat_sdp[n]))
             end
         end
 
@@ -1658,7 +1658,7 @@ function add_subp_incumb_cuts!(m)
     end
 
     for n in 1:m.num_sdp
-        if add_cut_sdp!(m, m.V_sdp[n], make_smat!(dual_conic[m.v_idx_sdp_subp[n]]), m.smat_sdp[n])
+        if add_cut_sdp!(m, m.V_sdp[n], make_smat!(dual_conic[m.v_idx_sdp_subp[n]], m.smat_sdp[n]))
             is_viol_subp = true
         end
     end
@@ -1789,7 +1789,7 @@ function add_prim_feas_cuts!(m, add_cuts::Bool)
 
         #TODO pass in eigvals, eigvecs?
 
-        if add_cut_sdp!(m, m.V_sdp[n], V_vals, m.smat_sdp[n])
+        if add_cut_sdp!(m, m.V_sdp[n], V_vals)
             is_viol_prim = true
         end
     end
@@ -1900,7 +1900,7 @@ function add_cut_exp!(m, r, s, t, r_dual, s_dual)
 end
 
 # Add K* cuts for a PSD, return true if a cut is violated by current solution
-function add_cut_sdp!(m, V, V_dual, smat)
+function add_cut_sdp!(m, V, V_dual)
     nothing
 end
 
