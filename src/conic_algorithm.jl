@@ -2034,7 +2034,7 @@ function print_gap(m)
 end
 
 # Print after finish
-function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
+function print_finish(m::PajaritoConicModel)
     flush(STDOUT)
 
     if m.log_level < 0
@@ -2044,7 +2044,7 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
     @printf "\nPajarito MICP solve summary:\n"
 
-    @printf " - Total time (s)       = %14.2e\n" logs[:total]
+    @printf " - Total time (s)       = %14.2e\n" m.logs[:total]
     @printf " - Status               = %14s\n" m.status
     @printf " - Best feasible obj.   = %+14.6e\n" m.best_obj
     @printf " - OA obj. bound        = %+14.6e\n" m.mip_obj
@@ -2059,50 +2059,50 @@ function print_finish(m::PajaritoConicModel, logs::Dict{Symbol,Real})
 
     @printf "\nTimers (s):\n"
 
-    @printf " - Setup                = %10.2e\n" (logs[:total] - logs[:oa_alg])
-    @printf " -- Transform data      = %10.2e\n" logs[:data_trans]
-    @printf " -- Create conic data   = %10.2e\n" logs[:data_conic]
-    @printf " -- Create MIP data     = %10.2e\n" logs[:data_mip]
-    @printf " -- Load/solve relax    = %10.2e\n" logs[:relax_solve]
+    @printf " - Setup                = %10.2e\n" (m.logs[:total] - m.logs[:oa_alg])
+    @printf " -- Transform data      = %10.2e\n" m.logs[:data_trans]
+    @printf " -- Create conic data   = %10.2e\n" m.logs[:data_conic]
+    @printf " -- Create MIP data     = %10.2e\n" m.logs[:data_mip]
+    @printf " -- Load/solve relax    = %10.2e\n" m.logs[:relax_solve]
 
-    @printf " - MIP-driven algorithm = %10.2e\n" logs[:oa_alg]
-    @printf " -- Solve conic model   = %10.2e\n" logs[:conic_solve]
+    @printf " - MIP-driven algorithm = %10.2e\n" m.logs[:oa_alg]
+    @printf " -- Solve conic model   = %10.2e\n" m.logs[:conic_solve]
 
     @printf "\nCounters:\n"
 
-    @printf " - Lazy callback        = %5d\n" logs[:n_lazy]
-    @printf " -- Feasible soln       = %5d\n" logs[:n_feas]
-    @printf " -- Integer repeat      = %5d\n" logs[:n_repeat]
-    @printf " -- Conic statuses      = %5d\n" logs[:n_conic]
-    @printf " --- Infeasible         = %5d\n" logs[:n_inf]
-    @printf " --- Optimal            = %5d\n" logs[:n_opt]
-    @printf " --- Suboptimal         = %5d\n" logs[:n_sub]
-    @printf " --- UserLimit          = %5d\n" logs[:n_lim]
-    @printf " --- ConicFailure       = %5d\n" logs[:n_fail]
-    @printf " --- Other status       = %5d\n" logs[:n_other]
-    @printf " -- No viol. dual cut   = %5d\n" logs[:n_nodual]
-    @printf " -- No viol. prim. cut  = %5d\n" logs[:n_nocuts]
+    @printf " - Lazy callback        = %5d\n" m.logs[:n_lazy]
+    @printf " -- Feasible soln       = %5d\n" m.logs[:n_feas]
+    @printf " -- Integer repeat      = %5d\n" m.logs[:n_repeat]
+    @printf " -- Conic statuses      = %5d\n" m.logs[:n_conic]
+    @printf " --- Infeasible         = %5d\n" m.logs[:n_inf]
+    @printf " --- Optimal            = %5d\n" m.logs[:n_opt]
+    @printf " --- Suboptimal         = %5d\n" m.logs[:n_sub]
+    @printf " --- UserLimit          = %5d\n" m.logs[:n_lim]
+    @printf " --- ConicFailure       = %5d\n" m.logs[:n_fail]
+    @printf " --- Other status       = %5d\n" m.logs[:n_other]
+    @printf " -- No viol. dual cut   = %5d\n" m.logs[:n_nodual]
+    @printf " -- No viol. prim. cut  = %5d\n" m.logs[:n_nocuts]
 
-    @printf " - Heuristic callback   = %5d\n" logs[:n_heur]
-    @printf " -- Feasible added      = %5d\n" logs[:n_add]
+    @printf " - Heuristic callback   = %5d\n" m.logs[:n_heur]
+    @printf " -- Feasible added      = %5d\n" m.logs[:n_add]
 
-    @printf " - Incumbent callback   = %5d\n" logs[:n_incum]
-    @printf " -- Feasible accepted   = %5d\n" logs[:n_innew]
+    @printf " - Incumbent callback   = %5d\n" m.logs[:n_incum]
+    @printf " -- Feasible accepted   = %5d\n" m.logs[:n_innew]
 
-    # @printf " - Dual cuts            = %5d\n" (logs[:n_relax] + logs[:n_dualfullv] + logs[:n_dualfullnv] + logs[:n_dualdisv] + logs[:n_dualdisnv])
-    # @printf " -- Relaxation          = %5d\n" logs[:n_relax]
-    # @printf " -- Full viol.          = %5d\n" logs[:n_dualfullv]
-    # @printf " -- Full nonviol.       = %5d\n" logs[:n_dualfullnv]
-    # @printf " -- Disagg. viol        = %5d\n" logs[:n_dualdisv]
-    # @printf " -- Disagg. nonviol     = %5d\n" logs[:n_dualdisnv]
-    # @printf " -- Poorly conditioned  = %5d\n" logs[:n_dualdiscon]
+    # @printf " - Dual cuts            = %5d\n" (m.logs[:n_relax] + m.logs[:n_dualfullv] + m.logs[:n_dualfullnv] + m.logs[:n_dualdisv] + m.logs[:n_dualdisnv])
+    # @printf " -- Relaxation          = %5d\n" m.logs[:n_relax]
+    # @printf " -- Full viol.          = %5d\n" m.logs[:n_dualfullv]
+    # @printf " -- Full nonviol.       = %5d\n" m.logs[:n_dualfullnv]
+    # @printf " -- Disagg. viol        = %5d\n" m.logs[:n_dualdisv]
+    # @printf " -- Disagg. nonviol     = %5d\n" m.logs[:n_dualdisnv]
+    # @printf " -- Poorly conditioned  = %5d\n" m.logs[:n_dualdiscon]
     #
-    # @printf " - Primal cuts          = %5d\n" (logs[:n_primfullv] + logs[:n_primfullnv] + logs[:n_primdisv] + logs[:n_primdisnv])
-    # @printf " -- Full viol.          = %5d\n" logs[:n_primfullv]
-    # @printf " -- Full nonviol.       = %5d\n" logs[:n_primfullnv]
-    # @printf " -- Disagg. viol        = %5d\n" logs[:n_primdisv]
-    # @printf " -- Disagg. nonviol     = %5d\n" logs[:n_primdisnv]
-    # @printf " -- Poorly conditioned  = %5d\n" logs[:n_primdiscon]
+    # @printf " - Primal cuts          = %5d\n" (m.logs[:n_primfullv] + m.logs[:n_primfullnv] + m.logs[:n_primdisv] + m.logs[:n_primdisnv])
+    # @printf " -- Full viol.          = %5d\n" m.logs[:n_primfullv]
+    # @printf " -- Full nonviol.       = %5d\n" m.logs[:n_primfullnv]
+    # @printf " -- Disagg. viol        = %5d\n" m.logs[:n_primdisv]
+    # @printf " -- Disagg. nonviol     = %5d\n" m.logs[:n_primdisnv]
+    # @printf " -- Poorly conditioned  = %5d\n" m.logs[:n_primdiscon]
 
     flush(STDOUT)
 
