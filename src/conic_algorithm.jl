@@ -388,7 +388,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             # Add relaxation cuts
             for n in 1:m.num_soc
                 v_dual = dual_conic[v_idxs_soc_relx[n]]
-                if clean_zeros!(v_dual)
+                if clean_zeros!(m, v_dual)
                     add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], v_dual)
                 end
             end
@@ -1616,7 +1616,7 @@ function add_subp_incumb_cuts!(m)
         # Subproblem feasible
         # Note: suboptimal is a poorly defined status for conic solvers, this status should be rare (whether or not the dual is valid, the K* cuts are always valid)
         # Clean zeros and calculate full objective value
-        clean_zeros!(soln_cont)
+        clean_zeros!(m, soln_cont)
         obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_cont)
 
         if m.scale_subp_cuts
@@ -1651,7 +1651,7 @@ function add_subp_incumb_cuts!(m)
     for n in 1:m.num_soc
         # Get SOC v dual, remove near-zeros, scale, add K* cuts
         v_dual = dual_conic[m.v_idxs_soc_subp[n]]
-        if clean_zeros!(v_dual)
+        if clean_zeros!(m, v_dual)
             if add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], v_dual)
                 is_viol_subp = true
             end
@@ -1749,7 +1749,7 @@ function add_prim_feas_cuts!(m, add_cuts::Bool)
         end
 
         # Remove near-zeros in v dual, scale, and add SOC K* cuts
-        if clean_zeros!(v_dual)
+        if clean_zeros!(m, v_dual)
             # Add SOC K* primal cuts from solution
             # v dual is -1/norm(v')*v'
             # Scale dual for feasibility tolerance
@@ -1774,7 +1774,7 @@ function add_prim_feas_cuts!(m, add_cuts::Bool)
 end
 
 # Remove near-zeros from a vector, return false if all values are near-zeros
-function clean_zeros!(data::Vector{Float64})
+function clean_zeros!(m, data::Vector{Float64})
     keep = false
     for j in 1:length(data)
         if abs(data[j]) < m.tol_zero
