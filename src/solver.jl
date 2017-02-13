@@ -71,8 +71,8 @@ function PajaritoSolver(;
     sdp_eig = true,
     sdp_soc = false,
 
-    init_soc_one = true,
-    init_soc_inf = true,
+    init_soc_one = false,
+    init_soc_inf = false,
     init_exp = true,
     init_sdp_lin = true,
     init_sdp_soc = false,

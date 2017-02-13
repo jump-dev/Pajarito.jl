@@ -1746,8 +1746,8 @@ function add_prim_feas_cuts!(m, add_cuts::Bool)
 
     for n in 1:m.num_soc
         # Get cone current solution, check infeasibility
-        v_vals = getvalue(m.v_soc[n])
-        inf_outer = vecnorm(v_vals) - getvalue(m.t_soc[n])
+        v_dual = getvalue(m.v_soc[n])
+        inf_outer = vecnorm(v_dual) - getvalue(m.t_soc[n])
         if inf_outer < m.tol_prim_infeas
             continue
         end
