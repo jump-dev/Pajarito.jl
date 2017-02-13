@@ -84,7 +84,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     x_int::Vector{JuMP.Variable} # JuMP (sub)vector of integer variables
     x_cont::Vector{JuMP.Variable} # JuMP (sub)vector of continuous variables
 
-    # SO cone data
+    # SOC data
     num_soc::Int                # Number of SOCs
     t_idx_soc_subp::Vector{Int} # Row index of t variable in SOCs in subproblems
     v_idxs_soc_subp::Vector{Vector{Int}} # Row indices of v variables in SOCs in subproblem
@@ -93,12 +93,16 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     d_soc::Vector{Vector{JuMP.Variable}} # d variables (disaggregated) in SOCs
     a_soc::Vector{Vector{JuMP.Variable}} # a variables (absolute values) in SOCs
 
-    # Exp cone data
+    # ExpPrimal data
     num_exp::Int                # Number of ExpPrimal cones
-    # rows_sub_exp::Vector{Vector{Int}} # Row indices in subproblem
-    # vars_exp::Vector{Vector{JuMP.Variable}} # Slack variables (newly added or detected)
+    r_idx_exp_subp::Vector{Int}
+    s_idx_exp_subp::Vector{Int}
+    t_idx_exp_subp::Vector{Int}
+    r_exp::Vector{JuMP.AffExpr}
+    s_exp::Vector{JuMP.AffExpr}
+    t_exp::Vector{JuMP.AffExpr}
 
-    # PSD cone data
+    # SDP data
     num_sdp::Int                # Number of SDP cones
     # rows_sub_sdp::Vector{Vector{Int}} # Row indices in subproblem
     # dim_sdp::Vector{Int}        # Dimensions
@@ -329,14 +333,11 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         @printf "\nCreating MIP model..."
     end
     tic()
-    (v_idxs_soc_relx, rows_relax_exp, rows_relax_sdp) = create_mip_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new, map_rows_sub, cols_cont, cols_int)
+    (v_idxs_soc_relx, r_idx_exp_relx, s_idx_exp_relx, rows_relax_sdp) = create_mip_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new, map_rows_sub, cols_cont, cols_int)
     m.logs[:data_mip] += toq()
     if m.log_level > 1
         @printf "...Done %8.2fs\n" m.logs[:data_mip]
     end
-
-    # print_cones(m)
-    # reset_cone_logs!(m)
 
     if m.solve_relax
         # Solve relaxed conic problem, proceed with algorithm if optimal or suboptimal, else finish
@@ -382,14 +383,13 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
             # Add relaxation cuts
             for n in 1:m.num_soc
-                v_dual = dual_conic[v_idxs_soc_relx[n]]
-                if clean_zeros!(m, v_dual)
-                    add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], v_dual)
-                end
+                add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[v_idxs_soc_relx[n]])
             end
-            # for n in 1:m.num_exp
-            #     add_cut_exp!(m, m.vars_exp[n], dual[m.rows_relax_exp[n]], false, m.logs[:ExpPrimal])
-            # end
+
+            for n in 1:m.num_exp
+                add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], dual_conic[r_idx_exp_relx[n]], dual_conic[s_idx_exp_relx[n]])
+            end
+
             # for n in 1:m.num_sdp
             #     add_cut_sdp!(m, m.dim_sdp[n], m.vars_sdp[n], dual[m.rows_relax_sdp[n]], m.smat[n], false, m.logs[:SDP])
             # end
@@ -972,6 +972,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     end
 
     # Allocate data for nonlinear cones
+    # SOC data
     v_idxs_soc_relx = Vector{Vector{Int}}(m.num_soc)
     t_idx_soc_subp = Vector{Int}(m.num_soc)
     v_idxs_soc_subp = Vector{Vector{Int}}(m.num_soc)
@@ -980,10 +981,17 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     d_soc = Vector{Vector{JuMP.Variable}}(m.num_soc)
     a_soc = Vector{Vector{JuMP.Variable}}(m.num_soc)
 
-    rows_relax_exp = Vector{Vector{Int}}(m.num_exp)
-    # rows_sub_exp = Vector{Vector{Int}}(num_exp)
-    # vars_exp = Vector{Vector{JuMP.AffExpr}}(num_exp)
-    #
+    # Exp data
+    r_idx_exp_relx = Vector{Int}(m.num_exp)
+    s_idx_exp_relx = Vector{Int}(m.num_exp)
+    r_idx_exp_subp = Vector{Int}(m.num_exp)
+    s_idx_exp_subp = Vector{Int}(m.num_exp)
+    t_idx_exp_subp = Vector{Int}(m.num_exp)
+    r_exp = Vector{JuMP.AffExpr}(m.num_exp)
+    s_exp = Vector{JuMP.AffExpr}(m.num_exp)
+    t_exp = Vector{JuMP.AffExpr}(m.num_exp)
+
+    # PSD data
     rows_relax_sdp = Vector{Vector{Int}}(m.num_sdp)
     # rows_sub_sdp = Vector{Vector{Int}}(num_sdp)
     # dim_sdp = Vector{Int}(num_sdp)
@@ -992,7 +1000,6 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     # smat = Vector{Array{Float64,2}}(num_sdp)
 
     # Set up a SOC cone in the MIP
-    # t >= norm(v)
     function add_soc!(t, v, d, a, dim)
         # Set bounds
         @constraint(model_mip, t >= 0)
@@ -1077,32 +1084,23 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
         end
     end
 
-    # # Set up a ExpPrimal cone in the MIP
-    # function add_exp!(n_exp, rows, vars)
-    #
-    #     #
-    #     # rows_relax_exp[n_exp] = rows
-    #     # rows_sub_exp[n_exp] = map_rows_sub[rows]
-    #     # vars_exp[n_exp] = vars
-    #     #
-    #     # # Set bounds
-    #     # @constraint(model_mip, vars[2] >= 0)
-    #     # @constraint(model_mip, vars[3] >= 0)
-    #     #
-    #     #
-    #     # # Add initial linearization depending on option
-    #     # if m.init_exp
-    #     #     # TODO maybe pick different linearization points
-    #     #     # Add initial exp cuts using dual exp cone linearizations
-    #     #     # Dual exp cone is  e * z >= -x * exp(y / x), z >= 0, x < 0
-    #     #     # at x = -1; y = -1, -1/2, -1/5, 0, 1/5, 1/2, 1; z = exp(-y) / e = exp(-y - 1)
-    #     #     for yval in [-1., -0.5, -0.2, 0., 0.2, 0.5, 1.]
-    #     #         @constraint(model_mip, -vars[1] + yval * vars[2] + exp(-yval - 1.) * vars[3] >= 0)
-    #     #     end
-    #     # end
-    # end
-    #
-    # # Set up a SDP cone in the MIP
+    # Set up a ExpPrimal cone in the MIP
+    function add_exp!(r, s, t)
+        # Set bounds
+        @constraint(model_mip, s >= 0)
+        @constraint(model_mip, t >= 0)
+
+        if m.init_exp
+            # Add initial exp cuts using dual exp cone linearizations
+            # (u,v,w) in ExpDual <-> exp(1)*w >= -u*exp(v/u), w >= 0, u < 0
+            # at u = -1; v = -1, -1/2, -1/5, 0, 1/5, 1/2, 1; z = exp(-v-1)
+            for v in [-1., -0.5, -0.2, 0., 0.2, 0.5, 1.]
+                @constraint(model_mip, -r + v*s + exp(-v-1)*w >= 0)
+            end
+        end
+    end
+
+    # Set up a SDP cone in the MIP
     # function add_sdp!(n_sdp, rows, vars)
     #
     #     # dim = round(Int, sqrt(1/4 + 2 * length(rows)) - 1/2) # smat space dimension
@@ -1167,8 +1165,9 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
                 continue
             end
 
+            # Set up a SOC
+            # (t,v) in SOC <-> t >= norm(v)
             n_soc += 1
-
             v_idxs = rows[2:end]
             dim = length(v_idxs)
             v_idxs_soc_relx[n_soc] = v_idxs
@@ -1203,12 +1202,24 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             a_soc[n_soc] = a
 
             add_soc!(t, v, d, a, dim)
-        # elseif spec == :ExpPrimal
-        #     n_exp += 1
-        #     add_exp!(n_exp, rows, lhs_expr[rows])
-        # elseif spec == :SDP
-        #     n_sdp += 1
-        #     add_sdp!(n_sdp, rows, lhs_expr[rows])
+        elseif spec == :ExpPrimal
+            # Set up a ExpPrimal cone
+            # (r,s,t) in ExpPrimal <-> t >= s*exp(r/s)
+            n_exp += 1
+            r_idx_exp_relx[n_soc] = rows[1]
+            s_idx_exp_relx[n_soc] = rows[2]
+            r_idx_exp_subp[n_soc] = map_rows_sub[rows[1]]
+            s_idx_exp_subp[n_soc] = map_rows_sub[rows[2]]
+            t_idx_exp_subp[n_soc] = map_rows_sub[rows[3]]
+
+            r_exp[n_soc] = r = lhs_expr[rows[1]]
+            s_exp[n_soc] = s = lhs_expr[rows[2]]
+            t_exp[n_soc] = t = lhs_expr[rows[3]]
+
+            add_exp!(r, s, t)
+        elseif spec == :SDP
+            n_sdp += 1
+            add_sdp!(n_sdp, rows, lhs_expr[rows])
         end
     end
 
@@ -1225,8 +1236,12 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     m.d_soc = d_soc
     m.a_soc = a_soc
 
-    # m.rows_sub_exp = rows_sub_exp
-    # m.vars_exp = vars_exp
+    m.r_idx_exp_subp = r_idx_exp_subp
+    m.s_idx_exp_subp = s_idx_exp_subp
+    m.t_idx_exp_subp = t_idx_exp_subp
+    m.r_exp = r_exp
+    m.s_exp = s_exp
+    m.t_exp = t_exp
 
     # m.rows_sub_sdp = rows_sub_sdp
     # m.dim_sdp = dim_sdp
@@ -1234,7 +1249,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     # m.vars_sdp = vars_sdp
     # m.smat = smat
 
-    return (v_idxs_soc_relx, rows_relax_exp, rows_relax_sdp)
+    return (v_idxs_soc_relx, r_idx_exp_relx, s_idx_exp_relx, rows_relax_sdp)
 end
 
 
@@ -1651,20 +1666,19 @@ function add_subp_incumb_cuts!(m)
 
     # Add subproblem cuts for each cone
     is_viol_subp = false
+
     for n in 1:m.num_soc
-        # Get SOC v dual, remove near-zeros, scale, add K* cuts
-        v_dual = dual_conic[m.v_idxs_soc_subp[n]]
-        if clean_zeros!(m, v_dual)
-            if add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], v_dual)
-                is_viol_subp = true
-            end
+        if add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[m.v_idxs_soc_subp[n]])
+            is_viol_subp = true
         end
     end
-    # for n in 1:m.num_exp
-    #
-    #
-    #     add_cut_exp!(m, m.vars_exp[n], dual[m.rows_exp[n]], m.logs[:ExpPrimal])
-    # end
+
+    for n in 1:m.num_exp
+        if add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], dual_conic[m.r_idx_exp_subp[n]], dual_conic[m.s_idx_exp_subp[n]])
+            is_viol_subp = true
+        end
+    end
+
     # for n in 1:m.num_sdp
     #
     #
@@ -1741,8 +1755,8 @@ function add_prim_feas_cuts!(m, add_cuts::Bool)
 
     for n in 1:m.num_soc
         # Get cone current solution, check infeasibility
-        v_dual = getvalue(m.v_soc[n])
-        inf_outer = vecnorm(v_dual) - getvalue(m.t_soc[n])
+        v_vals = getvalue(m.v_soc[n])
+        inf_outer = vecnorm(v_vals) - getvalue(m.t_soc[n])
         if inf_outer < m.tol_prim_infeas
             continue
         end
@@ -1751,22 +1765,33 @@ function add_prim_feas_cuts!(m, add_cuts::Bool)
             continue
         end
 
-        # Remove near-zeros in v dual, scale, and add SOC K* cuts
-        if clean_zeros!(m, v_dual)
-            # Add SOC K* primal cuts from solution
-            # v dual is -1/norm(v')*v'
-            # Scale dual for feasibility tolerance
-            scale!(v_dual, -1/vecnorm(v_dual))
-            if add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], v_dual)
-                is_viol_prim = true
-            end
+        # Add SOC K* primal cuts from solution
+        # Dual is (1, -1/norm(v)*v)
+        if add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], -1/vecnorm(v_vals)*v_vals)
+            is_viol_prim = true
         end
     end
-    # for n in 1:m.num_exp
-    #
-    #
-    #     add_cut_exp!(m, m.vars_exp[n], dual[m.rows_exp[n]])
-    # end
+
+    for n in 1:m.num_exp
+        r_val = getvalue(m.r_exp[n])
+        s_val = getvalue(m.s_exp[n])
+        inf_outer = s_val*exp(r_val/s_val) - getvalue(m.t_exp[n])
+        if inf_outer < m.tol_prim_infeas
+            continue
+        end
+        is_infeas = true
+        if !add_cuts
+            continue
+        end
+
+        # Add ExpPrimal K* primal cuts from solution
+        # Dual is (-exp(r/s), exp(r/s)(r/s-1), 1)
+        ers = exp(r_val/s_val)
+        if add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], -ers, ers*(r_val/s_val-1))
+            is_viol_prim = true
+        end
+    end
+
     # for n in 1:m.num_sdp
     #
     #
@@ -1791,11 +1816,16 @@ end
 
 # Add K* cuts for a SOC, return true if a cut is violated by current solution
 function add_cut_soc!(m, t, v, d, a, v_dual)
-    is_viol = false
+    # Remove near-zeros, return false if all near zero
+    if !clean_zeros!(m, v_dual)
+        return false
+    end
+
+    # Calculate t_dual according to SOC definition
+    t_dual = vecnorm(v_dual)
 
     dim = length(v)
-    v_dual_norm = vecnorm(v_dual)
-
+    is_viol = false
     add_full = false
     if m.soc_disagg
         # Using SOC disaggregation
@@ -1803,11 +1833,11 @@ function add_cut_soc!(m, t, v, d, a, v_dual)
             if v_dual[j] == 0.
                 # Zero cut, don't add
                 continue
-            elseif dim*v_dual[j]^2/v_dual_norm < m.tol_zero
+            elseif dim*v_dual[j]^2/t_dual < m.tol_zero
                 # Coefficient is too small, don't add, add full cut later
                 add_full = true
                 continue
-            elseif (v_dual[j]/v_dual_norm)^2 < 1e-5
+            elseif (v_dual[j]/t_dual)^2 < 1e-5
                 # Cut is poorly conditioned, add it but also add full cut
                 add_full = true
             end
@@ -1817,12 +1847,12 @@ function add_cut_soc!(m, t, v, d, a, v_dual)
                 # Using SOC absvalue lifting, so add two-sided cut
                 # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j - 2*|v'_j|*a_j >= 0
                 # Scale by 2*dim
-                @expression(m.model_mip, cut_expr, 2*dim*(v_dual[j]^2/v_dual_norm*t + 2*v_dual_norm*d[j] - 2*abs(v_dual[j])*a[j]))
+                @expression(m.model_mip, cut_expr, 2*dim*(v_dual[j]^2/t_dual*t + 2*t_dual*d[j] - 2*abs(v_dual[j])*a[j]))
             else
                 # Not using SOC absvalue lifting, so add a single one-sided cut
                 # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j + 2*v'_j*v_j >= 0
                 # Scale by 2*dim
-                @expression(m.model_mip, cut_expr, 2*dim*(v_dual[j]^2/v_dual_norm*t + 2*v_dual_norm*d[j] + 2*v_dual[j]*v[j]))
+                @expression(m.model_mip, cut_expr, 2*dim*(v_dual[j]^2/t_dual*t + 2*t_dual*d[j] + 2*v_dual[j]*v[j]))
             end
             if add_cut!(m, cut_expr, m.logs[:SOC])
                 is_viol = true
@@ -1836,12 +1866,11 @@ function add_cut_soc!(m, t, v, d, a, v_dual)
             # Using SOC absvalue lifting, so add many-sided cut
             # norm(v')*t - dot(|v'|,a) >= 0
             # Scale by 2
-            @expression(m.model_mip, cut_expr, 2*(v_dual_norm*t - vecdot(abs(v_dual), a)))
+            @expression(m.model_mip, cut_expr, 2*(t_dual*t - vecdot(abs(v_dual), a)))
         else
             # Not using SOC absvalue lifting, so add a single one-sided cut
             # norm(v')*t + dot(v',v) >= 0
-            # Scale by 2
-            @expression(m.model_mip, cut_expr, 2*(v_dual_norm*t + vecdot(v_dual, v)))
+            @expression(m.model_mip, cut_expr, t_dual*t + vecdot(v_dual, v))
         end
         if add_cut!(m, cut_expr, m.logs[:SOC])
             is_viol = true
@@ -1852,8 +1881,26 @@ function add_cut_soc!(m, t, v, d, a, v_dual)
 end
 
 # Add K* cuts for a ExpPrimal, return true if a cut is violated by current solution
-function add_cut_exp!(m, vars, cut, is_viol, summary)
-    nothing
+function add_cut_exp!(m, r, s, t, r_dual, s_dual)
+    # Clean zeros
+    if r_dual >= -m.tol_zero
+        return false
+    end
+    if abs(s_dual) < m.tol_zero
+        s_dual = 0.
+    end
+
+    # Calculate t_dual according to dual exp cone definition
+    # (u,v,w) in ExpDual <-> exp(1)*w >= -u*exp(v/u), w >= 0, u < 0
+    t_dual = -r_dual*exp(s_dual/r_dual - 1)
+    if t_dual < m.tol_zero
+        return false
+    end
+
+    # Cut is (u,v,w)'(r,s,t) >= 0
+    @expression(m.model_mip, cut_expr, r_dual*r + s_dual*s + t_dual*t)
+
+    return add_cut!(m, cut_expr, m.logs[:ExpPrimal])
 end
 
 # Add K* cuts for a PSD, return true if a cut is violated by current solution
