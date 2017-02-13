@@ -2179,6 +2179,8 @@ function print_finish(m::PajaritoConicModel)
         elseif cone == :SOCRotated
             # (y,z,x) in RSOC <=> (y+z,-y+z,sqrt2*x) in SOC, y >= 0, z >= 0
             viol_rot = max(viol_rot, sqrt((vals[idx[1]] - vals[idx[2]])^2 + 2. * sumabs2(vals[idx[j]] for j in 3:length(idx))) - (vals[idx[1]] + vals[idx[2]]))
+        elseif cone == :ExpPrimal
+            viol_exp = max(viol_exp, vals[idx[2]]*exp(vals[idx[1]]/vals[idx[2]]) - vals[idx[3]])
         else
             error("Cone not supported: $cone\n")
         end
@@ -2213,6 +2215,8 @@ function print_finish(m::PajaritoConicModel)
         elseif cone == :SOCRotated
             # (y,z,x) in RSOC <=> (y+z,-y+z,sqrt2*x) in SOC, y >= 0, z >= 0
             viol_rot = max(viol_rot, sqrt((vals[idx[1]] - vals[idx[2]])^2 + 2. * sumabs2(vals[idx[j]] for j in 3:length(idx))) - (vals[idx[1]] + vals[idx[2]]))
+        elseif cone == :ExpPrimal
+            viol_exp = max(viol_exp, vals[idx[2]]*exp(vals[idx[1]]/vals[idx[2]]) - vals[idx[3]])
         else
             error("Cone not supported: $cone\n")
         end
