@@ -1814,6 +1814,7 @@ function add_cut_soc!(m, t, v, d, a, v_dual)
                 # Using SOC absvalue lifting, so add two-sided cut
                 # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j - 2*|v'_j|*a_j >= 0
                 # Scale by 2*dim
+                @show v_dual, t, d, a
                 @expression(m.model_mip, cut_expr, 2*dim*(v_dual[j]^2/v_dual_norm*t + 2*v_dual_norm*d[j] - 2*abs(v_dual[j])*a[j]))
             else
                 # Not using SOC absvalue lifting, so add a single one-sided cut
