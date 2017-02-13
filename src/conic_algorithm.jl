@@ -1803,7 +1803,7 @@ function add_prim_feas_cuts!(m, add_cuts::Bool)
         # Add PSD K* primal cuts from solution
         # Dual is sum_{j: lambda_j < 0} lamda_j V_j V_j'
         neg_inds = V_eigvals .<= -m.tol_zero
-        if add_cut_sdp!(m, m.V_sdp[n], -V_eigvals[neg_inds], view(V_eigvecs, :, neg_inds))
+        if add_cut_sdp!(m, m.V_sdp[n], ones(countnz(neg_inds)), view(V_eigvecs, :, neg_inds))
             is_viol_prim = true
         end
     end
@@ -1917,24 +1917,35 @@ end
 function add_cut_sdp!(m, V, lam_dual, lamvec_dual)
     dim = size(lamvec_dual, 1)
     is_viol = false
-    if m.sdp_eig
-        # Using PSD eigenvector cuts
-        for lam_j in 1:length(lam_dual)
-            V_dual_j = lam_dual[lam_j]*lamvec_dual[:, lam_j]*lamvec_dual[:, lam_j]'
-            if clean_zeros!(m, V_dual_j)
-                @expression(m.model_mip, cut_expr, vecdot(V_dual_j, V))
+    if m.sdp_soc
+        # Using SDP SOC cuts
+        # TODO SOC cuts
+        if m.sdp_eig
+
+        else
+
+        end
+    else
+        # Not using SDP SOC cuts
+        if m.sdp_eig
+            # Using PSD eigenvector cuts
+            for lam_j in 1:length(lam_dual)
+                V_dual_j = lam_dual[lam_j]*lamvec_dual[:, lam_j]*lamvec_dual[:, lam_j]'
+                if clean_zeros!(m, V_dual_j)
+                    @expression(m.model_mip, cut_expr, vecdot(V_dual_j, V))
+                    if add_cut!(m, cut_expr, m.logs[:SDP])
+                        is_viol = true
+                    end
+                end
+            end
+        else
+            # Using full PSD cut
+            V_dual = lamvec_dual*diagm(lam_dual)*lamvec_dual'
+            if clean_zeros!(m, V_dual)
+                @expression(m.model_mip, cut_expr, vecdot(V_dual, V))
                 if add_cut!(m, cut_expr, m.logs[:SDP])
                     is_viol = true
                 end
-            end
-        end
-    else
-        # Using full PSD cut
-        V_dual = lamvec_dual*diagm(lam_dual)*lamvec_dual'
-        if clean_zeros!(m, V_dual)
-            @expression(m.model_mip, cut_expr, vecdot(V_dual, V))
-            if add_cut!(m, cut_expr, m.logs[:SDP])
-                is_viol = true
             end
         end
     end
