@@ -67,48 +67,25 @@ TOL = 1e-3
 log = 0
 
 # NLP tests in nlptest.jl
-@testset "NLP model and NLP solver tests: MSD=$msd, MIP=$(typeof(mip)), NLP=$(typeof(nlp))" for msd in [false, true], mip in solvers_mip, nlp in solvers_nlp
+@testset "NLP models: $(msd ? "  MSD" : " iter"), $(split(typeof(mip), '.')[1]), $(split(typeof(nlp), '.')[1])" for nlp in solvers_nlp, mip in solvers_mip, msd in [false, true]
     runnlptests(msd, mip, nlp, log)
 end
 
-# Conic models tests in conictest.jl
-@testset "Conic model and NLP solver tests" begin
-    @testset "SOC problems" begin
-        for msd in [false, true], mip in solvers_mip, nlp in solvers_nlp
-            @testset "MSD=$msd, MIP=$(typeof(mip)), NLP=$(typeof(nlp))" begin
-                runsoctests(msd, mip, nlp, log)
-            end
-        end
-    end
-    @testset "Exp+SOC problems" begin
-        for msd in [false, true], mip in solvers_mip, nlp in solvers_nlp
-            @testset "MSD=$msd, MIP=$(typeof(mip)), NLP=$(typeof(nlp))" begin
-                runexpsoctests(msd, mip, nlp, log)
-            end
-        end
-    end
+# Conic models tests in conictest.jl with NLP solver
+@testset "SOC with NLP: $(msd ? "  MSD" : " iter"), $(split(typeof(mip), '.')[1]), $(split(typeof(nlp), '.')[1])" for nlp in solvers_nlp, mip in solvers_mip, msd in [false, true]
+    runsoctests(msd, mip, nlp, log)
+end
+@testset "Exp+SOC with NLP: $(msd ? "  MSD" : " iter"), $(split(typeof(mip), '.')[1]), $(split(typeof(nlp), '.')[1])" for nlp in solvers_nlp, mip in solvers_mip, msd in [false, true]
+    runexpsoctests(msd, mip, nlp, log)
 end
 
-@testset "Conic model and conic solver tests" begin
-    @testset "SOC problems" begin
-        for msd in [false, true], mip in solvers_mip, conic in solvers_soc
-            @testset "MSD=$msd, MIP=$(typeof(mip)), Conic=$(typeof(conic))" begin
-                runsoctests(msd, mip, conic, log)
-            end
-        end
-    end
-    @testset "Exp+SOC problems" begin
-        for msd in [false, true], mip in solvers_mip, conic in solvers_expsoc
-            @testset "MSD=$msd, MIP=$(typeof(mip)), Conic=$(typeof(conic))" begin
-                runexpsoctests(msd, mip, conic, log)
-            end
-        end
-    end
-    @testset "SDP+SOC problems" begin
-        for msd in [false, true], mip in solvers_mip, conic in solvers_sdpsoc
-            @testset "MSD=$msd, MIP=$(typeof(mip)), Conic=$(typeof(conic))" begin
-                runsdpsoctests(msd, mip, conic, log)
-            end
-        end
-    end
+# Conic models tests in conictest.jl with conic solver
+@testset "SOC with conic: $(msd ? "  MSD" : " iter"), $(split(typeof(mip), '.')[1]), $(split(typeof(nlp), '.')[1])" for conic in solvers_soc, mip in solvers_mip, msd in [false, true]
+    runsoctests(msd, mip, conic, log)
+end
+@testset "Exp+SOC with conic: $(msd ? "  MSD" : " iter"), $(split(typeof(mip), '.')[1]), $(split(typeof(nlp), '.')[1])" for conic in solvers_expsoc, mip in solvers_mip, msd in [false, true]
+    runexpsoctests(msd, mip, conic, log)
+end
+@testset "SDP+SOC with conic: $(msd ? "  MSD" : " iter"), $(split(typeof(mip), '.')[1]), $(split(typeof(nlp), '.')[1])" for conic in solvers_sdpsoc, mip in solvers_mip, msd in [false, true]
+    runsdpsoctests(msd, mip, conic, log)
 end
