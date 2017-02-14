@@ -340,7 +340,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     if m.solve_relax
         # Solve relaxed conic problem, proceed with algorithm if optimal or suboptimal, else finish
-        if m.log_level > 0
+        if m.log_level > 1
             @printf "\nSolving conic relaxation..."
         end
         tic()
@@ -353,7 +353,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         MathProgBase.loadproblem!(model_relax, c_new, A_new, b_new, cone_con_new, cone_var_new)
         MathProgBase.optimize!(model_relax)
         m.logs[:relax_solve] += toq()
-        if m.log_level > 0
+        if m.log_level > 1
             @printf "...Done %8.2fs\n" m.logs[:relax_solve]
         end
 
@@ -368,7 +368,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             warn("Apparent conic solver failure with status $status_relax\n")
         else
             obj_relax = MathProgBase.getobjval(model_relax)
-            if m.log_level >= 1
+            if m.log_level > 2
                 @printf " - Relaxation status    = %14s\n" status_relax
                 @printf " - Relaxation objective = %14.6f\n" obj_relax
             end
@@ -411,7 +411,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     if (m.status != :Infeasible) && (m.status != :UnboundedRelaxation)
         tic()
-        if m.log_level > 1
+        if m.log_level > 2
             @printf "\nCreating conic subproblem model..."
         end
         if m.dualize_sub
@@ -427,7 +427,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         else
             m.update_conicsub = false
         end
-        if m.log_level > 1
+        if m.log_level > 2
             @printf "...Done %8.2fs\n" toq()
         end
 
@@ -1975,7 +1975,7 @@ function add_cut_sdp!(m, V, lam_dual, lamvec_dual)
                     cut_expr_max = cut_expr
                 end
             end
-            
+
             if viol_max > 0.
                 if add_cut!(m, cut_expr_max, m.logs[:SDP])
                     is_viol = true
@@ -2163,7 +2163,7 @@ end
 
 # Reset all cone cut summary info to 0
 function reset_cone_logs!(m)
-    if m.log_level <= 2
+    if m.log_level <= 1
         return
     end
 
@@ -2200,7 +2200,7 @@ end
 
 # Print objective gap information for iterative
 function print_gap(m)
-    if m.log_level <= 1
+    if m.log_level < 1
         return
     end
 
@@ -2220,9 +2220,7 @@ end
 # Print after finish
 function print_finish(m::PajaritoConicModel)
     flush(STDOUT)
-
-    if m.log_level < 0
-        @printf "\n"
+    if m.log_level == 0
         return
     end
 
@@ -2235,9 +2233,7 @@ function print_finish(m::PajaritoConicModel)
     @printf " - Relative opt. gap    = %14.3e\n" m.gap_rel_opt
 
     flush(STDOUT)
-
-    if m.log_level == 0
-        @printf "\n"
+    if m.log_level == 1
         return
     end
 
@@ -2289,9 +2285,10 @@ function print_finish(m::PajaritoConicModel)
     # @printf " -- Poorly conditioned  = %5d\n" m.logs[:n_primdiscon]
 
     flush(STDOUT)
-
+    if m.log_level == 2
+        return
+    end
     if !isfinite(m.best_obj) || any(isnan(m.final_soln))
-        @printf "\n"
         return
     end
 
@@ -2379,6 +2376,5 @@ function print_finish(m::PajaritoConicModel)
     @printf " -- Primal exponential  = %10.2e\n" viol_exp
     @printf " -- Positive semidef.   = %10.2e\n" viol_sdp
 
-    @printf "\n"
     flush(STDOUT)
 end

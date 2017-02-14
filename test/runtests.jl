@@ -64,7 +64,7 @@ println("\nStarting Pajarito tests...\n")
 
 # Tests absolute tolerance and Pajarito printing options
 TOL = 1e-3
-log = 0
+log = -1
 
 @testset "All Pajarito tests" begin
     # NLP tests in nlptest.jl
