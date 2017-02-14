@@ -1610,21 +1610,19 @@ function add_subp_incumb_cuts!(m)
 
     # Determine cut scaling factors and check if have new feasible incumbent solution
     if status_conic == :Infeasible
-        # Subproblem infeasible
-        if m.scale_subp_cuts
-            # First check infeasible ray has negative value
-            ray_value = vecdot(dual_conic, b_sub_int)
-            if ray_value > -m.tol_zero
-                warn("Serious conic solver failure: returned status $status_conic but b'y is not sufficiently negative for infeasible ray y (this should not happen: please submit an issue)\n")
-                return (false, false)
+        # Subproblem infeasible: first check infeasible ray has negative value
+        ray_value = vecdot(dual_conic, b_sub_int)
+        if ray_value < -m.tol_zero
+            if m.scale_subp_cuts
+                # Rescale by number of cones / value of ray
+                scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / ray_value)
             end
-
-            # Rescale by number of cones / value of ray
-            scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / ray_value)
+        else
+            warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (this should not happen: please submit an issue)\n")
+            return (false, false)
         end
-    elseif (status_conic == :Optimal) || (status_conic == :Suboptimal)
+    elseif status_conic == :Optimal
         # Subproblem feasible
-        # Note: suboptimal is a poorly defined status for conic solvers, this status should be rare (whether or not the dual is valid, the K* cuts are always valid)
         # Clean zeros and calculate full objective value
         clean_zeros!(m, soln_conic)
         obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_conic)
@@ -1636,14 +1634,17 @@ function add_subp_incumb_cuts!(m)
 
         if obj_full < m.best_obj
             # Conic solver solution is a new incumbent
-            # Note: perhaps should check feasibility of conic solution with respect to our primal inf tol, but it should be satisfied except rarely
-            # warn("Conic solver solution does not satisfy Pajarito's primal infeasibility tolerances (try increasing tol_prim_infeas or decreasing feasibility tolerances on the conic solver)\n")
-            # m.logs[:n_feas] += 1
             m.best_obj = obj_full
             m.best_int = soln_int
             m.best_cont = soln_conic
             m.best_slck = b_sub_int - m.A_sub_cont * soln_conic
             m.new_incumb = true
+        end
+    elseif !isempty(dual_conic)
+        # We have a dual but don't know the status, so we can't use subproblem scaling
+        if m.scale_subp_cuts
+            # Rescale by number of cones
+            scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp))
         end
     else
         # Status not handled, cannot add subproblem cuts
@@ -1727,18 +1728,18 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
         m.logs[:n_other] += 1
     end
 
-    if (status_conic == :Optimal) || (status_conic == :Suboptimal)
-        # Get solution
-        soln_conic = MathProgBase.getsolution(m.model_conic)
-    else
-        soln_conic = Float64[]
+    # Try to get a solution
+    soln_conic = try
+        MathProgBase.getsolution(m.model_conic)
+    catch
+        Float64[]
     end
 
-    if (status_conic == :Infeasible) || (status_conic == :Optimal) || (status_conic == :Suboptimal)
-        # Get dual
-        dual_conic = MathProgBase.getdual(m.model_conic)
-    else
-        dual_conic = Float64[]
+    # Try to get a dual
+    dual_conic =  try
+        MathProgBase.getdual(m.model_conic)
+    catch
+        Float64[]
     end
 
     # Free the conic model if not saving it
