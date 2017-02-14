@@ -2220,7 +2220,7 @@ end
 # Print after finish
 function print_finish(m::PajaritoConicModel)
     flush(STDOUT)
-    if m.log_level == 0
+    if m.log_level <= 0
         return
     end
 
