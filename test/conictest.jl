@@ -3,23 +3,7 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-function runconicdefaulttests(mip_solver_drives, log)
-    @testset "Default solvers test" begin
-        x = Convex.Variable(1,:Int)
-
-        problem = Convex.maximize(3x,
-                            x <= 10,
-                            x^2 <= 9)
-
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, log_level=log))
-
-        @test isapprox(problem.optval, 9.0, atol=TOL)
-        @test problem.status == :Optimal
-    end
-end
-
 function runconictests(mip_solver_drives, mip_solver, conic_solver, log)
-
     @testset "Infeasible conic problem" begin
         x = Convex.Variable(1,:Int)
 
@@ -106,21 +90,19 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver, log)
         @test isapprox(Convex.evaluate(x), 2.0, atol=TOL)
     end
 
-    if !contains(string(typeof(conic_solver)),"ECOS")# ECOS reports "close to optimal" on this tiny problem
-        @testset "Solver test 2" begin
-            x = Convex.Variable(1,:Int)
-            y = Convex.Variable(1, Convex.Positive())
+    @testset "Solver test 2" begin
+        x = Convex.Variable(1,:Int)
+        y = Convex.Variable(1, Convex.Positive())
 
-            problem = Convex.minimize(-3x - y,
-                               x >= 1,
-                               3x + 2y <= 30,
-                               exp(y^2) + x <= 7)
+        problem = Convex.minimize(-3x - y,
+                           x >= 1,
+                           3x + 2y <= 30,
+                           exp(y^2) + x <= 7)
 
-            Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log, rel_gap=1e-4))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log, rel_gap=1e-4))
 
-            @test problem.status == :Optimal
-            @test isapprox(Convex.evaluate(x), 6.0, atol=TOL)
-        end
+        @test problem.status == :Optimal
+        @test isapprox(Convex.evaluate(x), 6.0, atol=TOL)
     end
 
     ## Currently returns UnboundedRelaxation because conic solver interprets infeasible dual incorrectly
@@ -181,6 +163,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver, log)
         #     (x,y,z) in SOC
         #      x in {0,1}
         m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
+
         MathProgBase.loadproblem!(m,
         [ 0.0, -1.0, -1.0],
         [ 1.0  0.0  0.0;
@@ -193,9 +176,11 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver, log)
         MathProgBase.setvartype!(m, [:Int,:Cont,:Cont])
 
         MathProgBase.optimize!(m)
+
         @test MathProgBase.status(m) == :Optimal
         @test isapprox(MathProgBase.getobjval(m), -sqrt(2.0), atol=TOL)
         @test isapprox(MathProgBase.getobjbound(m), -sqrt(2.0), atol=TOL)
+
         vals = MathProgBase.getsolution(m)
         @test isapprox(vals[1], 1, atol=TOL)
         @test isapprox(vals[2], 1.0/sqrt(2.0), atol=TOL)
@@ -203,8 +188,9 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver, log)
     end
 
     @testset "Variable in zero cone" begin
-            # Same as "Variable not in zero cone problem" but with variables 2 and 4 added and in zero cones
+        # Same as "Variable not in zero cone problem" but with variables 2 and 4 added and in zero cones
         m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
+
         MathProgBase.loadproblem!(m,
         [ 0.0, 0.0, -1.0, 1.0, -1.0],
         [ 1.0  1.0  0.0  0.0  0.0;
@@ -217,8 +203,10 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver, log)
         MathProgBase.setvartype!(m, [:Int,:Int,:Cont,:Cont,:Cont])
 
         MathProgBase.optimize!(m)
+
         @test MathProgBase.status(m) == :Optimal
         @test isapprox(MathProgBase.getobjval(m), -sqrt(2.0), atol=TOL)
+
         vals = MathProgBase.getsolution(m)
         @test isapprox(vals[1], 1, atol=TOL)
         @test isapprox(vals[2], 0, atol=TOL)
@@ -228,7 +216,7 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver, log)
     end
 
     @testset "Rotated SOC problem" begin
-        problem = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
 
         c = [-3.0, 0.0, 0.0, 0.0]
         A = zeros(4,4)
@@ -238,16 +226,15 @@ function runconictests(mip_solver_drives, mip_solver, conic_solver, log)
         A[4,1] = 1.0
         A[4,4] = -1.0
         b = [10.0, 1.5, 3.0, 0.0]
-
         constr_cones = Any[(:NonNeg,[1,2,3]),(:Zero,[4])]
         var_cones = Any[(:SOCRotated,[2,3,1]),(:Free,[4])]
         vartypes = [:Cont, :Cont, :Cont, :Int]
+        MathProgBase.loadproblem!(m, c, A, b, constr_cones, var_cones)
+        MathProgBase.setvartype!(m, vartypes)
 
-        MathProgBase.loadproblem!(problem, c, A, b, constr_cones, var_cones)
-        MathProgBase.setvartype!(problem, vartypes)
-        MathProgBase.optimize!(problem)
+        MathProgBase.optimize!(m)
 
-        @test isapprox(MathProgBase.getobjval(problem), -9.0, atol=TOL)
-        @test isapprox(MathProgBase.getobjbound(problem), -9.0, atol=TOL)
+        @test isapprox(MathProgBase.getobjval(m), -9.0, atol=TOL)
+        @test isapprox(MathProgBase.getobjbound(m), -9.0, atol=TOL)
     end
 end
