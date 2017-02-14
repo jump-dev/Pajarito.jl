@@ -60,11 +60,11 @@ println("\nConic SDP+SOC solvers:")
 for solver in solvers_sdpsoc
     println(solver)
 end
-println()
+println("\nStarting Pajarito tests...\n")
 
 # Tests absolute tolerance and Pajarito printing options
 TOL = 1e-3
-log = 2
+log = 0
 
 # NLP tests in nlptest.jl
 @testset "NLP model and NLP solver tests" begin
