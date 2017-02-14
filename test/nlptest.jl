@@ -3,7 +3,7 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-function runnonlineartests(mip_solver_drives, mip_solver, nlp_solver, log)
+function runnlptests(mip_solver_drives, mip_solver, nlp_solver, log)
     @testset "Sparse matrix bug test" begin
         m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log))
 
