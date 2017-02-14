@@ -41,15 +41,25 @@ if mos
 end
 
 println("\nMIP solvers:")
-@show solvers_mip
+for solver in solvers_mip
+    println(solver)
+end
 println("\nNLP solvers:")
-@show solvers_nlp
+for solver in solvers_nlp
+    println(solver)
+end
 println("\nConic SOC solvers:")
-@show solvers_soc
+for solver in solvers_soc
+    println(solver)
+end
 println("\nConic Exp+SOC solvers:")
-@show solvers_expsoc
+for solver in solvers_expsoc
+    println(solver)
+end
 println("\nConic SDP+SOC solvers:")
-@show solvers_sdpsoc
+for solver in solvers_sdpsoc
+    println(solver)
+end
 println()
 
 # Tests absolute tolerance and Pajarito printing options
@@ -67,30 +77,38 @@ end
 
 # Conic models tests in conictest.jl
 @testset "Conic model and NLP solver tests" begin
-    for msd in [false, true], mip in solvers_mip, nlp in solvers_nlp
-        @testset "MSD=$msd, MIP=$(typeof(mip)), NLP=$(typeof(nlp))" begin
-            runsoctests(msd, mip, nlp, log)
-            runexpsoctests(msd, mip, nlp, log)
+    @testset "SOC problems" begin
+        for msd in [false, true], mip in solvers_mip, nlp in solvers_nlp
+            @testset "MSD=$msd, MIP=$(typeof(mip)), NLP=$(typeof(nlp))" begin
+                runsoctests(msd, mip, nlp, log)
+            end
+        end
+    end
+    @testset "Exp+SOC problems" begin
+        for msd in [false, true], mip in solvers_mip, nlp in solvers_nlp
+            @testset "MSD=$msd, MIP=$(typeof(mip)), NLP=$(typeof(nlp))" begin
+                runexpsoctests(msd, mip, nlp, log)
+            end
         end
     end
 end
 
 @testset "Conic model and conic solver tests" begin
-    @testset "SOC problems"
+    @testset "SOC problems" begin
         for msd in [false, true], mip in solvers_mip, conic in solvers_soc
             @testset "MSD=$msd, MIP=$(typeof(mip)), Conic=$(typeof(conic))" begin
                 runsoctests(msd, mip, conic, log)
             end
         end
     end
-    @testset "Exp+SOC problems"
+    @testset "Exp+SOC problems" begin
         for msd in [false, true], mip in solvers_mip, conic in solvers_expsoc
             @testset "MSD=$msd, MIP=$(typeof(mip)), Conic=$(typeof(conic))" begin
                 runexpsoctests(msd, mip, conic, log)
             end
         end
     end
-    @testset "SDP+SOC problems"
+    @testset "SDP+SOC problems" begin
         for msd in [false, true], mip in solvers_mip, conic in solvers_sdpsoc
             @testset "MSD=$msd, MIP=$(typeof(mip)), Conic=$(typeof(conic))" begin
                 runsdpsoctests(msd, mip, conic, log)
