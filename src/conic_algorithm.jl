@@ -1963,7 +1963,7 @@ function add_cut_sdp!(m, V, lam_dual, lamvec_dual)
             cut_expr_max = JuMP.AffExpr()
             for i in 1:dim
                 error("SOC cuts for SDP currently broken\n")
-                
+
                 # Use norm and transformation from RSOC to SOC
                 # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
                 @expression(m.model_mip, z_expr, sum(V_dual[k,l]*V[k,l] for k in 1:dim, l in 1:dim if k!=i && l!=i))
@@ -2143,18 +2143,30 @@ function create_logs!(m)
     logs_soc[:relax] = 0
     logs_soc[:n_viol_total] = 0
     logs_soc[:n_nonviol_total] = 0
+    logs_soc[:n_viol] = 0
+    logs_soc[:viol_max] = 0.
+    logs_soc[:n_nonviol] = 0
+    logs_soc[:nonviol_max] = 0.
     logs[:SOC] = logs_soc
 
     logs_exp = Dict{Symbol,Any}()
     logs_exp[:relax] = 0
     logs_exp[:n_viol_total] = 0
     logs_exp[:n_nonviol_total] = 0
+    logs_exp[:n_viol] = 0
+    logs_exp[:viol_max] = 0.
+    logs_exp[:n_nonviol] = 0
+    logs_exp[:nonviol_max] = 0.
     logs[:ExpPrimal] = logs_exp
 
     logs_sdp = Dict{Symbol,Any}()
     logs_sdp[:relax] = 0
     logs_sdp[:n_viol_total] = 0
     logs_sdp[:n_nonviol_total] = 0
+    logs_sdp[:n_viol] = 0
+    logs_sdp[:viol_max] = 0.
+    logs_sdp[:n_nonviol] = 0
+    logs_sdp[:nonviol_max] = 0.
     logs[:SDP] = logs_sdp
 
     m.logs = logs
