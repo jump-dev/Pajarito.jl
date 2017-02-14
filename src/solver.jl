@@ -78,7 +78,7 @@ function PajaritoSolver(;
     init_sdp_soc = false,
 
     scale_subp_cuts = true,
-    viol_cuts_only = true,
+    viol_cuts_only = false,
     prim_cuts_only = false,
     prim_cuts_always = false,
     prim_cuts_assist = true,
