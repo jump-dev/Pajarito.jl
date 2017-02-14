@@ -1858,6 +1858,7 @@ function add_cut_soc!(m, t, v, d, a, v_dual)
             end
 
             # TODO is the coeff on a or v supposed to be negative?
+
             if m.soc_abslift
                 # Using SOC absvalue lifting, so add two-sided cut
                 # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j - 2*|v'_j|*a_j >= 0
@@ -1982,59 +1983,6 @@ function add_cut_sdp!(m, V, lam_dual, lamvec_dual)
             end
         else
             # Using PSD linear cut
-            if clean_zeros!(m, V_dual)
-                @expression(m.model_mip, cut_expr, vecdot(V_dual, V))
-                if add_cut!(m, cut_expr, m.logs[:SDP])
-                    is_viol = true
-                end
-            end
-        end
-    end
-
-
-
-    if m.sdp_soc
-        # Using SDP SOC cuts
-        # TODO SOC cuts
-        if m.sdp_eig
-            # Add one SDP SOC eigenvector cut (derived from Schur complement)
-            # Calculate most violated cut over all dim possible cuts (one per diagonal element)
-            vvT_soln = eigvals[v] * (smat[:, v] * smat[:, v]') .* soln_smat
-            val_min = Inf
-            ind_min = 0
-            for iSD in 1:dim
-                # TODO Check this
-                val_cur = soln_smat[iSD, iSD] * sum(vvT_soln[k, l] for k in 1:dim, l in 1:dim if (k != iSD && l != iSD)) - 2 * sumabs2(vvT_soln[k, iSD] for k in 1:dim if (k != iSD))
-                if val_cur < val_min
-                    val_min = val_cur
-                    ind_min = iSD
-                end
-            end
-
-            # Use norm and transformation from RSOC to SOC
-            # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
-            @expression(m.model_mip, z_expr, sum(eigvals[v] * smat[k, v] * smat[l, v] * vars_smat[k, l] for k in 1:dim, l in 1:dim if (k != ind_min && l != ind_min)))
-            @expression(m.model_mip, cut_expr, vars_smat[ind_min, ind_min] + z_expr - norm(((k == ind_min) ? (vars_smat[ind_min, ind_min] - z_expr) : (2 * eigvals[v] * smat[k, ind_min] * smat[k, v] * vars_smat[k, ind_min])) for k in 1:dim))
-
-        else
-
-        end
-    else
-        # Not using SDP SOC cuts
-        if m.sdp_eig
-            # Using PSD eigenvector cuts
-            for lam_j in 1:length(lam_dual)
-                V_dual_j = lam_dual[lam_j]*lamvec_dual[:, lam_j]*lamvec_dual[:, lam_j]'
-                if clean_zeros!(m, V_dual_j)
-                    @expression(m.model_mip, cut_expr, vecdot(V_dual_j, V))
-                    if add_cut!(m, cut_expr, m.logs[:SDP])
-                        is_viol = true
-                    end
-                end
-            end
-        else
-            # Using full PSD cut
-            V_dual = lamvec_dual*diagm(lam_dual)*lamvec_dual'
             if clean_zeros!(m, V_dual)
                 @expression(m.model_mip, cut_expr, vecdot(V_dual, V))
                 if add_cut!(m, cut_expr, m.logs[:SDP])
