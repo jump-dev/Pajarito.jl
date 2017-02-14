@@ -169,7 +169,7 @@ function runexpsoctests(mip_solver_drives, mip_solver, conic_solver, log)
                            x^2 <= 5,
                            exp(y) + x <= 7)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, soc_disagg=false, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, soc_disagg=false, init_soc_one=false, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
 
         @test problem.status == :Optimal
         @test isapprox(Convex.evaluate(x), 2.0, atol=TOL)
