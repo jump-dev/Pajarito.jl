@@ -95,19 +95,19 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
     # ExpPrimal data
     num_exp::Int                # Number of ExpPrimal cones
-    r_idx_exp_subp::Vector{Int}
-    s_idx_exp_subp::Vector{Int}
-    t_idx_exp_subp::Vector{Int}
-    r_exp::Vector{JuMP.AffExpr}
-    s_exp::Vector{JuMP.AffExpr}
-    t_exp::Vector{JuMP.AffExpr}
+    r_idx_exp_subp::Vector{Int} # Row index of r variable in ExpPrimals in subproblems
+    s_idx_exp_subp::Vector{Int} # Row index of s variable in ExpPrimals in subproblems
+    t_idx_exp_subp::Vector{Int} # Row index of t variable in ExpPrimals in subproblems
+    r_exp::Vector{JuMP.AffExpr} # r variable in ExpPrimals
+    s_exp::Vector{JuMP.AffExpr} # s variable in ExpPrimals
+    t_exp::Vector{JuMP.AffExpr} # t variable in ExpPrimals
 
     # SDP data
     num_sdp::Int                # Number of SDP cones
-    v_idx_sdp_subp::Vector{Vector{Int}}
-    smat_sdp::Vector{Array{Float64,2}}
-    v_sdp::Vector{Vector{JuMP.AffExpr}}
-    V_sdp::Vector{Array{JuMP.AffExpr,2}}
+    v_idx_sdp_subp::Vector{Vector{Int}} # Row indices of svec v variables in SDPs in subproblem
+    smat_sdp::Vector{Array{Float64,2}} # Preallocated array for smat space values
+    v_sdp::Vector{Vector{JuMP.AffExpr}} # svec v variables in SDPs
+    V_sdp::Vector{Array{JuMP.AffExpr,2}} # smat V variables in SDPs
 
     # Miscellaneous for algorithms
     update_conicsub::Bool       # Indicates whether to use setbvec! to update an existing conic subproblem model
@@ -128,8 +128,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     final_soln::Vector{Float64} # Final solution on original variables
 
     # Logging information and status
-    logs::Dict{Symbol,Any}
-    status::Symbol
+    logs::Dict{Symbol,Any}      # Logging information
+    status::Symbol              # Current Pajarito status
 
     # Model constructor
     function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
@@ -1934,15 +1934,7 @@ function add_cut_sdp!(m, V, lam_dual, lamvec_dual)
                 viol_max = 0.
                 cut_expr_max = JuMP.AffExpr()
                 for i in 1:dim
-                    # Use norm and transformation from RSOC to SOC
-                    # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
-                    @expression(m.model_mip, z_expr, sum(V_dual_j[k,l]*V[k,l] for k in 1:dim, l in 1:dim if k!=i && l!=i))
-                    @expression(m.model_mip, cut_expr, norm((k==i ? (V[i,i] - z_expr) : 2*V_dual_j[k,i]*V[k,i]) for k in 1:dim) - (V[i,i] + z_expr))
-                    viol = getvalue(cut_expr)
-                    if viol > viol_max
-                        viol_max = viol
-                        cut_expr_max = cut_expr
-                    end
+                    error("SOC cuts for SDP currently broken\n")
                 end
 
                 if viol_max > 0.
@@ -1970,6 +1962,8 @@ function add_cut_sdp!(m, V, lam_dual, lamvec_dual)
             viol_max = 0.
             cut_expr_max = JuMP.AffExpr()
             for i in 1:dim
+                error("SOC cuts for SDP currently broken\n")
+                
                 # Use norm and transformation from RSOC to SOC
                 # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
                 @expression(m.model_mip, z_expr, sum(V_dual[k,l]*V[k,l] for k in 1:dim, l in 1:dim if k!=i && l!=i))
