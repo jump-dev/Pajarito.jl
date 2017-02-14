@@ -67,31 +67,31 @@ TOL = 1e-3
 log = 0
 
 # NLP tests in nlptest.jl
-@testset "NLP models:       " for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
-    @printf "  %5s   %10s   %10s\n" (msd ? "MSD" : "Iter") split(string(typeof(mip)), '.')[1] split(string(typeof(con)), '.')[1]
+@testset "NLP models:     " for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
+    @printf "  %5s, %10s, %10s\n" (msd ? "MSD" : "Iter") split(string(typeof(mip)), '.')[1] split(string(typeof(con)), '.')[1]
     runnlptests(msd, mip, con, log)
 end
 
 # Conic models tests in conictest.jl with NLP solver
-@testset "SOC NLP:          " for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
-    @printf "  %5s   %10s   %10s\n" (msd ? "MSD" : "Iter") split(string(typeof(mip)), '.')[1] split(string(typeof(con)), '.')[1]
+@testset "SOC NLP:        " for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
+    @printf "  %5s, %10s, %10s\n" (msd ? "MSD" : "Iter") split(string(typeof(mip)), '.')[1] split(string(typeof(con)), '.')[1]
     runsoctests(msd, mip, con, log)
 end
-@testset "Exp+SOC NLP:      " for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
-    @printf "  %5s   %10s   %10s\n" (msd ? "MSD" : "Iter") split(string(typeof(mip)), '.')[1] split(string(typeof(con)), '.')[1]
+@testset "Exp+SOC NLP:    " for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
+    @printf "  %5s, %10s, %10s\n" (msd ? "MSD" : "Iter") split(string(typeof(mip)), '.')[1] split(string(typeof(con)), '.')[1]
     runexpsoctests(msd, mip, con, log)
 end
 
 # Conic models tests in conictest.jl with conic solver
-@testset "SOC conic:        " for conic in solvers_soc, mip in solvers_mip, msd in [false, true]
-    @printf "  %5s   %10s   %10s\n" (msd ? "MSD" : "Iter") split(string(typeof(mip)), '.')[1] split(string(typeof(con)), '.')[1]
-    runsoctests(msd, mip, conic, log)
+@testset "SOC conic:      " for con in solvers_soc, mip in solvers_mip, msd in [false, true]
+    @printf "  %5s, %10s, %10s\n" (msd ? "MSD" : "Iter") split(string(typeof(mip)), '.')[1] split(string(typeof(con)), '.')[1]
+    runsoctests(msd, mip, con, log)
 end
-@testset "Exp+SOC conic:    " for conic in solvers_expsoc, mip in solvers_mip, msd in [false, true]
-    @printf "  %5s   %10s   %10s\n" (msd ? "MSD" : "Iter") split(string(typeof(mip)), '.')[1] split(string(typeof(con)), '.')[1]
-    runexpsoctests(msd, mip, conic, log)
+@testset "Exp+SOC conic:  " for con in solvers_expsoc, mip in solvers_mip, msd in [false, true]
+    @printf "  %5s, %10s, %10s\n" (msd ? "MSD" : "Iter") split(string(typeof(mip)), '.')[1] split(string(typeof(con)), '.')[1]
+    runexpsoctests(msd, mip, con, log)
 end
-@testset "SDP+SOC conic:    " for conic in solvers_sdpsoc, mip in solvers_mip, msd in [false, true]
-    @printf "  %5s   %10s   %10s\n" (msd ? "MSD" : "Iter") split(string(typeof(mip)), '.')[1] split(string(typeof(con)), '.')[1]
-    runsdpsoctests(msd, mip, conic, log)
+@testset "SDP+SOC conic:  " for con in solvers_sdpsoc, mip in solvers_mip, msd in [false, true]
+    @printf "  %5s, %10s, %10s\n" (msd ? "MSD" : "Iter") split(string(typeof(mip)), '.')[1] split(string(typeof(con)), '.')[1]
+    runsdpsoctests(msd, mip, con, log)
 end
