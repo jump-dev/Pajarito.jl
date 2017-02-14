@@ -359,13 +359,18 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
         status_relax = MathProgBase.status(model_relax)
         if status_relax == :Infeasible
-            warn("Initial conic relaxation status was $status_relax\n")
+            if m.log_level > 0
+                println("Initial conic relaxation status was $status_relax")
+            end
             m.status = :Infeasible
         elseif status_relax == :Unbounded
-            warn("Initial conic relaxation status was $status_relax\n")
+            if m.log_level > 0
+                println("Initial conic relaxation status was $status_relax")
+            end
             m.status = :UnboundedRelaxation
         elseif (status_relax != :Optimal) && (status_relax != :Suboptimal)
-            warn("Apparent conic solver failure with status $status_relax\n")
+            warn("Conic solver failure on initial relaxation: returned status $status_relax\n")
+            m.status = :ConicFailure
         else
             obj_relax = MathProgBase.getobjval(model_relax)
             if m.log_level > 2
@@ -409,7 +414,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
     end
 
-    if (m.status != :Infeasible) && (m.status != :UnboundedRelaxation)
+    if (m.status != :Infeasible) && (m.status != :UnboundedRelaxation) && (m.status != :ConicFailure)
         tic()
         if m.log_level > 2
             @printf "\nCreating conic subproblem model..."
