@@ -27,6 +27,9 @@ The table below describes the different ways to access the two algorithms in Paj
 | Derivative-based nonlinear  | X                           |                          | [X](mpb-nlp-url)   |
 | Conic (incl. MISOCP, MISDP) | X (no automatic conversion) | X (automatic conversion) | [X](mpb-conic-url) |
 
+MISOCP: mixed-integer second-order cone programming
+MISDP: mixed-integer semidefinite programming
+
 [mpb-nlp-url]: http://mathprogbasejl.readthedocs.io/en/latest/nlp.html
 [mpb-conic-url]: http://mathprogbasejl.readthedocs.io/en/latest/conic.html
 
