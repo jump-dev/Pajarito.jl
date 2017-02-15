@@ -18,13 +18,19 @@ Pajarito is a solver for mixed-integer convex optimization problems. These are o
 
 ## Using Pajarito
 
-The best way to access Pajarito is through [Convex.jl](https://github.com/JuliaOpt/Convex.jl), a disciplined convex programming (DCP) modeling language. Write a standard Convex.jl model with integer or binary variables and pass ``PajaritoSolver()`` (with some options; see below) to Convex.jl's ``solve!`` method. In the context of DCP, we call Pajarito a mixed-integer DCP (MIDCP) solver, the first published MIDCP solver in existence to our knowledge. When used through Convex.jl, Pajarito acts as a mixed-integer conic solver using the algorithm described in our paper cited below.
+Pajarito has two entirely separate algorithms depending on the form in which the input is provided. The first is the **derivative-based nonlinear** algorithm, where the approach used is analogous to that of [Bonmin](https://projects.coin-or.org/Bonmin) and will perform similarly, with the primary advantage of being able to easily swap-in various mixed-integer and convex subproblem solvers which Bonmin does not support. The second is **conic** algorithm which is the new approach proposed in the publications describing Pajarito. The conic algorithm currently supports second-order cones, exponential cones, and positive semidefinte cones. A problem provided in conic form may solve faster than an identical problem encoded in derivative-based nonlinear form because conic form naturally encodes extended formulations; however, [Hijazi et al.](http://www.optimization-online.org/DB_FILE/2011/06/3050.pdf) suggest manual reformulation techniques which achieve many of the algorithmic benefits of conic form.
 
-Pajarito is also accessible through [JuMP](https://github.com/JuliaOpt/JuMP.jl) as a mixed-integer convex nonlinear solver by setting the ``solver=PajaritoSolver()`` option in JuMP's ``Model()`` constructor. When used in this way, Pajarito is analogous to [Bonmin](https://projects.coin-or.org/Bonmin) and will perform similarly, with the primary advantage of being able to easily swap-in various mixed-integer and convex subproblem solvers which Bonmin does not support. Note that Pajarito does not verify convexity of derivative-based input and may give incorrect answers to nonconvex problems.
+The table below describes the different ways to access the two algorithms in Pajarito.
 
-**We recommend Convex.jl over JuMP as input to Pajarito; a problem expressed in in Convex.jl form may solve faster than an identical problem expressed using JuMP.** This is because Convex.jl automatically transforms problems into mixed-integer conic form while JuMP provides problems to Pajarito in the more traditional derivative-based form. In our paper cited below, we argue that mixed-integer conic form is a superior representation. Nevertheless, this question remains an active area of research and we encourage users to experiment with multiple formulations to see which works best. [Hijazi et al.](http://www.optimization-online.org/DB_FILE/2011/06/3050.pdf) suggest manual reformulation techniques which achieve many of the algorithmic benefits of conic form.
+|                             | JuMP                        | Convex.jl                | MathProgBase       |
+|-----------------------------|-----------------------------|--------------------------|--------------------|
+| Derivative-based nonlinear  | X                           |                          | [X](mpb-nlp-url)   |
+| Conic (incl. MISOCP, MISDP) | X (no automatic conversion) | X (automatic conversion) | [X](mpb-conic-url) |
 
-Pajarito may be accessed from outside Julia by using the experimental [cmpb](https://github.com/mlubin/cmpb) interface which provides a C API to the low-level conic input format.
+[mpb-nlp-url]: http://mathprogbasejl.readthedocs.io/en/latest/nlp.html
+[mpb-conic-url]: http://mathprogbasejl.readthedocs.io/en/latest/conic.html
+
+Pajarito may be accessed through MathProgBase from outside Julia by using the experimental [cmpb](https://github.com/mlubin/cmpb) interface which provides a C API to the low-level conic input format.
 
 ## Subproblem solvers
 
