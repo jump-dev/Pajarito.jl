@@ -22,16 +22,19 @@ Pajarito has two entirely separate algorithms depending on the form in which the
 
 The table below describes the different ways to access the two algorithms in Pajarito.
 
-|                             | JuMP                        | Convex.jl                | MathProgBase       |
-|-----------------------------|-----------------------------|--------------------------|--------------------|
-| Derivative-based nonlinear  | X                           |                          | [X][mpb-nlp-url]   |
-| Conic (incl. MISOCP, MISDP) | X (no automatic conversion) | X (automatic conversion) | [X][mpb-conic-url] |
+|                             | [JuMP][JuMP-url]            | [Convex.jl][convex-url]  | [MathProgBase][mpb-url] |
+|-----------------------------|-----------------------------|--------------------------|-------------------------|
+| Derivative-based nonlinear  | X                           |                          | [X][mpb-nlp-url]        |
+| Conic (incl. MISOCP, MISDP) | X (no automatic conversion) | X (automatic conversion) | [X][mpb-conic-url]      |
 
 * MISOCP: mixed-integer second-order cone programming
 * MISDP: mixed-integer semidefinite programming
 
 [mpb-nlp-url]: http://mathprogbasejl.readthedocs.io/en/latest/nlp.html
 [mpb-conic-url]: http://mathprogbasejl.readthedocs.io/en/latest/conic.html
+[JuMP-url]: https://github.com/JuliaOpt/JuMP.jl
+[convex-url]: https://github.com/JuliaOpt/Convex.jl
+[mpb-url]: https://github.com/JuliaOpt/MathProgBase.jl
 
 Pajarito may be accessed through MathProgBase from outside Julia by using the experimental [cmpb](https://github.com/mlubin/cmpb) interface which provides a C API to the low-level conic input format.
 
