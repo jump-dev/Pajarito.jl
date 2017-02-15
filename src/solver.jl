@@ -10,7 +10,7 @@ This file implements the default PajaritoSolver
 export PajaritoSolver
 
 immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
-    log_level::Int              # Verbosity flag: -1 for no output, 0 for minimal solution information, 1 for basic OA iteration and solve statistics, 2 for cone summary information, 3 for infeasibilities of duals, cuts, and OA solutions
+    log_level::Int              # Verbosity flag: 0 for minimal information, 1 for basic solve statistics, 2 for iteration information, 3 for cone information
     timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
     rel_gap::Float64            # Relative optimality gap termination condition
 
@@ -27,7 +27,7 @@ immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     dualize_sub::Bool           # (Conic only) Solve the conic duals of the continuous conic subproblems
 
     soc_disagg::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
-    soc_abslift::Bool           # (Conic only) Use absolute value lifting in the MIP only
+    soc_abslift::Bool           # (Conic only) Use SOC absolute value lifting in the MIP only
     soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
     sdp_eig::Bool               # (Conic SDP only) Use SDP eigenvector-derived cuts
     sdp_soc::Bool               # (Conic SDP only) Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
@@ -41,10 +41,10 @@ immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     viol_cuts_only::Bool        # (Conic only) Only add cuts that are violated by the current MIP solution (may be useful for MSD algorithm where many cuts are added)
     prim_cuts_only::Bool        # (Conic only) Do not add subproblem cuts
     prim_cuts_always::Bool      # (Conic only) Add primal cuts at each iteration or in each lazy callback
-    prim_cuts_assist::Bool      # (Conic only) Add primal cuts only when integer solutions are repeating
+    prim_cuts_assist::Bool      # (Conic only) Add primal cuts only when integer solutions are repeating or when conic solver fails
 
     tol_zero::Float64           # (Conic only) Tolerance for small epsilons as zeros
-    tol_prim_infeas::Float64    # (Conic only) Tolerance level for cone outer infeasibilities for primal cut adding functions (must be at least 1e-5)
+    tol_prim_infeas::Float64    # (Conic only) Tolerance level for cone outer infeasibilities for primal cut adding functions (should be at least 1e-5)
 end
 
 

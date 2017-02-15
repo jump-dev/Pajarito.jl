@@ -40,21 +40,21 @@ JuMP and Convex.jl are algebraic modeling interfaces, while MathProgBase is a lo
 
 Pajarito may be accessed through MathProgBase from outside Julia by using the experimental [cmpb](https://github.com/mlubin/cmpb) interface which provides a C API to the low-level conic input format.
 
-## Subproblem solvers
+## MIP and Continuous solvers
 
-The algorithm implemented by Pajarito itself is relatively simple, and most of the hard work is performed by subproblem solvers. Pajarito requires two different subproblem solvers, one for mixed-integer linear problems and one for convex subproblems. **The performance of Pajarito depends on the subproblem solvers.** For best performance, use commercial solvers.
+The algorithm implemented by Pajarito itself is relatively simple, and most of the hard work is performed by the MIP outer-approximation model solver and the continuous convex subproblem models solver. **The performance of Pajarito depends on these two types of solvers.** For best performance, use commercial solvers.
 
-The mixed-integer linear solver is specified by using the `mip_solver` option to `PajaritoSolver`, e.g., `PajaritoSolver(mip_solver=CplexSolver())`. You must first load the Julia package which provides the mixed-integer linear solver, e.g., with `using CPLEX`.
+The mixed-integer solver is specified by using the `mip_solver` option to `PajaritoSolver`, e.g., `PajaritoSolver(mip_solver=CplexSolver())`. You must first load the Julia package which provides the mixed-integer solver, e.g., with `using CPLEX`. This solver is typically a mixed-integer linear solver, but if a conic problem has both second-order cones and other nonlinear cones, or if contains PSD cones, then the MIP solver can be an MISOCP solver and second-order cones may be present in the outer-approximation model.
 
 The convex subproblem solver is specified by using the `cont_solver` option, e.g., `PajaritoSolver(cont_solver=IpoptSolver())`. When given input in derivative-based nonlinear form, Pajarito requires a derivative-based nonlinear solver, e.g., [Ipopt](https://projects.coin-or.org/Ipopt) or [KNITRO](http://www.ziena.com/knitro.htm). When given input in conic form, the convex subproblem solver can be *either* a conic solver like [ECOS](https://github.com/JuliaOpt/ECOS.jl) *or* a derivative-based solver like Ipopt. If a derivative-based solver is provided in this case, then Pajarito will switch to the derivative-based algorithm by using the [ConicNonlinearBridge](https://github.com/mlubin/ConicNonlinearBridge.jl) package. Note that using derivative-based solvers for conic problems can cause numerical instability because conic problems are not always smooth.
 
-All solvers can have their parameters specified through their corresponding Julia interfaces. For example, you probably should turn off the output of the subproblem solvers, e.g., by using `IpoptSolver(print_level=0)`.
+All solvers can have their parameters specified through their corresponding Julia interfaces. For example, you may wish to turn off the output of these solvers, e.g., by using `IpoptSolver(print_level=0)` for the Ipopt solver.
 
 ## Pajarito solver options
 
-The following options can be passed to `PajaritoSolver()` to modify its behavior (**C** means conic algorithm only):
+The following options can be passed to `PajaritoSolver()` to modify its behavior (see [solver.jl](https://github.com/mlubin/Pajarito.jl/blob/master/src/solver.jl for default values); **C** means conic algorithm only):
 
-  * `log_level::Int` Verbosity flag: -1 for no output, 0 for minimal solution information, 1 for basic OA iteration and solve statistics, 2 for cone summary information, 3 for infeasibilities of duals, cuts, and OA solutions
+  * `log_level::Int` Verbosity flag: 0 for minimal information, 1 for basic solve statistics, 2 for iteration information, 3 for cone information
   * `timeout::Float64` Time limit for outer approximation algorithm not including initial load (in seconds)
   * `rel_gap::Float64` Relative optimality gap termination condition
   * `mip_solver_drives::Bool` Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
@@ -64,29 +64,26 @@ The following options can be passed to `PajaritoSolver()` to modify its behavior
   * `round_mip_sols::Bool` **C** Round the integer variable values from the MIP solver before passing to the conic subproblems
   * `pass_mip_sols::Bool` **C** Give best feasible solutions constructed from conic subproblem solution to MIP
   * `cont_solver::MathProgBase.AbstractMathProgSolver` Continuous solver (conic or nonlinear)
-  * `solve_relax::Bool` **C** Solve the continuous conic relaxation to add initial dual cuts
+  * `solve_relax::Bool` **C** Solve the continuous conic relaxation to add initial subproblem cuts
   * `dualize_relax::Bool` **C** Solve the conic dual of the continuous conic relaxation
   * `dualize_sub::Bool` **C** Solve the conic duals of the continuous conic subproblems
   * `soc_disagg::Bool` **C** Disaggregate SOC cones in the MIP only
+  * `soc_abslift::Bool` **C** Use SOC absolute value lifting in the MIP only
   * `soc_in_mip::Bool` **C** Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
   * `sdp_eig::Bool` **C** Use SDP eigenvector-derived cuts
-  * `sdp_soc::Bool` **C** Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
-  * `init_soc_one::Bool` **C** Start with disaggregated L_1 outer approximation cuts for SOCs (if soc_disagg)
-  * `init_soc_inf::Bool` **C** Start with disaggregated L_inf outer approximation cuts for SOCs (if soc_disagg)
+  * `sdp_soc::Bool` **C** Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP)
+  * `init_soc_one::Bool` **C** Start with disaggregated L_1 outer approximation cuts for SOCs (if `soc_disagg` or `soc_abslift`)
+  * `init_soc_inf::Bool` **C** Start with disaggregated L_inf outer approximation cuts for SOCs (if `soc_disagg`)
   * `init_exp::Bool` **C** Start with several outer approximation cuts on the exponential cones
   * `init_sdp_lin::Bool` **C** Use SDP initial linear cuts
   * `init_sdp_soc::Bool` **C** Use SDP initial SOC cuts (if MIP solver supports MISOCP)
+  * `scale_subp_cuts::Bool` **C** Use scaling for subproblem cuts based on subproblem status
   * `viol_cuts_only::Bool` **C** Only add cuts that are violated by the current MIP solution (may be useful for MSD algorithm where many cuts are added)
-  * `proj_dual_infeas::Bool` **C** Project dual cone infeasible dual vectors onto dual cone boundaries
-  * `proj_dual_feas::Bool` **C** Project dual cone strictly feasible dual vectors onto dual cone boundaries
-  * `prim_cuts_only::Bool` **C** Do not add dual cuts
-  * `prim_cuts_always::Bool` **C** Add primal cuts at each iteration or in each lazy callback
-  * `prim_cuts_assist::Bool` **C** Add primal cuts only when integer solutions are repeating
-  * `tol_zero::Float64` **C** Tolerance for setting small absolute values in duals to zeros
-  * `tol_prim_zero::Float64` **C** Tolerance level for zeros in primal cut adding functions (must be at least 1e-5)
-  * `tol_prim_infeas::Float64` **C** Tolerance level for cone outer infeasibilities for primal cut adding functions (must be at least 1e-5)
-  * `tol_sdp_eigvec::Float64` **C** Tolerance for setting small values in SDP eigenvectors to zeros (for cut sanitation)
-  * `tol_sdp_eigval::Float64` **C** Tolerance for ignoring eigenvectors corresponding to small (positive) eigenvalues
+  * `prim_cuts_only::Bool` **C** Do not add subproblem cuts (if `prim_cuts_always` and `prim_cuts_assist`)
+  * `prim_cuts_always::Bool` **C** Add primal cuts at each iteration or in each lazy callback (if `prim_cuts_assist`)
+  * `prim_cuts_assist::Bool` **C** Add primal cuts only when integer solutions are repeating or when conic solver fails
+  * `tol_zero::Float64` **C** Tolerance for small epsilons as zeros
+  * `tol_prim_infeas::Float64` **C** Tolerance level for cone outer infeasibilities for primal cut adding functions (should be at least 1e-5)
 
 **Pajarito is not yet numerically robust and may require tuning of parameters to improve convergence.** If the default parameters don't work for you, please let us know.
 
