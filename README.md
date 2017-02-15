@@ -30,7 +30,7 @@ The table below describes the different ways to access the two algorithms in Paj
 * MISOCP: mixed-integer second-order cone programming
 * MISDP: mixed-integer semidefinite programming
 
-JuMP and Convex.jl are algebraic modeling interfaces, while MathProgBase is a lower-level interface for providing input in raw callback or matrix form. Convex.jl is perhaps the most user-friendly way to provide input in conic form, since it transparently handles conversion of algebraic expressions. JuMP support conic modeling but requires cones to be explicitly specified, e.g., by using `norm(x) <= t` for second-order cones and `@SDconstraint` for positive semidefinite constraints.
+JuMP and Convex.jl are algebraic modeling interfaces, while MathProgBase is a lower-level interface for providing input in raw callback or matrix form. Convex.jl is perhaps the most user-friendly way to provide input in conic form, since it transparently handles conversion of algebraic expressions. JuMP supports conic modeling but requires cones to be explicitly specified, e.g., by using `norm(x) <= t` for second-order cones and `@SDconstraint` for positive semidefinite constraints.
 
 [mpb-nlp-url]: http://mathprogbasejl.readthedocs.io/en/latest/nlp.html
 [mpb-conic-url]: http://mathprogbasejl.readthedocs.io/en/latest/conic.html
