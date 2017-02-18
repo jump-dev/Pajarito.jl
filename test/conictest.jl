@@ -120,7 +120,7 @@ function runsocboth(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
     end
 end
@@ -199,7 +199,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
     end
 
@@ -214,7 +214,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
         internalmodel(m).logs[:n_mip] = 1
     end
@@ -230,7 +230,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
         internalmodel(m).logs[:n_mip] = 1
     end
@@ -246,7 +246,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
         internalmodel(m).logs[:n_mip] = 1
     end
@@ -262,7 +262,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
         internalmodel(m).logs[:n_mip] = 2^dim + 1
     end
@@ -278,7 +278,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
         internalmodel(m).logs[:n_mip] = 3
     end
@@ -294,7 +294,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
         internalmodel(m).logs[:n_mip] = 1
     end
@@ -310,7 +310,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
         internalmodel(m).logs[:n_mip] = 1
     end
