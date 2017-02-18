@@ -111,7 +111,7 @@ function runsocboth(mip_solver_drives, mip_solver, cont_solver, log)
         @test isapprox(MathProgBase.getobjbound(m), -9.0, atol=TOL)
     end
 
-    @testset "Hijazi: defaults" begin
+    @testset "No continuous variables, infeasible" begin
         m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
 
         dim = 5
@@ -180,7 +180,9 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         dim = 3
 
         @variable(m, x[1:dim], Bin)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @variable(m, t)
+        @constraint(m, t == sqrt(dim-1)/2)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
         status = solve(m)
@@ -193,7 +195,9 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         dim = 5
 
         @variable(m, x[1:dim], Bin)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @variable(m, t)
+        @constraint(m, t == sqrt(dim-1)/2)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
         status = solve(m)
@@ -207,7 +211,9 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         dim = 5
 
         @variable(m, x[1:dim], Bin)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @variable(m, t)
+        @constraint(m, t == sqrt(dim-1)/2)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
         status = solve(m)
@@ -221,7 +227,9 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         dim = 5
 
         @variable(m, x[1:dim], Bin)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @variable(m, t)
+        @constraint(m, t == sqrt(dim-1)/2)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
         status = solve(m)
@@ -235,7 +243,9 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         dim = 5
 
         @variable(m, x[1:dim], Bin)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @variable(m, t)
+        @constraint(m, t == sqrt(dim-1)/2)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
         status = solve(m)
@@ -249,7 +259,9 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         dim = 3
 
         @variable(m, x[1:dim], Bin)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @variable(m, t)
+        @constraint(m, t == sqrt(dim-1)/2)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
         status = solve(m)
@@ -263,7 +275,9 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         dim = 4
 
         @variable(m, x[1:dim], Bin)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @variable(m, t)
+        @constraint(m, t == sqrt(dim-1)/2)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
         status = solve(m)
@@ -277,7 +291,9 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         dim = 4
 
         @variable(m, x[1:dim], Bin)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @variable(m, t)
+        @constraint(m, t == sqrt(dim-1)/2)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
         status = solve(m)
@@ -291,7 +307,9 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         dim = 4
 
         @variable(m, x[1:dim], Bin)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @variable(m, t)
+        @constraint(m, t == sqrt(dim-1)/2)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
         status = solve(m)
