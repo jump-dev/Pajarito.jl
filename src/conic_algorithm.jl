@@ -1271,7 +1271,7 @@ function solve_iterative!(m)
 
         # Solve MIP
         tic()
-        status_mip = solve(m.model_mip)#, suppress_warnings=true)
+        status_mip = solve(m.model_mip), suppress_warnings=true)
         m.logs[:mip_solve] += toq()
         m.logs[:n_mip] += 1
 
@@ -1449,7 +1449,7 @@ function solve_mip_driven!(m)
 
     # Start MIP solver
     m.logs[:mip_solve] = time()
-    status_mip = solve(m.model_mip)#, suppress_warnings=true)
+    status_mip = solve(m.model_mip), suppress_warnings=true)
     m.logs[:mip_solve] = time() - m.logs[:mip_solve]
 
     if (status_mip == :Infeasible) || (status_mip == :InfeasibleOrUnbounded)
