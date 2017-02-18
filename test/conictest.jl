@@ -112,15 +112,15 @@ function runsocboth(mip_solver_drives, mip_solver, cont_solver, log)
     end
 
     @testset "Hijazi: defaults" begin
-        m = JuMP.Model(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
 
         dim = 5
 
-        JuMP.@variable(m, x[1:dim], :Bin)
-        JuMP.@constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
-        JuMP.@objective(m, 0)
+        @variable(m, x[1:dim], :Bin)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @objective(m, 0)
 
-        status = JuMP.solve!(m)
+        status = solve!(m)
         @test status == :Infeasible
     end
 end
@@ -128,137 +128,137 @@ end
 # SOC problems for conic algorithm
 function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
     @testset "Hijazi: no init soc" begin
-        m = JuMP.Model(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, init_soc_inf=false))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, init_soc_inf=false))
 
         dim = 3
 
-        JuMP.@variable(m, x[1:dim], :Bin)
-        JuMP.@constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
-        JuMP.@objective(m, 0)
+        @variable(m, x[1:dim], :Bin)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @objective(m, 0)
 
-        status = JuMP.solve!(m)
+        status = solve!(m)
         @test status == :Infeasible
     end
 
     @testset "Hijazi: L1, no disagg, no abslift" begin
-        m = JuMP.Model(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=false, soc_abslift=false))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=false, soc_abslift=false))
 
         dim = 5
 
-        JuMP.@variable(m, x[1:dim], :Bin)
-        JuMP.@constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
-        JuMP.@objective(m, 0)
+        @variable(m, x[1:dim], :Bin)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @objective(m, 0)
 
-        status = JuMP.solve!(m)
+        status = solve!(m)
         @test status == :Infeasible
         m.internalmodel.logs[:n_mip] = 1
     end
 
     @testset "Hijazi: L1, disagg, no abslift" begin
-        m = JuMP.Model(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=true, soc_abslift=false))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=true, soc_abslift=false))
 
         dim = 5
 
-        JuMP.@variable(m, x[1:dim], :Bin)
-        JuMP.@constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
-        JuMP.@objective(m, 0)
+        @variable(m, x[1:dim], :Bin)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @objective(m, 0)
 
-        status = JuMP.solve!(m)
+        status = solve!(m)
         @test status == :Infeasible
         m.internalmodel.logs[:n_mip] = 1
     end
 
     @testset "Hijazi: L1, disagg, abslift" begin
-        m = JuMP.Model(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=true, soc_abslift=true))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=true, soc_abslift=true))
 
         dim = 5
 
-        JuMP.@variable(m, x[1:dim], :Bin)
-        JuMP.@constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
-        JuMP.@objective(m, 0)
+        @variable(m, x[1:dim], :Bin)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @objective(m, 0)
 
-        status = JuMP.solve!(m)
+        status = solve!(m)
         @test status == :Infeasible
         m.internalmodel.logs[:n_mip] = 1
     end
 
     @testset "Hijazi: L1, no disagg, abslift" begin
-        m = JuMP.Model(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=false, soc_abslift=true))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=false, soc_abslift=true))
 
         dim = 5
 
-        JuMP.@variable(m, x[1:dim], :Bin)
-        JuMP.@constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
-        JuMP.@objective(m, 0)
+        @variable(m, x[1:dim], :Bin)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @objective(m, 0)
 
-        status = JuMP.solve!(m)
+        status = solve!(m)
         @test status == :Infeasible
         m.internalmodel.logs[:n_mip] = 1
     end
 
     @testset "Hijazi: no L1, no disagg, no abslift" begin
-        m = JuMP.Model(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, soc_disagg=false, soc_abslift=false))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, soc_disagg=false, soc_abslift=false))
 
         dim = 3
 
-        JuMP.@variable(m, x[1:dim], :Bin)
-        JuMP.@constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
-        JuMP.@objective(m, 0)
+        @variable(m, x[1:dim], :Bin)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @objective(m, 0)
 
-        status = JuMP.solve!(m)
+        status = solve!(m)
         @test status == :Infeasible
         m.internalmodel.logs[:n_mip] = 2^dim + 1
     end
 
     @testset "Hijazi: no L1, disagg, no abslift" begin
-        m = JuMP.Model(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, soc_disagg=true, soc_abslift=false))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, soc_disagg=true, soc_abslift=false))
 
         dim = 4
 
-        JuMP.@variable(m, x[1:dim], :Bin)
-        JuMP.@constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
-        JuMP.@objective(m, 0)
+        @variable(m, x[1:dim], :Bin)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @objective(m, 0)
 
-        status = JuMP.solve!(m)
+        status = solve!(m)
         @test status == :Infeasible
         m.internalmodel.logs[:n_mip] = 3
     end
 
     @testset "Hijazi: no L1, disagg, abslift" begin
-        m = JuMP.Model(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, soc_disagg=true, soc_abslift=true))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, soc_disagg=true, soc_abslift=true))
 
         dim = 4
 
-        JuMP.@variable(m, x[1:dim], :Bin)
-        JuMP.@constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
-        JuMP.@objective(m, 0)
+        @variable(m, x[1:dim], :Bin)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @objective(m, 0)
 
-        status = JuMP.solve!(m)
+        status = solve!(m)
         @test status == :Infeasible
         m.internalmodel.logs[:n_mip] = 1
     end
 
     @testset "Hijazi: no L1, no disagg, abslift" begin
-        m = JuMP.Model(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, soc_disagg=false, soc_abslift=true))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, soc_disagg=false, soc_abslift=true))
 
         dim = 5
 
-              m = JuMP.Model(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=false, soc_abslift=false))
+              m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=false, soc_abslift=false))
 
       dim = 3
 
-      JuMP.@variable(m, x[1:dim], :Bin)
-      JuMP.@constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
-      JuMP.@objective(m, 0)
+      @variable(m, x[1:dim], :Bin)
+      @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+      @objective(m, 0)
 
-      status = JuMP.solve!(m)
+      status = solve!(m)
       @test status == :Infeasible
       m.internalmodel.logs[:n_mip] = 1
   endable(m, x[1:dim], :Bin)
-        JuMP.@constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
-        JuMP.@objective(m, 0)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @objective(m, 0)
 
-        status = JuMP.solve!(m)
+        status = solve!(m)
         @test status == :Infeasible
         m.internalmodel.logs[:n_mip] = 1
     end
