@@ -82,7 +82,7 @@ log = 0
 # Conic models tests in conictest.jl with conic solver
 @testset "SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_soc, mip in solvers_mip, msd in [false, true]
     runsocboth(msd, mip, con, log)
-    # runsocconic(msd, mip, con, log)
+    runsocconic(msd, mip, con, log)
 end
 @testset "Exp+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_expsoc, mip in solvers_mip, msd in [false, true]
     runexpsocboth(msd, mip, con, log)
