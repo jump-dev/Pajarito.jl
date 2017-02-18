@@ -110,6 +110,20 @@ function runsoctests(mip_solver_drives, mip_solver, conic_solver, log)
         @test isapprox(MathProgBase.getobjval(m), -9.0, atol=TOL)
         @test isapprox(MathProgBase.getobjbound(m), -9.0, atol=TOL)
     end
+
+    @testset "Hijazi: initial L1" begin
+        m = JuMP.Model(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=conic_solver, log_level=log))
+
+        dim = 5
+
+        @variable(m, x[1:dim], :Bin)
+        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
+        @objective(m, 0)
+
+        status = solve!(m)
+        @test status == :Infeasible
+        m.internalmodel.logs[:n_mip] = 1
+    end
 end
 
 # Exp+SOC problems
