@@ -189,22 +189,6 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @test status == :Infeasible
     end
 
-    @testset "Hijazi: L1, no disagg, no abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=false, soc_abslift=false))
-
-        dim = 5
-
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
-
-        status = solve(m)
-        @test status == :Infeasible
-        internalmodel(m).logs[:n_mip] = 1
-    end
-
     @testset "Hijazi: L1, disagg, no abslift" begin
         m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=true, soc_abslift=false))
 
