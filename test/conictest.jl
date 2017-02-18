@@ -127,6 +127,31 @@ end
 
 # SOC problems for conic algorithm
 function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
+    @testset "Infinite duality gap failure" begin
+        # Example of polyhedral OA failure due to infinite duality gap from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
+        # min  z
+        # st   x == 0
+        #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
+        #      x in {0,1}
+
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=true, mip_solver=CplexSolver(), cont_solver=ECOSSolver(), log_level=2))
+
+        MathProgBase.loadproblem!(m,
+        [ 0.0, 0.0, 1.0],
+        [ -1.0  0.0  0.0;
+        -1.0  0.0  0.0;
+        0.0 -1.0  0.0;
+        0.0  0.0 -1.0],
+        [ 0.0, 0.0, 0.0, 0.0],
+        Any[(:Zero,1:1),(:SOCRotated,2:4)],
+        Any[(:Free,[1,2,3])])
+        MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
+
+        MathProgBase.optimize!(m)
+
+        @test MathProgBase.status(m) == :ConicFailure
+    end
+
     @testset "Hijazi: no init soc" begin
         m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, init_soc_inf=false))
 
