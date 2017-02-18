@@ -134,7 +134,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
         #      x in {0,1}
 
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
 
         MathProgBase.loadproblem!(m,
         [ 0.0, 0.0, 1.0],
