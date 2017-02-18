@@ -488,7 +488,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @test isapprox(Convex.evaluate(x), 6.0, atol=TOL)
     end
 
-    @testset "Viol cuts only" begin
+    @testset "Viol cuts only true" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1, Convex.Positive())
 
@@ -498,6 +498,21 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                            exp(y^2) + x <= 7)
 
         Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, viol_cuts_only=true))
+
+        @test problem.status == :Optimal
+        @test isapprox(Convex.evaluate(x), 6.0, atol=TOL)
+    end
+
+    @testset "Viol cuts only false" begin
+        x = Convex.Variable(1, :Int)
+        y = Convex.Variable(1, Convex.Positive())
+
+        problem = Convex.minimize(-3x - y,
+                           x >= 1,
+                           3x + 2y <= 30,
+                           exp(y^2) + x <= 7)
+
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, viol_cuts_only=false))
 
         @test problem.status == :Optimal
         @test isapprox(Convex.evaluate(x), 6.0, atol=TOL)
