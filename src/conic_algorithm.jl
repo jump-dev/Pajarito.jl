@@ -2054,9 +2054,9 @@ function create_logs!(m)
     logs[:conic_solve] = 0. # Solving conic subproblem model
 
     # Counters
-    logs[:n_mip] = 0        # Number of times lazy is called
-    logs[:n_lazy] = 0       # Number of times lazy is called
-    logs[:n_feas] = 0       # Number of times lazy is called with feasible solution
+    logs[:n_mip] = 0        # Number of iterations in iterative
+    logs[:n_lazy] = 0       # Number of times lazy is called in MSD
+    logs[:n_feas] = 0       # Number of times get a new feasible solution from conic solver
     logs[:n_repeat] = 0     # Number of times integer solution repeats
     logs[:n_conic] = 0      # Number of unique integer solutions (conic subproblem solves)
     logs[:n_nodual] = 0     # Number of times no violated dual cuts could be added in lazy
