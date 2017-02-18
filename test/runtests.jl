@@ -64,30 +64,30 @@ println("\nStarting Pajarito tests...\n")
 
 # Tests absolute tolerance and Pajarito printing options
 TOL = 1e-3
-log = 2
+log = 0
 
-# # NLP tests in nlptest.jl
-# @testset "NLP model - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
-#     runnlptests(msd, mip, con, log)
-# end
-#
-# # Conic models tests in conictest.jl with NLP solver
-# @testset "SOC NLP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
-#     runsocboth(msd, mip, con, log)
-# end
-# @testset "Exp+SOC NLP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
-#     runexpsocboth(msd, mip, con, log)
-# end
+# NLP tests in nlptest.jl
+@testset "NLP model - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
+    runnlptests(msd, mip, con, log)
+end
+
+# Conic models tests in conictest.jl with NLP solver
+@testset "SOC NLP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
+    runsocboth(msd, mip, con, log)
+end
+@testset "Exp+SOC NLP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
+    runexpsocboth(msd, mip, con, log)
+end
 
 # Conic models tests in conictest.jl with conic solver
 @testset "SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_soc, mip in solvers_mip, msd in [false, true]
-    # runsocboth(msd, mip, con, log)
+    runsocboth(msd, mip, con, log)
     runsocconic(msd, mip, con, log)
 end
-# @testset "Exp+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_expsoc, mip in solvers_mip, msd in [false, true]
-#     runexpsocboth(msd, mip, con, log)
-#     runexpsocconic(msd, mip, con, log)
-# end
-# @testset "SDP+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpsoc, mip in solvers_mip, msd in [false, true]
-#     runsdpsocconic(msd, mip, con, log)
-# end
+@testset "Exp+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_expsoc, mip in solvers_mip, msd in [false, true]
+    runexpsocboth(msd, mip, con, log)
+    runexpsocconic(msd, mip, con, log)
+end
+@testset "SDP+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpsoc, mip in solvers_mip, msd in [false, true]
+    runsdpsocconic(msd, mip, con, log)
+end

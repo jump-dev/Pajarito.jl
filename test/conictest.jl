@@ -202,7 +202,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
 
         status = solve(m)
         @test status == :Infeasible
-        m.internalmodel.logs[:n_mip] = 1
+        internalmodel(m).logs[:n_mip] = 1
     end
 
     @testset "Hijazi: L1, disagg, no abslift" begin
@@ -218,7 +218,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
 
         status = solve(m)
         @test status == :Infeasible
-        m.internalmodel.logs[:n_mip] = 1
+        internalmodel(m).logs[:n_mip] = 1
     end
 
     @testset "Hijazi: L1, disagg, abslift" begin
@@ -234,7 +234,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
 
         status = solve(m)
         @test status == :Infeasible
-        m.internalmodel.logs[:n_mip] = 1
+        internalmodel(m).logs[:n_mip] = 1
     end
 
     @testset "Hijazi: L1, no disagg, abslift" begin
@@ -250,7 +250,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
 
         status = solve(m)
         @test status == :Infeasible
-        m.internalmodel.logs[:n_mip] = 1
+        internalmodel(m).logs[:n_mip] = 1
     end
 
     @testset "Hijazi: no L1, no disagg, no abslift" begin
@@ -266,7 +266,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
 
         status = solve(m)
         @test status == :Infeasible
-        m.internalmodel.logs[:n_mip] = 2^dim + 1
+        internalmodel(m).logs[:n_mip] = 2^dim + 1
     end
 
     @testset "Hijazi: no L1, disagg, no abslift" begin
@@ -282,7 +282,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
 
         status = solve(m)
         @test status == :Infeasible
-        m.internalmodel.logs[:n_mip] = 3
+        internalmodel(m).logs[:n_mip] = 3
     end
 
     @testset "Hijazi: no L1, disagg, abslift" begin
@@ -298,7 +298,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
 
         status = solve(m)
         @test status == :Infeasible
-        m.internalmodel.logs[:n_mip] = 1
+        internalmodel(m).logs[:n_mip] = 1
     end
 
     @testset "Hijazi: no L1, no disagg, abslift" begin
@@ -314,7 +314,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
 
         status = solve(m)
         @test status == :Infeasible
-        m.internalmodel.logs[:n_mip] = 1
+        internalmodel(m).logs[:n_mip] = 1
     end
 end
 
