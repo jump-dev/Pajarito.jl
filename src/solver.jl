@@ -78,7 +78,7 @@ function PajaritoSolver(;
     init_sdp_soc = false,
 
     scale_subp_cuts = true,
-    viol_cuts_only = false,
+    viol_cuts_only = nothing,
     prim_cuts_only = false,
     prim_cuts_always = false,
     prim_cuts_assist = true,
@@ -86,6 +86,11 @@ function PajaritoSolver(;
     tol_zero = 1e-10,
     tol_prim_infeas = 1e-6,
     )
+
+    if viol_cuts_only == nothing
+        # If user has not set option, default is true on MSD and false on iterative
+        viol_cuts_only = mip_solver_drives
+    end
 
     PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
 end
