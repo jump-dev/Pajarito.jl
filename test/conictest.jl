@@ -171,7 +171,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
 
         MathProgBase.optimize!(m)
 
-        @test MathProgBase.status(m) == :ConicFailure
+        @test MathProgBase.status(m) == :CutsFailure
     end
 
     @testset "Hijazi: no init soc" begin
@@ -288,20 +288,9 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
     @testset "Hijazi: no L1, no disagg, abslift" begin
         m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, soc_disagg=false, soc_abslift=true))
 
-        dim = 5
+        dim = 4
 
-              m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=false, soc_abslift=false))
-
-      dim = 3
-
-      @variable(m, x[1:dim], Bin)
-      @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
-      @objective(m, Min, 0)
-
-      status = solve(m)
-      @test status == :Infeasible
-      m.internalmodel.logs[:n_mip] = 1
-  endable(m, x[1:dim], Bin)
+        @variable(m, x[1:dim], Bin)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
         @objective(m, Min, 0)
 
