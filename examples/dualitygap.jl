@@ -1,4 +1,4 @@
-
+# This problem should cause Pajarito to fail, because we cannot detect duality gaps
 # Example of polyhedral OA failure due to infinite duality gap from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
 # min  z
 # st   x == 0

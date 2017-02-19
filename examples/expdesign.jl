@@ -1,3 +1,4 @@
+# These problems are numerically challenging (small epsilons etc) and cause poor stability in the MIP and conic solvers and Pajarito itself (eg negative opt gap)
 # Experimental design examples from CVX, Boyd & Vandenberghe 2004 section 7.5
 # http://web.cvxr.com/cvx/examples/cvxbook/Ch07_statistical_estim/html/expdesign.html
 
@@ -24,13 +25,15 @@ solver = PajaritoSolver(
 	mip_solver=mip_solver,
 	cont_solver=cont_solver,
 	log_level=log_level,
+	sdp_eig=true,
+	init_sdp_lin=true,
 )
 
 
 enforce_integrality = true
 
 m = 4
-n = 35
+n = 15
 
 angles1 = linspace(3/4*pi, pi, m)
 angles2 = linspace(-3/8*pi, -5/8*pi, m)
@@ -39,15 +42,14 @@ V = [
     3.*cos(angles1)' 1.8.*cos(angles2)' 1.*cos(angles3)';
     3.*sin(angles1)' 1.8.*sin(angles2)' 1.*sin(angles3)';
     3.*cos(angles2)' 1.8.*cos(angles3)' 1.*cos(angles1)';
-    3.*sin(angles2)' 1.8.*sin(angles3)' 1.*sin(angles1)';
-    3.*cos(angles3)' 1.8.*cos(angles1)' 1.*cos(angles2)';
-    3.*sin(angles3)' 1.8.*sin(angles1)' 1.*sin(angles2)'
+    3.*sin(angles2)' 1.8.*sin(angles3)' 1.*sin(angles1)'
     ]
-V = trunc(V, 6)
+V = trunc(V, 3)
 (q, p) = size(V)
 
 
 np = enforce_integrality ? Variable(p, :Int) : Variable(p)
+
 
 # D-optimal design
 #   maximize    nthroot det V*diag(lambda)*V'

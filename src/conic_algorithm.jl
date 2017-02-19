@@ -1387,6 +1387,7 @@ function solve_iterative!(m)
 
         # Give the best feasible solution to the MIP as a warm-start
         if m.pass_mip_sols && m.new_incumb
+            m.logs[:n_add] += 1
             set_best_soln!(m)
             m.new_incumb = false
         end
@@ -1437,7 +1438,9 @@ function solve_mip_driven!(m)
         # Add heuristic callback to give MIP solver feasible solutions from conic solves
         function callback_heur(cb)
             # If have a new best feasible solution since last heuristic solution added, set MIP solution to the new best feasible solution
+            m.logs[:n_heur] += 1
             if m.new_incumb
+                m.logs[:n_add] += 1
                 m.cb_heur = cb
                 set_best_soln!(m)
                 addsolution(cb)
@@ -1524,8 +1527,6 @@ function set_best_soln!(m)
             set_a_soln!(m, m.a_soc[n], m.best_slck[m.v_idxs_soc_subp[n]])
         end
     end
-
-    #TODO other cones
 end
 
 # Call setvalue or setsolutionvalue solution for a vector of variables and a solution vector
@@ -1685,6 +1686,10 @@ function add_subp_incumb_cuts!(m)
         if add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], view(V_eigvecs, :, pos_inds))
             is_viol_subp = true
         end
+    end
+
+    if !is_viol_subp
+        m.logs[:n_nosubp] += 1
     end
 
     return (false, is_viol_subp)
@@ -2059,7 +2064,7 @@ function create_logs!(m)
     logs[:n_feas] = 0       # Number of times get a new feasible solution from conic solver
     logs[:n_repeat] = 0     # Number of times integer solution repeats
     logs[:n_conic] = 0      # Number of unique integer solutions (conic subproblem solves)
-    logs[:n_nodual] = 0     # Number of times no violated dual cuts could be added in lazy
+    logs[:n_nosubp] = 0     # Number of times no violated subproblem cuts could be added in lazy
     logs[:n_nocuts] = 0     # Number of times no violated cuts could be added on infeas solution in lazy
 
     logs[:n_heur] = 0       # Number of times heuristic is called
@@ -2204,8 +2209,7 @@ function print_finish(m::PajaritoConicModel)
     @printf " --- UserLimit          = %5d\n" m.logs[:n_lim]
     @printf " --- ConicFailure       = %5d\n" m.logs[:n_fail]
     @printf " --- Other status       = %5d\n" m.logs[:n_other]
-    @printf " -- No viol. subp. cut  = %5d\n" m.logs[:n_nodual]
-    @printf " -- No viol. prim. cut  = %5d\n" m.logs[:n_nocuts]
+    @printf " -- No viol. subp. cut  = %5d\n" m.logs[:n_nosubp]
 
     @printf " - Heuristic callback   = %5d\n" m.logs[:n_heur]
     @printf " -- Feasible added      = %5d\n" m.logs[:n_add]

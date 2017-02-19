@@ -2,8 +2,11 @@
 using Convex, Pajarito
 log_level = 2
 
-using ECOS
-cont_solver = ECOSSolver(verbose=false)
+# using ECOS
+# cont_solver = ECOSSolver(verbose=false)
+
+using SCS
+cont_solver = SCSSolver(eps=1e-5, max_iters=100000, verbose=0)
 
 # using Cbc
 # mip_solver = CbcSolver()
@@ -11,7 +14,7 @@ cont_solver = ECOSSolver(verbose=false)
 
 using CPLEX
 mip_solver = CplexSolver()
-mip_solver_drives = false
+mip_solver_drives = true
 
 
 solver = PajaritoSolver(
