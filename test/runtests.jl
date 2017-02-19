@@ -13,7 +13,16 @@ include("nlptest.jl")
 include("conictest.jl")
 
 # Define solvers using JuMP/test/solvers.jl
-solvers_mip = lazy_solvers
+solvers_mip = []
+if grb
+    push!(solvers_mip, Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=1e-8, FeasibilityTol=1e-6, MIPGap=0.))
+end
+if cpx
+    push!(solvers_mip, CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-6, CPX_PARAM_EPGAP=0.))
+end
+if glp 
+    push!(solvers_mip, GLPKMathProgInterface.GLPKInterfaceMIP.GLPKSolverMIP(MsgLev=0, TolInt=1e-8, TolBnd=1e-6, TolObj=0.))
+end
 
 solvers_nlp = []
 if ipt
@@ -71,7 +80,7 @@ flush(STDOUT)
 
 # Tests absolute tolerance and Pajarito printing options
 TOL = 1e-3
-ll = 0
+ll = 3
 
 # # NLP tests in nlptest.jl
 # @testset "NLP model - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
