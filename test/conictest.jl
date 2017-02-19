@@ -816,7 +816,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         	aOpt.constraints += Convex.isposdef([V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]])
         end
 
-        Convex.solve!(aOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+        Convex.solve!(aOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=false))
 
         @show aOpt.status, aOpt.optval, np.value
         @test aOpt.status == :Optimal
