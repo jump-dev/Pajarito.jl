@@ -3,20 +3,21 @@
 # http://web.cvxr.com/cvx/examples/cvxbook/Ch07_statistical_estim/html/expdesign.html
 
 using Convex, Pajarito
-log_level = 2
+log_level = 3
 
-# using SCS
-# cont_solver = SCSSolver(eps=1e-5, max_iters=1000000, verbose=0)
+using SCS
+cont_solver = SCSSolver(eps=1e-5, max_iters=1000000, verbose=0)
 
-using Mosek
-cont_solver = MosekSolver(LOG=0)
+# using Mosek
+# cont_solver = MosekSolver(LOG=0)
 
 # using Cbc
 # mip_solver = CbcSolver()
 # mip_solver_drives = false
 
 using CPLEX
-mip_solver = CplexSolver(CPX_PARAM_SCRIND=1, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-6, CPX_PARAM_EPGAP=0.)
+mip_solver = CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-6, CPX_PARAM_EPGAP=0.)
+# mip_solver = CplexSolver()
 mip_solver_drives = false
 
 

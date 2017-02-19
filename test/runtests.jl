@@ -35,7 +35,7 @@ if scs
     push!(solvers_soc, SCS.SCSSolver(eps=1e-5,max_iters=100000,verbose=0))
     push!(solvers_expsoc, SCS.SCSSolver(eps=1e-5,max_iters=100000,verbose=0))
     push!(solvers_sdpsoc, SCS.SCSSolver(eps=1e-5,max_iters=100000,verbose=0))
-    push!(solvers_sdpexp, SCS.SCSSolver(eps=1e-5,max_iters=100000,verbose=0))
+    push!(solvers_sdpexp, SCS.SCSSolver(eps=1e-6,max_iters=1000000,verbose=0))
 end
 if mos
     push!(solvers_soc, Mosek.MosekSolver(LOG=0))
