@@ -21,7 +21,7 @@ solvers_mip = []
 #     push!(solvers_mip, CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-7, CPX_PARAM_EPGAP=1e-8))
 # end
 if glp
-    push!(solvers_mip, GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_ERR, tol_int=1e-10, tol_bnd=1e-10, tol_obj=1e-10))
+    push!(solvers_mip, GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=1e-10, tol_bnd=1e-14, tol_obj=1e-14))
 end
 
 solvers_nlp = []
