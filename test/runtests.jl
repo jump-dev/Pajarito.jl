@@ -34,6 +34,7 @@ if scs
     push!(solvers_soc, SCS.SCSSolver(eps=1e-5,max_iters=100000,verbose=0))
     push!(solvers_expsoc, SCS.SCSSolver(eps=1e-5,max_iters=100000,verbose=0))
     push!(solvers_sdpsoc, SCS.SCSSolver(eps=1e-5,max_iters=100000,verbose=0))
+    push!(solvers_sdpexp, SCS.SCSSolver(eps=1e-5,max_iters=100000,verbose=0))
 end
 if mos
     push!(solvers_soc, Mosek.MosekSolver(LOG=0))
@@ -58,6 +59,10 @@ for solver in solvers_expsoc
 end
 println("\nConic SDP+SOC solvers:")
 for solver in solvers_sdpsoc
+    println(solver)
+end
+println("\nConic SDP+Exp solvers:")
+for solver in solvers_sdpexp
     println(solver)
 end
 println("\nStarting Pajarito tests...\n")
@@ -96,5 +101,9 @@ end
 flush(STDOUT)
 @testset "SDP+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpsoc, mip in solvers_mip, msd in [false, true]
     runsdpsocconic(msd, mip, con, ll)
+end
+flush(STDOUT)
+@testset "SDP+Exp conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpexp, mip in solvers_mip, msd in [false, true]
+    runsdpexpconic(msd, mip, con, ll)
 end
 flush(STDOUT)

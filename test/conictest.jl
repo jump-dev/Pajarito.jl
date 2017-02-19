@@ -792,4 +792,88 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(y.value, 2.0, atol=TOL)
         @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
     end
+
+    @testset "A-opt design: defaults" begin
+        # A-optimal design
+        #   minimize    Trace (sum_i lambdai*vi*vi')^{-1}
+        #   subject to  lambda >= 0, 1'*lambda = 1
+        n = 7
+        nmax = 3
+        V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
+        (q, p) = size(V)
+
+        np = Convex.Variable(p, :Int)
+        u = Convex.Variable(q)
+
+        aOpt = Convex.minimize(
+            sum(u),
+            sum(np) <= n,
+            np >= 0,
+            np <= nmax
+        )
+        E = eye(q)
+        for i in 1:q
+        	aOpt.constraints += Convex.isposdef([V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]])
+        end
+
+        Convex.solve!(aOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+
+        @test aOpt.status == :Optimal
+        @test isapprox(aOpt.optval, 0.177181, atol=TOL)
+        @test isapprox(np.value, [2,1,2,2], atol=TOL)
+    end
+
+    @testset "E-opt design: defaults" begin
+        # E-optimal design
+        #   maximize    w
+        #   subject to  sum_i lambda_i*vi*vi' >= w*I
+        #               lambda >= 0,  1'*lambda = 1;
+        n = 7
+        nmax = 3
+        V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
+        (q, p) = size(V)
+
+        np = Convex.Variable(p, :Int)
+        t = Convex.Variable()
+        eOpt = Convex.maximize(
+            t,
+            sum(np) <= n,
+            np >= 0,
+            np <= nmax,
+            Convex.isposdef(V * diagm(np./n) * V' - t * eye(q))
+        )
+
+        Convex.solve!(eOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+
+        @test eOpt.status == :Optimal
+        @test isapprox(eOpt.optval, 10.466724, atol=TOL)
+        @test isapprox(np.value, [2,1,1,3], atol=TOL)
+    end
+end
+
+# SDP+Exp problems for conic algorithm
+function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
+    @testset "D-opt design: defaults" begin
+        # D-optimal design
+        #   maximize    nthroot det V*diag(lambda)*V'
+        #   subject to  sum(lambda)=1,  lambda >=0
+        n = 7
+        nmax = 3
+        V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
+        (q, p) = size(V)
+
+        np = Convex.Variable(p, :Int)
+        dOpt = maximize(
+            logdet(V * diagm(np./n) * V'),
+            sum(np) <= n,
+            np >= 0,
+            np <= nmax
+        )
+
+        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+
+        @test dOpt.status == :Optimal
+        @test isapprox(dOpt.optval, 9.062207, atol=TOL)
+        @test isapprox(np.value, [2,2,2,1], atol=TOL)
+    end
 end

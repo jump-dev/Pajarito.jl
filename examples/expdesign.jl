@@ -16,7 +16,7 @@ cont_solver = SCSSolver(eps=1e-5, max_iters=1000000, verbose=0)
 # mip_solver_drives = false
 
 using CPLEX
-mip_solver = CplexSolver(CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-6, CPX_PARAM_SCRIND=0, CPX_PARAM_EPGAP=0.)
+mip_solver = CplexSolver(CPX_PARAM_SCRIND=1, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-6, CPX_PARAM_EPGAP=0.)
 mip_solver_drives = true
 
 
@@ -50,9 +50,11 @@ n = 15
 # (q, p) = size(V)
 
 # Use a random matrix of integers in (-10, 10)
-q = 5
-p = 6
-V = round.(20 .* rand(q, p) .- 10)
+# q = 5
+# p = 6
+# V = round.(20 .* rand(q, p) .- 10)
+
+V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
 (q, p) = size(V)
 
 
