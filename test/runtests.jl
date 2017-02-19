@@ -26,6 +26,7 @@ end
 solvers_soc = []
 solvers_expsoc = []
 solvers_sdpsoc = []
+solvers_sdpexp = []
 if eco
     push!(solvers_soc, ECOS.ECOSSolver(verbose=false))
     push!(solvers_expsoc, ECOS.ECOSSolver(verbose=false))
