@@ -816,7 +816,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         	aOpt.constraints += Convex.isposdef([V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]])
         end
 
-        Convex.solve!(aOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, round_mip_sols=true))
+        Convex.solve!(aOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         @show aOpt.status, aOpt.optval, np.value
         @test aOpt.status == :Optimal
@@ -844,7 +844,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
             Convex.isposdef(V * diagm(np./n) * V' - t * eye(q))
         )
 
-        Convex.solve!(eOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, round_mip_sols=true))
+        Convex.solve!(eOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         @show eOpt.status, eOpt.optval, np.value
         @test eOpt.status == :Optimal
@@ -872,7 +872,7 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
             np <= nmax
         )
 
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, round_mip_sols=true))
+        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         @show dOpt.status, dOpt.optval, np.value
         @test dOpt.status == :Optimal
