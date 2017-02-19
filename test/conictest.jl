@@ -375,7 +375,7 @@ function runexpsocboth(mip_solver_drives, mip_solver, cont_solver, log)
         Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
 
         @test problem.status == :Optimal
-        @test isapprox(problem.optval), -18.0, atol=TOL)
+        @test isapprox(problem.optval, -18.0, atol=TOL)
         @test isapprox(x.value, 6.0, atol=TOL)
         @test isapprox(y.value, 0.0, atol=TOL)
     end
@@ -412,7 +412,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_exp=false, init_soc_one=false, init_soc_inf=false))
 
         @test problem.status == :Optimal
-        @test isapprox(problem.optval), -18.0, atol=TOL)
+        @test isapprox(problem.optval, -18.0, atol=TOL)
         @test isapprox(x.value, 6.0, atol=TOL)
         @test isapprox(y.value, 0.0, atol=TOL)
     end
@@ -480,7 +480,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, viol_cuts_only=true))
 
         @test problem.status == :Optimal
-        @test isapprox(problem.optval), -18.0, atol=TOL)
+        @test isapprox(problem.optval, -18.0, atol=TOL)
         @test isapprox(x.value, 6.0, atol=TOL)
         @test isapprox(y.value, 0.0, atol=TOL)
     end
@@ -497,7 +497,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, viol_cuts_only=false))
 
         @test problem.status == :Optimal
-        @test isapprox(problem.optval), -18.0, atol=TOL)
+        @test isapprox(problem.optval, -18.0, atol=TOL)
         @test isapprox(x.value, 6.0, atol=TOL)
         @test isapprox(y.value, 0.0, atol=TOL)
     end
@@ -514,7 +514,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, scale_subp_cuts=false))
 
         @test problem.status == :Optimal
-        @test isapprox(problem.optval), -18.0, atol=TOL)
+        @test isapprox(problem.optval, -18.0, atol=TOL)
         @test isapprox(x.value, 6.0, atol=TOL)
         @test isapprox(y.value, 0.0, atol=TOL)
     end
@@ -531,7 +531,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, prim_cuts_always=true))
 
         @test problem.status == :Optimal
-        @test isapprox(problem.optval), -18.0, atol=TOL)
+        @test isapprox(problem.optval, -18.0, atol=TOL)
         @test isapprox(x.value, 6.0, atol=TOL)
         @test isapprox(y.value, 0.0, atol=TOL)
     end
@@ -548,7 +548,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, prim_cuts_assist=true, prim_cuts_always=true, prim_cuts_only=true))
 
         @test problem.status == :Optimal
-        @test isapprox(problem.optval), -18.0, atol=TOL)
+        @test isapprox(problem.optval, -18.0, atol=TOL)
         @test isapprox(x.value, 6.0, atol=TOL)
         @test isapprox(y.value, 0.0, atol=TOL)
     end
