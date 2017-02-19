@@ -292,7 +292,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @objective(m, Min, 0)
 
         @test solve(m) == :Infeasible
-        @test internalmodel(m).logs[:n_inf] == 
+        @test internalmodel(m).logs[:n_inf] == 0
     end
 end
 
