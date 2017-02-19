@@ -1358,23 +1358,25 @@ function solve_iterative!(m)
                         break
                     end
                 end
-            elseif is_repeat && !is_viol_prim
-                # Integer solution has repeated, conic solution is infeasible, and no violated primal cuts were added
-                if count_subopt == 0
-                    # Solve was optimal solve, so nothing more we can do
-                    if m.prim_cuts_assist
-                        warn("No violated subproblem cuts or primal cuts were added on conic-infeasible OA solution (this should not happen: please submit an issue)\n")
-                    else
-                        warn("No violated subproblem cuts or primal cuts were added on conic-infeasible OA solution (try using prim_cuts_assist = true)\n")
-                    end
-                    m.status = :CutsFailure
-                    break
-                end
-
-                # Try solving next MIP to optimality, if that doesn't help then we will fail next iteration
-                warn("Integer solution has repeated, solving next MIP to optimality\n")
-                count_subopt = m.mip_subopt_count
             end
+        end
+
+        if is_repeat && !is_viol_prim && !is_viol_subp
+            # Integer solution has repeated, conic solution is infeasible, and no violated primal cuts were added
+            if count_subopt == 0
+                # Solve was optimal solve, so nothing more we can do
+                if m.prim_cuts_assist
+                    warn("No violated subproblem cuts or primal cuts were added on conic-infeasible OA solution (this should not happen: please submit an issue)\n")
+                else
+                    warn("No violated subproblem cuts or primal cuts were added on conic-infeasible OA solution (try using prim_cuts_assist = true)\n")
+                end
+                m.status = :CutsFailure
+                break
+            end
+
+            # Try solving next MIP to optimality, if that doesn't help then we will fail next iteration
+            warn("Integer solution has repeated, solving next MIP to optimality\n")
+            count_subopt = m.mip_subopt_count
         end
 
         print_gap(m)
