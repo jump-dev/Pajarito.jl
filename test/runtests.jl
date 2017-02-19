@@ -21,7 +21,7 @@ if cpx
     push!(solvers_mip, CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-6, CPX_PARAM_EPGAP=0.))
 end
 if glp
-    push!(solvers_mip, GLPKMathProgInterface.GLPKSolverMIP(MessageLevel=0, MipIntFeasTol=1e-8, FeasibilityTol=1e-6, MipRelativeGap=0.))
+    push!(solvers_mip, GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_ERR, tol_int=1e-8, tol_bnd=1e-6, tol_obj=0.))
 end
 
 solvers_nlp = []
