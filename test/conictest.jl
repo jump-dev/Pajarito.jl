@@ -821,7 +821,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @show aOpt.status, aOpt.optval, np.value
         @test aOpt.status == :Optimal
         @test isapprox(aOpt.optval, 0.177181, atol=TOL)
-        @test isapprox(np.value, [2,1,2,2], atol=TOL)
+        @test isapprox(np.value, [2.0,1.0,2.0,2.0], atol=TOL)
     end
 
     @testset "E-opt design: defaults" begin
@@ -849,7 +849,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @show eOpt.status, eOpt.optval, np.value
         @test eOpt.status == :Optimal
         @test isapprox(eOpt.optval, 10.466724, atol=TOL)
-        @test isapprox(np.value, [2,1,1,3], atol=TOL)
+        @test isapprox(np.value, [2.0,1.0,1.0,3.0], atol=TOL)
     end
 end
 
@@ -877,6 +877,6 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @show dOpt.status, dOpt.optval, np.value
         @test dOpt.status == :Optimal
         @test isapprox(dOpt.optval, 9.062207, atol=TOL)
-        @test isapprox(np.value, [2,2,2,1], atol=TOL)
+        @test isapprox(np.value, [2.0,2.0,2.0,1.0], atol=TOL)
     end
 end

@@ -5,11 +5,11 @@
 using Convex, Pajarito
 log_level = 2
 
-using SCS
-cont_solver = SCSSolver(eps=1e-5, max_iters=1000000, verbose=0)
+# using SCS
+# cont_solver = SCSSolver(eps=1e-5, max_iters=1000000, verbose=0)
 
-# using Mosek
-# cont_solver = MosekSolver(LOG=0)
+using Mosek
+cont_solver = MosekSolver(LOG=0)
 
 # using Cbc
 # mip_solver = CbcSolver()
@@ -17,7 +17,7 @@ cont_solver = SCSSolver(eps=1e-5, max_iters=1000000, verbose=0)
 
 using CPLEX
 mip_solver = CplexSolver(CPX_PARAM_SCRIND=1, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-6, CPX_PARAM_EPGAP=0.)
-mip_solver_drives = true
+mip_solver_drives = false
 
 
 solver = PajaritoSolver(
@@ -31,8 +31,6 @@ solver = PajaritoSolver(
 
 
 enforce_integrality = true
-
-n = 15
 
 # Use a matrix of values generated similarly to Boyd & Vandenberghe
 # Likely to cause numerical difficulties
@@ -57,6 +55,10 @@ n = 15
 V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
 (q, p) = size(V)
 
+n = 7
+nmax = 3
+# nmax = ceil(Int, 2*n/p)
+
 
 np = enforce_integrality ? Variable(p, :Int) : Variable(p)
 
@@ -68,7 +70,8 @@ println("\n\n****D optimal****\n")
 dOpt = maximize(
     logdet(V * diagm(np./n) * V'),
     sum(np) <= n,
-    np >= 0
+	np >= 0,
+	np <= nmax
 )
 solve!(dOpt, (enforce_integrality ? solver : cont_solver))
 println("  objective $(dOpt.optval)")
@@ -82,7 +85,8 @@ u = Variable(q)
 aOpt = minimize(
     sum(u),
     sum(np) <= n,
-    np >= 0
+	np >= 0,
+	np <= nmax
 )
 E = eye(q)
 for i in 1:q
@@ -101,7 +105,8 @@ t = Variable()
 eOpt = maximize(
     t,
     sum(np) <= n,
-    np >= 0,
+	np >= 0,
+	np <= nmax,
     isposdef(V * diagm(np./n) * V' - t * eye(q))
 )
 solve!(eOpt, (enforce_integrality ? solver : cont_solver))
