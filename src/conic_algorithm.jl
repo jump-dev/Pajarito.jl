@@ -1360,21 +1360,21 @@ function solve_iterative!(m)
                 end
             end
 
-            if !is_viol_subp && is_repeat && !is_viol_prim
-                # Integer solution has repeated, conic solution is infeasible, and no violated primal cuts were added
+            if is_repeat && !is_viol_prim
+                # Integer solution has repeated and no violated cuts were added
                 if count_subopt == 0
                     # Solve was optimal solve, so nothing more we can do
                     if m.prim_cuts_assist
-                        warn("No violated subproblem cuts or primal cuts were added on conic-infeasible OA solution (this should not happen: please submit an issue)\n")
+                        warn("No violated cuts were added on repeated integer solution (this should not happen: please submit an issue)\n")
                     else
-                        warn("No violated subproblem cuts or primal cuts were added on conic-infeasible OA solution (try using prim_cuts_assist = true)\n")
+                        warn("No violated cuts were added on repeated integer solution (try using prim_cuts_assist = true)\n")
                     end
                     m.status = :CutsFailure
                     break
                 end
 
                 # Try solving next MIP to optimality, if that doesn't help then we will fail next iteration
-                warn("Integer solution has repeated, solving next MIP to optimality\n")
+                warn("Integer solution has repeated and no violated cuts were added: solving next MIP to optimality\n")
                 count_subopt = m.mip_subopt_count
             end
         end
