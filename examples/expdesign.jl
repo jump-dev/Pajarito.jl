@@ -5,19 +5,19 @@
 using Convex, Pajarito
 log_level = 2
 
-# using SCS
-# cont_solver = SCSSolver(eps=1e-5, max_iters=100000, verbose=0)
+using SCS
+cont_solver = SCSSolver(eps=1e-5, max_iters=1000000, verbose=0)
 
-using Mosek
-cont_solver = MosekSolver(LOG=0)
+# using Mosek
+# cont_solver = MosekSolver(LOG=0)
 
 # using Cbc
 # mip_solver = CbcSolver()
 # mip_solver_drives = false
 
 using CPLEX
-mip_solver = CplexSolver()
-mip_solver_drives = false
+mip_solver = CplexSolver(CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-6, CPX_PARAM_SCRIND=0, CPX_PARAM_EPGAP=0.)
+mip_solver_drives = true
 
 
 solver = PajaritoSolver(
@@ -32,19 +32,27 @@ solver = PajaritoSolver(
 
 enforce_integrality = true
 
-m = 4
 n = 15
 
-angles1 = linspace(3/4*pi, pi, m)
-angles2 = linspace(-3/8*pi, -5/8*pi, m)
-angles3 = linspace(-1/6*pi, 1/4*pi, m)
-V = [
-    3.*cos(angles1)' 1.8.*cos(angles2)' 1.*cos(angles3)';
-    3.*sin(angles1)' 1.8.*sin(angles2)' 1.*sin(angles3)';
-    3.*cos(angles2)' 1.8.*cos(angles3)' 1.*cos(angles1)';
-    3.*sin(angles2)' 1.8.*sin(angles3)' 1.*sin(angles1)'
-    ]
-V = trunc(V, 3)
+# Use a matrix of values generated similarly to Boyd & Vandenberghe
+# Likely to cause numerical difficulties
+# m = 4
+# angles1 = linspace(3/4*pi, pi, m)
+# angles2 = linspace(-3/8*pi, -5/8*pi, m)
+# angles3 = linspace(-1/6*pi, 1/4*pi, m)
+# V = [
+#     3.*cos(angles1)' 1.8.*cos(angles2)' 1.*cos(angles3)';
+#     3.*sin(angles1)' 1.8.*sin(angles2)' 1.*sin(angles3)';
+#     3.*cos(angles2)' 1.8.*cos(angles3)' 1.*cos(angles1)';
+#     3.*sin(angles2)' 1.8.*sin(angles3)' 1.*sin(angles1)'
+#     ]
+# V = trunc(V, 3)
+# (q, p) = size(V)
+
+# Use a random matrix of integers in (-10, 10)
+q = 5
+p = 6
+V = round.(20 .* rand(q, p) .- 10)
 (q, p) = size(V)
 
 
