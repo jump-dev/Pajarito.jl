@@ -865,8 +865,8 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         (q, p) = size(V)
 
         np = Convex.Variable(p, :Int)
-        dOpt = maximize(
-            logdet(V * diagm(np./n) * V'),
+        dOpt = Convex.maximize(
+            Convex.logdet(V * diagm(np./n) * V'),
             sum(np) <= n,
             np >= 0,
             np <= nmax
