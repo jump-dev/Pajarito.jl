@@ -2005,8 +2005,6 @@ end
 
 # Check and record violation and add cut, return true if violated
 function add_cut!(m, cut_expr::JuMP.AffExpr, cone_logs::Dict{Symbol,Any})
-    @show cut_expr
-
     if !m.oa_started
         @constraint(m.model_mip, cut_expr >= 0)
         return false
