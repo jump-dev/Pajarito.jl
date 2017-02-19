@@ -120,13 +120,74 @@ function runsocboth(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
     end
 end
 
 # SOC problems for conic algorithm
 function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
+    @testset "Dualize SOC" begin
+        x = Convex.Variable(1, :Int)
+
+        problem = Convex.maximize(3x,
+                            x <= 10,
+                            x^2 <= 9)
+
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, dualize_sub=true, dualize_relax=true))
+
+        @test isapprox(problem.optval, 9.0, atol=TOL)
+        @test problem.status == :Optimal
+    end
+
+    @testset "Dualize rotated SOC" begin
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, dualize_sub=true, dualize_relax=true))
+
+        c = [-3.0, 0.0, 0.0, 0.0]
+        A = zeros(4,4)
+        A[1,1] = 1.0
+        A[2,2] = 1.0
+        A[3,3] = 1.0
+        A[4,1] = 1.0
+        A[4,4] = -1.0
+        b = [10.0, 1.5, 3.0, 0.0]
+        constr_cones = Any[(:NonNeg,[1,2,3]),(:Zero,[4])]
+        var_cones = Any[(:SOCRotated,[2,3,1]),(:Free,[4])]
+        vartypes = [:Cont, :Cont, :Cont, :Int]
+        MathProgBase.loadproblem!(m, c, A, b, constr_cones, var_cones)
+        MathProgBase.setvartype!(m, vartypes)
+
+        MathProgBase.optimize!(m)
+
+        @test isapprox(MathProgBase.getobjval(m), -9.0, atol=TOL)
+        @test isapprox(MathProgBase.getobjbound(m), -9.0, atol=TOL)
+    end
+
+    @testset "Infinite duality gap failure" begin
+        # Example of polyhedral OA failure due to infinite duality gap from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
+        # min  z
+        # st   x == 0
+        #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
+        #      x in {0,1}
+
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+
+        MathProgBase.loadproblem!(m,
+        [ 0.0, 0.0, 1.0],
+        [ -1.0  0.0  0.0;
+        -1.0  0.0  0.0;
+        0.0 -1.0  0.0;
+        0.0  0.0 -1.0],
+        [ 0.0, 0.0, 0.0, 0.0],
+        Any[(:Zero,1:1),(:SOCRotated,2:4)],
+        Any[(:Free,[1,2,3])])
+        MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
+
+        MathProgBase.optimize!(m)
+
+        @test MathProgBase.status(m) == :ConicFailure
+    end
+
     @testset "Hijazi: no init soc" begin
         m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, init_soc_inf=false))
 
@@ -138,7 +199,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
     end
 
@@ -153,7 +214,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
         internalmodel(m).logs[:n_mip] = 1
     end
@@ -169,7 +230,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
         internalmodel(m).logs[:n_mip] = 1
     end
@@ -185,7 +246,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
         internalmodel(m).logs[:n_mip] = 1
     end
@@ -201,7 +262,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
         internalmodel(m).logs[:n_mip] = 2^dim + 1
     end
@@ -217,7 +278,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
         internalmodel(m).logs[:n_mip] = 3
     end
@@ -233,7 +294,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
         internalmodel(m).logs[:n_mip] = 1
     end
@@ -249,7 +310,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        status = solve(m)
+        status = solve(m, suppress_warnings=true)
         @test status == :Infeasible
         internalmodel(m).logs[:n_mip] = 1
     end
@@ -366,21 +427,6 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @test isapprox(Convex.evaluate(x), 6.0, atol=TOL)
     end
 
-    @testset "No disagg, no abslift" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-
-        problem = Convex.maximize(3x + y,
-                            x >= 0,
-                            3x + 2y <= 10,
-                            exp(x) <= 10)
-
-       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, soc_disagg=false, soc_abslift=false))
-
-       @test isapprox(problem.optval, 8.0, atol=TOL)
-       @test problem.status == :Optimal
-    end
-
     @testset "No disagg, abslift" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1, Convex.Positive())
@@ -426,21 +472,6 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
        @test problem.status == :Optimal
     end
 
-    @testset "Dualize" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-
-        problem = Convex.minimize(-3x - y,
-                           x >= 1,
-                           3x + 2y <= 30,
-                           exp(y^2) + x <= 7)
-
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, dualize_sub=true, dualize_relax=true))
-
-        @test problem.status == :Optimal
-        @test isapprox(Convex.evaluate(x), 6.0, atol=TOL)
-    end
-
     @testset "Viol cuts only true" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1, Convex.Positive())
@@ -481,21 +512,6 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                            exp(y^2) + x <= 7)
 
         Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, scale_subp_cuts=false))
-
-        @test problem.status == :Optimal
-        @test isapprox(Convex.evaluate(x), 6.0, atol=TOL)
-    end
-
-    @testset "No primal cuts assist" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-
-        problem = Convex.minimize(-3x - y,
-                           x >= 1,
-                           3x + 2y <= 30,
-                           exp(y^2) + x <= 7)
-
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, prim_cuts_assist=false))
 
         @test problem.status == :Optimal
         @test isapprox(Convex.evaluate(x), 6.0, atol=TOL)
