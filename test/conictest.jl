@@ -4,7 +4,7 @@
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 # SOC problems for NLP and conic algorithms
-function runsocboth(mip_solver_drives, mip_solver, cont_solver, log)
+function runsocboth(mip_solver_drives, mip_solver, cont_solver, log_level)
     @testset "Maximize" begin
         x = Convex.Variable(1, :Int)
 
@@ -12,7 +12,7 @@ function runsocboth(mip_solver_drives, mip_solver, cont_solver, log)
                             x <= 10,
                             x^2 <= 9)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         @test isapprox(x.value, 3.0, atol=TOL)
         @test isapprox(problem.optval, 9.0, atol=TOL)
@@ -26,7 +26,7 @@ function runsocboth(mip_solver_drives, mip_solver, cont_solver, log)
                             x >= 4,
                             x^2 <= 9)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log), verbose=false)
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level), verbose=false)
 
         @test problem.status == :Infeasible
     end
@@ -40,7 +40,7 @@ function runsocboth(mip_solver_drives, mip_solver, cont_solver, log)
                             x^2 <= 2t,
                             t >= 5)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         @test problem.status == :UnboundedRelaxation
     end
@@ -51,7 +51,7 @@ function runsocboth(mip_solver_drives, mip_solver, cont_solver, log)
         #     (x,y,z) in SOC
         #      x in {0,1}
 
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         MathProgBase.loadproblem!(m,
         [ 0.0, -1.0, -1.0],
@@ -73,7 +73,7 @@ function runsocboth(mip_solver_drives, mip_solver, cont_solver, log)
     end
 
     @testset "Zero cones" begin
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         MathProgBase.loadproblem!(m,
         [ 0.0, 0.0, -1.0, 1.0, -1.0],
@@ -95,7 +95,7 @@ function runsocboth(mip_solver_drives, mip_solver, cont_solver, log)
     end
 
     @testset "Rotated SOC" begin
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         c = [-3.0, 0.0, 0.0, 0.0]
         A = zeros(4,4)
@@ -120,7 +120,7 @@ function runsocboth(mip_solver_drives, mip_solver, cont_solver, log)
     end
 
     @testset "No continuous variables, infeasible" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         dim = 5
         @variable(m, x[1:dim], Bin)
@@ -132,7 +132,7 @@ function runsocboth(mip_solver_drives, mip_solver, cont_solver, log)
 end
 
 # SOC problems for conic algorithm
-function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
+function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
     @testset "Dualize SOC" begin
         x = Convex.Variable(1, :Int)
 
@@ -140,7 +140,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             x <= 10,
                             x^2 <= 9)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, dualize_sub=true, dualize_relax=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, dualize_sub=true, dualize_relax=true))
 
         @test isapprox(problem.optval, 9.0, atol=TOL)
         @test isapprox(x.value, 3.0, atol=TOL)
@@ -148,7 +148,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
     end
 
     @testset "Dualize rotated SOC" begin
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, dualize_sub=true, dualize_relax=true))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, dualize_sub=true, dualize_relax=true))
 
         c = [-3.0, 0.0, 0.0, 0.0]
         A = zeros(4,4)
@@ -179,7 +179,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
         #      x in {0,1}
 
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         MathProgBase.loadproblem!(m,
         [ 0.0, 0.0, 1.0],
@@ -198,7 +198,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
     end
 
     @testset "Hijazi: L1, disagg, no abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=true, soc_abslift=false))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=true, soc_disagg=true, soc_abslift=false))
 
         dim = 5
         @variable(m, x[1:dim], Bin)
@@ -212,7 +212,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
     end
 
     @testset "Hijazi: L1, disagg, abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=true, soc_abslift=true))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=true, soc_disagg=true, soc_abslift=true))
 
         dim = 5
         @variable(m, x[1:dim], Bin)
@@ -226,7 +226,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
     end
 
     @testset "Hijazi: L1, no disagg, abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=true, soc_disagg=false, soc_abslift=true))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=true, soc_disagg=false, soc_abslift=true))
 
         dim = 5
         @variable(m, x[1:dim], Bin)
@@ -240,7 +240,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
     end
 
     @testset "Hijazi: no L1, no disagg, no abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, init_soc_inf=false, soc_disagg=false, soc_abslift=false))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, init_soc_inf=false, soc_disagg=false, soc_abslift=false))
 
         dim = 4
         @variable(m, x[1:dim], Bin)
@@ -254,7 +254,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
     end
 
     @testset "Hijazi: no L1, disagg, no abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, init_soc_inf=false, soc_disagg=true, soc_abslift=false))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, init_soc_inf=false, soc_disagg=true, soc_abslift=false))
 
         dim = 4
         @variable(m, x[1:dim], Bin)
@@ -268,7 +268,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
     end
 
     @testset "Hijazi: no L1, disagg, abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, init_soc_inf=false, soc_disagg=true, soc_abslift=true))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, init_soc_inf=false, soc_disagg=true, soc_abslift=true))
 
         dim = 4
         @variable(m, x[1:dim], Bin)
@@ -282,7 +282,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
     end
 
     @testset "Hijazi: no L1, no disagg, abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, soc_disagg=false, soc_abslift=true))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, soc_disagg=false, soc_abslift=true))
 
         dim = 4
         @variable(m, x[1:dim], Bin)
@@ -297,7 +297,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
 end
 
 # Exp+SOC problems for NLP and conic algorithms
-function runexpsocboth(mip_solver_drives, mip_solver, cont_solver, log)
+function runexpsocboth(mip_solver_drives, mip_solver, cont_solver, log_level)
     @testset "Exp and SOC" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1, Convex.Positive())
@@ -307,7 +307,7 @@ function runexpsocboth(mip_solver_drives, mip_solver, cont_solver, log)
                             3x + 2y <= 10,
                             exp(x) <= 10)
 
-       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
        @test isapprox(problem.optval, 8.0, atol=TOL)
        @test isapprox(x.value, 2.0, atol=TOL)
@@ -324,7 +324,7 @@ function runexpsocboth(mip_solver_drives, mip_solver, cont_solver, log)
                             3x + 2y <= 10,
                             exp(x) <= 10)
 
-       @test_throws ErrorException Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+       @test_throws ErrorException Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
     end
 
     @testset "More constraints" begin
@@ -338,7 +338,7 @@ function runexpsocboth(mip_solver_drives, mip_solver, cont_solver, log)
                            x^2 <= 5,
                            exp(y) + x <= 7)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         @test problem.status == :Optimal
         @test isapprox(x.value, 2.0, atol=TOL)
@@ -356,7 +356,7 @@ function runexpsocboth(mip_solver_drives, mip_solver, cont_solver, log)
                            x^2 <= 5,
                            exp(y) + x <= 7)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, soc_disagg=false, init_soc_one=false, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, soc_disagg=false, init_soc_one=false, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         @test problem.status == :Optimal
         @test isapprox(x.value, 2.0, atol=TOL)
@@ -372,7 +372,7 @@ function runexpsocboth(mip_solver_drives, mip_solver, cont_solver, log)
                            3x + 2y <= 30,
                            exp(y^2) + x <= 7)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -18.0, atol=TOL)
@@ -382,7 +382,7 @@ function runexpsocboth(mip_solver_drives, mip_solver, cont_solver, log)
 end
 
 # Exp+SOC problems for conic algorithm
-function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
+function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
     @testset "No init exp" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1, Convex.Positive())
@@ -392,7 +392,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             3x + 2y <= 10,
                             exp(x) <= 10)
 
-       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_exp=false))
+       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_exp=false))
 
        @test problem.status == :Optimal
        @test isapprox(problem.optval, 8.0, atol=TOL)
@@ -409,7 +409,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                            3x + 2y <= 30,
                            exp(y^2) + x <= 7)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_exp=false, init_soc_one=false, init_soc_inf=false))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_exp=false, init_soc_one=false, init_soc_inf=false))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -18.0, atol=TOL)
@@ -426,7 +426,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             3x + 2y <= 10,
                             exp(x) <= 10)
 
-       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, soc_disagg=false, soc_abslift=true))
+       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=false, soc_abslift=true))
 
        @test problem.status == :Optimal
        @test isapprox(problem.optval, 8.0, atol=TOL)
@@ -443,7 +443,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             3x + 2y <= 10,
                             exp(x) <= 10)
 
-       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, soc_disagg=true, soc_abslift=false))
+       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=true, soc_abslift=false))
 
        @test problem.status == :Optimal
        @test isapprox(problem.optval, 8.0, atol=TOL)
@@ -460,7 +460,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             3x + 2y <= 10,
                             exp(x) <= 10)
 
-       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, soc_disagg=true, soc_abslift=true))
+       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=true, soc_abslift=true))
 
        @test problem.status == :Optimal
        @test isapprox(problem.optval, 8.0, atol=TOL)
@@ -477,7 +477,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                            3x + 2y <= 30,
                            exp(y^2) + x <= 7)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, viol_cuts_only=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, viol_cuts_only=true))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -18.0, atol=TOL)
@@ -494,7 +494,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                            3x + 2y <= 30,
                            exp(y^2) + x <= 7)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, viol_cuts_only=false))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, viol_cuts_only=false))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -18.0, atol=TOL)
@@ -511,7 +511,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                            3x + 2y <= 30,
                            exp(y^2) + x <= 7)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, scale_subp_cuts=false))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, scale_subp_cuts=false))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -18.0, atol=TOL)
@@ -528,7 +528,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                            3x + 2y <= 30,
                            exp(y^2) + x <= 7)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, prim_cuts_always=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_always=true))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -18.0, atol=TOL)
@@ -545,7 +545,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                            3x + 2y <= 30,
                            exp(y^2) + x <= 7)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, prim_cuts_assist=true, prim_cuts_always=true, prim_cuts_only=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=true, prim_cuts_always=true, prim_cuts_only=true))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -18.0, atol=TOL)
@@ -555,7 +555,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
 end
 
 # SDP+SOC problems for conic algorithm
-function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
+function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
     @testset "SDP and SOC" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1, Convex.Positive())
@@ -568,7 +568,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             z[1,2] >= 1,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -7.5, atol=TOL)
@@ -588,7 +588,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             x^2 <= 4,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         @test problem.status == :UnboundedRelaxation
     end
@@ -605,7 +605,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             z[1,2] >= 2,
                             y >= z[2,2] + z[1,1])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         @test problem.status == :Infeasible
     end
@@ -622,7 +622,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             z[1,2] >= 1,
                             y >= z[2,2])
 
-       @test_throws ErrorException Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+       @test_throws ErrorException Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
     end
 
     @testset "No init sdp" begin
@@ -637,7 +637,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             z[1,2] >= 1,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_sdp_lin=false))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_lin=false))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -7.5, atol=TOL)
@@ -658,7 +658,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             z[1,2] >= 1,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, sdp_eig=false))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=false))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -7.5, atol=TOL)
@@ -679,7 +679,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             z[1,2] >= 1,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, dualize_sub=true, dualize_relax=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, dualize_sub=true, dualize_relax=true))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -7.5, atol=TOL)
@@ -700,7 +700,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             z[1,2] >= 1,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, viol_cuts_only=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, viol_cuts_only=true))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -7.5, atol=TOL)
@@ -721,7 +721,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             z[1,2] >= 1,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, scale_subp_cuts=false))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, scale_subp_cuts=false))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -7.5, atol=TOL)
@@ -742,7 +742,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             z[1,2] >= 1,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, prim_cuts_assist=false))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -7.5, atol=TOL)
@@ -763,7 +763,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             z[1,2] >= 1,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, prim_cuts_always=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_always=true))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -7.5, atol=TOL)
@@ -784,7 +784,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log)
                             z[1,2] >= 1,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, prim_cuts_assist=true, prim_cuts_always=true, prim_cuts_only=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=true, prim_cuts_always=true, prim_cuts_only=true))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, -7.5, atol=TOL)
