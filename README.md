@@ -87,9 +87,10 @@ The following options can be passed to `PajaritoSolver()` to modify its behavior
 
 **Pajarito is not yet numerically robust and may require tuning of parameters to improve convergence.** If the default parameters don't work for you, please let us know.
 
-Note that for the conic algorithm, Pajarito usually returns a solution constructed from one of the conic solver's feasible solutions. Since the conic solver is not subject to the same feasibility tolerances as the MIP solver (which should match the absolute feasibility tolerance `tol_prim_infeas`), Pajarito's solution will not necessarily satisfy `tol_prim_infeas`.
-
-Note that MIP solver integrality tolerance should typically be tightened, for example to 1e-8, for improved Pajarito performance.
+Note:
+  * For the conic algorithm, Pajarito usually returns a solution constructed from one of the conic solver's feasible solutions. Since the conic solver is not subject to the same feasibility tolerances as the MIP solver (which should match the absolute feasibility tolerance `tol_prim_infeas`), Pajarito's solution will not necessarily satisfy `tol_prim_infeas`.
+  * MIP solver integrality tolerance should typically be tightened, for example to 1e-8, for improved Pajarito performance.
+  * `viol_cuts_only` defaults to `true` on the MIP-solver-driven algorithm and `false` on the iterative algorithm. 
 
 ## Bug reports and support
 
