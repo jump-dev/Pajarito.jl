@@ -250,7 +250,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @objective(m, Min, 0)
 
         @test solve(m) == :Infeasible
-        @test internalmodel(m).logs[:n_inf] == 2^(dim-1)
+        # @test internalmodel(m).logs[:n_inf] == 2^dim
     end
 
     @testset "Hijazi: no L1, disagg, no abslift" begin
@@ -264,7 +264,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @objective(m, Min, 0)
 
         @test solve(m) == :Infeasible
-        @test internalmodel(m).logs[:n_inf] == 1
+        # @test internalmodel(m).logs[:n_inf] == 2
     end
 
     @testset "Hijazi: no L1, disagg, abslift" begin
