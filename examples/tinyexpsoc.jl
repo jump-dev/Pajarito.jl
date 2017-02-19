@@ -14,6 +14,19 @@ mip_solver = CplexSolver()
 mip_solver_drives = false
 
 
+solver = PajaritoSolver(
+	mip_solver_drives=mip_solver_drives,
+	mip_solver=mip_solver,
+	cont_solver=cont_solver,
+	log_level=log_level,
+	soc_abslift=true,
+	soc_disagg=true,
+	init_soc_one=false,
+	init_soc_inf=false,
+	init_exp=false,
+)
+
+
 x = Convex.Variable(1, :Int)
 y = Convex.Variable(1)
 
@@ -26,19 +39,9 @@ pr = Convex.minimize(
    	exp(y) + x <= 7
 )
 
-Convex.solve!(pr, PajaritoSolver(
-	mip_solver_drives=mip_solver_drives,
-	mip_solver=mip_solver,
-	cont_solver=cont_solver,
-	log_level=log_level,
-	soc_abslift=true,
-	soc_disagg=true,
-	init_soc_one=false,
-	init_soc_inf=false,
-	init_exp=false,
-))
+Convex.solve!(pr, solver)
 
 @show pr.status
 @show pr.optval
-@show x
-@show y
+@show x.value
+@show y.value

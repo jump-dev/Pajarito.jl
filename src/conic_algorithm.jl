@@ -2065,28 +2065,12 @@ function create_logs!(m)
     logs[:n_heur] = 0       # Number of times heuristic is called
     logs[:n_add] = 0        # Number of times heuristic adds new solution
 
-    logs[:n_incum] = 0      # Number of times incumbent is called
-    logs[:n_innew] = 0      # Number of times incumbent allows feas soln
-
     logs[:n_inf] = 0        # Number of conic subproblem infeasible statuses
     logs[:n_opt] = 0        # Number of conic subproblem optimal statuses
     logs[:n_sub] = 0        # Number of conic subproblem suboptimal statuses
     logs[:n_lim] = 0        # Number of conic subproblem user limit statuses
     logs[:n_fail] = 0       # Number of conic subproblem conic failure statuses
     logs[:n_other] = 0      # Number of conic subproblem other statuses
-
-    # logs[:n_relax] = 0      # Number of relaxation subproblem cuts added
-    # logs[:n_dualfullv] = 0  # Number of violated full subproblem cuts added (after relax)
-    # logs[:n_dualfullnv] = 0 # Number of nonviolated full subproblem cuts added (after relax)
-    # logs[:n_dualdisv] = 0   # Number of violated disagg subproblem cuts added (after relax)
-    # logs[:n_dualdisnv] = 0  # Number of nonviolated disagg subproblem cuts added (after relax)
-    # logs[:n_dualdiscon] = 0 # Number of poorly conditioned disagg subproblem cuts encountered
-    # logs[:n_dualrev] = 0    # Number of violated full subproblem cuts RE-added (integer solution repeated)
-    # logs[:n_primfullv] = 0  # Number of violated full prim cuts added
-    # logs[:n_primfullnv] = 0 # Number of nonviolated full prim cuts added
-    # logs[:n_primdisv] = 0   # Number of violated disagg prim cuts added
-    # logs[:n_primdisnv] = 0  # Number of nonviolated disagg prim cuts added
-    # logs[:n_primdiscon] = 0 # Number of poorly conditioned disagg primal cuts encountered
 
     logs_soc = Dict{Symbol,Any}()
     logs_soc[:relax] = 0
@@ -2225,24 +2209,6 @@ function print_finish(m::PajaritoConicModel)
 
     @printf " - Heuristic callback   = %5d\n" m.logs[:n_heur]
     @printf " -- Feasible added      = %5d\n" m.logs[:n_add]
-
-    @printf " - Incumbent callback   = %5d\n" m.logs[:n_incum]
-    @printf " -- Feasible accepted   = %5d\n" m.logs[:n_innew]
-
-    # @printf " - Subproblem cuts            = %5d\n" (m.logs[:n_relax] + m.logs[:n_dualfullv] + m.logs[:n_dualfullnv] + m.logs[:n_dualdisv] + m.logs[:n_dualdisnv])
-    # @printf " -- Relaxation          = %5d\n" m.logs[:n_relax]
-    # @printf " -- Full viol.          = %5d\n" m.logs[:n_dualfullv]
-    # @printf " -- Full nonviol.       = %5d\n" m.logs[:n_dualfullnv]
-    # @printf " -- Disagg. viol        = %5d\n" m.logs[:n_dualdisv]
-    # @printf " -- Disagg. nonviol     = %5d\n" m.logs[:n_dualdisnv]
-    # @printf " -- Poorly conditioned  = %5d\n" m.logs[:n_dualdiscon]
-    #
-    # @printf " - Primal cuts          = %5d\n" (m.logs[:n_primfullv] + m.logs[:n_primfullnv] + m.logs[:n_primdisv] + m.logs[:n_primdisnv])
-    # @printf " -- Full viol.          = %5d\n" m.logs[:n_primfullv]
-    # @printf " -- Full nonviol.       = %5d\n" m.logs[:n_primfullnv]
-    # @printf " -- Disagg. viol        = %5d\n" m.logs[:n_primdisv]
-    # @printf " -- Disagg. nonviol     = %5d\n" m.logs[:n_primdisnv]
-    # @printf " -- Poorly conditioned  = %5d\n" m.logs[:n_primdiscon]
 
     flush(STDOUT)
     if m.log_level == 2

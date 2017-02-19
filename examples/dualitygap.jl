@@ -20,12 +20,15 @@ mip_solver = CplexSolver()
 mip_solver_drives = true
 
 
-m = MathProgBase.ConicModel(PajaritoSolver(
+solver = PajaritoSolver(
 	mip_solver_drives=mip_solver_drives,
 	mip_solver=mip_solver,
 	cont_solver=cont_solver,
 	log_level=log_level
-))
+)
+
+
+m = MathProgBase.ConicModel(solver)
 
 MathProgBase.loadproblem!(m,
 	[ 0.0, 0.0, 1.0],
@@ -42,3 +45,4 @@ MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
 MathProgBase.optimize!(m)
 
 @show MathProgBase.status(m)
+@show MathProgBase.getobjval(m)
