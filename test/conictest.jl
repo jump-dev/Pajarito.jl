@@ -240,9 +240,9 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
     end
 
     @testset "Hijazi: no L1, no disagg, no abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, soc_disagg=false, soc_abslift=false))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, init_soc_inf=false, soc_disagg=false, soc_abslift=false))
 
-        dim = 3
+        dim = 4
         @variable(m, x[1:dim], Bin)
         @variable(m, t)
         @constraint(m, t == sqrt(dim-1)/2)
@@ -254,7 +254,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
     end
 
     @testset "Hijazi: no L1, disagg, no abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, soc_disagg=true, soc_abslift=false))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, init_soc_one=false, init_soc_inf=false, soc_disagg=true, soc_abslift=false))
 
         dim = 4
         @variable(m, x[1:dim], Bin)
@@ -292,7 +292,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log)
         @objective(m, Min, 0)
 
         @test solve(m) == :Infeasible
-        @test internalmodel(m).logs[:n_mip] == 1
+        @test internalmodel(m).logs[:n_mip] == 2
     end
 end
 
