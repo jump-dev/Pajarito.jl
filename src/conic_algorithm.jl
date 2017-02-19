@@ -2010,6 +2010,8 @@ function add_cut!(m, cut_expr::JuMP.AffExpr, cone_logs::Dict{Symbol,Any})
         return false
     end
 
+    @show cut_expr
+    
     cut_inf = -getvalue(cut_expr)
 
     if cut_inf > m.tol_prim_infeas
