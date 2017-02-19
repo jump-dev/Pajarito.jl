@@ -14,12 +14,12 @@ include("conictest.jl")
 
 # Define solvers using JuMP/test/solvers.jl
 solvers_mip = []
-if grb
-    push!(solvers_mip, Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=1e-8, FeasibilityTol=1e-8, MIPGap=1e-8))
-end
-if cpx
-    push!(solvers_mip, CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-8, CPX_PARAM_EPGAP=1e-8))
-end
+# if grb
+#     push!(solvers_mip, Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=1e-8, FeasibilityTol=1e-8, MIPGap=1e-8))
+# end
+# if cpx
+#     push!(solvers_mip, CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-8, CPX_PARAM_EPGAP=1e-8))
+# end
 if glp
     push!(solvers_mip, GLPKMathProgInterface.GLPKSolverMIP(tol_int=1e-8, tol_bnd=1e-8, tol_obj=1e-8))
 end
