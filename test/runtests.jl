@@ -14,14 +14,14 @@ include("conictest.jl")
 
 # Define solvers using JuMP/test/solvers.jl
 solvers_mip = []
-# if grb
-#     push!(solvers_mip, Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=1e-8, FeasibilityTol=1e-7, MIPGap=1e-8))
-# end
-# if cpx
-#     push!(solvers_mip, CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-7, CPX_PARAM_EPGAP=1e-8))
-# end
+if grb
+    push!(solvers_mip, Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=1e-8, FeasibilityTol=1e-7, MIPGap=1e-8))
+end
+if cpx
+    push!(solvers_mip, CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-7, CPX_PARAM_EPGAP=1e-8))
+end
 if glp
-    push!(solvers_mip, GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_ON, tol_int=1e-10, tol_bnd=1e-14, tol_obj=1e-14))
+    push!(solvers_mip, GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_ERR, tol_int=1e-8, tol_bnd=1e-7, tol_obj=1e-8))
 end
 
 solvers_nlp = []
@@ -29,7 +29,7 @@ if ipt
     push!(solvers_nlp, Ipopt.IpoptSolver(print_level=0))
 end
 if kni
-    push!(solvers_nlp, KNITRO.KnitroSolver(objrange=1e16,outlev=0,maxit=100000))
+    push!(solvers_nlp, KNITRO.KnitroSolver(objrange=1e16, outlev=0, maxit=100000))
 end
 
 solvers_soc = []
@@ -41,10 +41,10 @@ if eco
     push!(solvers_expsoc, ECOS.ECOSSolver(verbose=false))
 end
 if scs
-    push!(solvers_soc, SCS.SCSSolver(eps=1e-6,max_iters=100000,verbose=0))
-    push!(solvers_expsoc, SCS.SCSSolver(eps=1e-6,max_iters=100000,verbose=0))
-    push!(solvers_sdpsoc, SCS.SCSSolver(eps=1e-6,max_iters=1000000,verbose=0))
-    push!(solvers_sdpexp, SCS.SCSSolver(eps=1e-6,max_iters=1000000,verbose=0))
+    push!(solvers_soc, SCS.SCSSolver(eps=1e-6, max_iters=100000, verbose=0))
+    push!(solvers_expsoc, SCS.SCSSolver(eps=1e-6, max_iters=100000, verbose=0))
+    push!(solvers_sdpsoc, SCS.SCSSolver(eps=1e-6, max_iters=1000000, verbose=0))
+    push!(solvers_sdpexp, SCS.SCSSolver(eps=1e-6, max_iters=1000000, verbose=0))
 end
 if mos
     push!(solvers_soc, Mosek.MosekSolver(LOG=0))
@@ -97,18 +97,18 @@ ll = 3
 #     runexpsocboth(msd, mip, con, ll)
 # end
 # flush(STDOUT)
-#
-# # Conic models tests in conictest.jl with conic solver
-# @testset "SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_soc, mip in solvers_mip, msd in [false, true]
-#     runsocboth(msd, mip, con, ll)
-#     runsocconic(msd, mip, con, ll)
-# end
-# flush(STDOUT)
-# @testset "Exp+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_expsoc, mip in solvers_mip, msd in [false, true]
-#     runexpsocboth(msd, mip, con, ll)
-#     runexpsocconic(msd, mip, con, ll)
-# end
-# flush(STDOUT)
+
+# Conic models tests in conictest.jl with conic solver
+@testset "SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_soc, mip in solvers_mip, msd in [false, true]
+    runsocboth(msd, mip, con, ll)
+    runsocconic(msd, mip, con, ll)
+end
+flush(STDOUT)
+@testset "Exp+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_expsoc, mip in solvers_mip, msd in [false, true]
+    runexpsocboth(msd, mip, con, ll)
+    runexpsocconic(msd, mip, con, ll)
+end
+flush(STDOUT)
 @testset "SDP+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpsoc, mip in solvers_mip, msd in [false, true]
     runsdpsocconic(msd, mip, con, ll)
 end

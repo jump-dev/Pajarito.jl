@@ -367,10 +367,10 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             if m.log_level > 0
                 println("Initial conic relaxation status was $status_relax")
             end
-            m.status = :UnboundedRelaxation
+            m.status = :Unbounded
         elseif (status_relax != :Optimal) && (status_relax != :Suboptimal)
             warn("Conic solver failure on initial relaxation: returned status $status_relax\n")
-            m.status = :ConicFailure
+            m.status = :CutsFailure
         else
             obj_relax = MathProgBase.getobjval(model_relax)
             if m.log_level > 2
@@ -414,7 +414,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
     end
 
-    if (m.status != :Infeasible) && (m.status != :UnboundedRelaxation) && (m.status != :ConicFailure)
+    if (m.status != :Infeasible) && (m.status != :Unbounded) && (m.prim_cuts_assist || (m.status != :CutsFailure))
         tic()
         if m.log_level > 2
             @printf "\nCreating conic subproblem model..."
@@ -1281,12 +1281,8 @@ function solve_iterative!(m)
             break
         elseif status_mip == :Unbounded
             # Stop if unbounded (initial conic relax solve should detect this)
-            if m.solve_relax
-                warn("MIP solver returned status $status_mip, which suggests that the initial subproblem cuts added were too weak\n")
-            else
-                warn("MIP solver returned status $status_mip, because the initial conic relaxation was not solved\n")
-            end
-            m.status = :CutsFailure
+            warn("MIP solver returned status $status_mip, which could indicate a problem with the conic relaxation solve (try setting prim_cuts_assist = false)\n")
+            m.status = :MIPFailure
             break
         elseif (status_mip == :UserLimit) || (status_mip == :Optimal)
             # Update OA bound if MIP bound is better than current OA bound
@@ -1461,13 +1457,10 @@ function solve_mip_driven!(m)
         m.status = :Infeasible
         return
     elseif status_mip == :Unbounded
-        if m.solve_relax
-            warn("MIP solver returned status $status_mip, which suggests that the initial subproblem cuts added were too weak\n")
-        else
-            warn("MIP solver returned status $status_mip, because the initial conic relaxation was not solved\n")
-        end
-        m.status = :CutsFailure
-        return
+        # Stop if unbounded (initial conic relax solve should detect this)
+        warn("MIP solver returned status $status_mip, which could indicate a problem with the conic relaxation solve (try setting prim_cuts_assist = false)\n")
+        m.status = :MIPFailure
+        break
     elseif status_mip == :UserLimit
         # Either a timeout, or a cuts failure terminated the MIP solver
         m.mip_obj = getobjbound(m.model_mip)
