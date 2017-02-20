@@ -1727,18 +1727,32 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
         m.logs[:n_other] += 1
     end
 
-    # Try to get a solution
-    soln_conic = try
-        MathProgBase.getsolution(m.model_conic)
-    catch
-        Float64[]
+    if status_conic == :Optimal
+        soln_conic = MathProgBase.getsolution(m.model_conic)
+    else
+        # Try to get a solution
+        try
+            soln_conic = MathProgBase.getsolution(m.model_conic)
+        catch
+            soln_conic = Float64[]
+        end
+        if any(isnan, soln_conic)
+            soln_conic = Float64[]
+        end
     end
 
-    # Try to get a dual
-    dual_conic =  try
-        MathProgBase.getdual(m.model_conic)
-    catch
-        Float64[]
+    if (status_conic == :Optimal) || (status_conic == :Infeasible)
+        dual_conic = MathProgBase.getdual(m.model_conic)
+    else
+        # Try to get a dual
+        try
+            dual_conic = MathProgBase.getdual(m.model_conic)
+        catch
+            dual_conic = Float64[]
+        end
+        if any(isnan, dual_conic)
+            dual_conic = Float64[]
+        end
     end
 
     # Free the conic model if not saving it
@@ -2210,7 +2224,7 @@ function print_finish(m::PajaritoConicModel)
     if m.log_level == 2
         return
     end
-    if !isfinite(m.best_obj) || any(isnan(m.final_soln))
+    if !isfinite(m.best_obj) || any(isnan, m.final_soln)
         return
     end
 
