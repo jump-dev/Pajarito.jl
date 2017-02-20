@@ -510,7 +510,7 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
     # TODO Figure out the conditions for this to hold!
     elseif ini_nlp_status == :Unbounded
         warn("Initial NLP Relaxation Unbounded.")
-        m.status = :UnboundedRelaxation
+        m.status = :Unbounded
         return
     else
         warn("NLP Solver Failure.")
