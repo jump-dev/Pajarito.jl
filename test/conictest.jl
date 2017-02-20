@@ -196,6 +196,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         status = MathProgBase.status(m)
         if status == :Optimal
+            @show MathProgBase.getsolution(m)
             @test isapprox(MathProgBase.getsolution(m), [0.0,0.0,0.0], atol=TOL)
         else
             @test status == :CutsFailure
@@ -226,6 +227,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         status = MathProgBase.status(m)
         if status == :Optimal
+            @show MathProgBase.getsolution(m)
             @test isapprox(MathProgBase.getsolution(m), [0.0,0.0,0.0], atol=TOL)
         else
             @test status == :CutsFailure
@@ -258,6 +260,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         status = MathProgBase.status(m)
         if status == :Optimal
+            @show MathProgBase.getsolution(m)
             @test isapprox(MathProgBase.getsolution(m), [0.0,0.0,0.0], atol=TOL)
         else
             @test status == :CutsFailure
@@ -283,6 +286,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         status = MathProgBase.status(m)
         if status == :Optimal
+            @show MathProgBase.getsolution(m)
             @test isapprox(MathProgBase.getsolution(m), [0.0,0.0,0.0], atol=TOL)
         else
             @test status == :CutsFailure
