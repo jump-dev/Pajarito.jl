@@ -172,106 +172,100 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(MathProgBase.getsolution(m), [3.0,1.5,3.0,3.0], atol=TOL)
     end
 
-    @testset "Infinite duality gap: primal assist" begin
-        # Example of polyhedral OA failure due to infinite duality gap from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
-        # min  z
-        # st   x == 0
-        #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
-        #      x in {0,1}
+#     @testset "Infinite duality gap: primal assist" begin
+#         # Example of polyhedral OA failure due to infinite duality gap from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
+#         # min  z
+#         # st   x == 0
+#         #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
+#         #      x in {0,1}
 
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
+#         m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
 
-        MathProgBase.loadproblem!(m,
-        [ 0.0, 0.0, 1.0],
-        [ -1.0  0.0  0.0;
-        -1.0  0.0  0.0;
-        0.0 -1.0  0.0;
-        0.0  0.0 -1.0],
-        [ 0.0, 0.0, 0.0, 0.0],
-        Any[(:Zero,1:1),(:SOCRotated,2:4)],
-        Any[(:Free,[1,2,3])])
-        MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
+#         MathProgBase.loadproblem!(m,
+#         [ 0.0, 0.0, 1.0],
+#         [ -1.0  0.0  0.0;
+#         -1.0  0.0  0.0;
+#         0.0 -1.0  0.0;
+#         0.0  0.0 -1.0],
+#         [ 0.0, 0.0, 0.0, 0.0],
+#         Any[(:Zero,1:1),(:SOCRotated,2:4)],
+#         Any[(:Free,[1,2,3])])
+#         MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
 
-        MathProgBase.optimize!(m)
+#         MathProgBase.optimize!(m)
 
-        status = MathProgBase.status(m)
-        @test_skip status == :CutsFailure
-    end
+#         status = MathProgBase.status(m)
+#         @test status == :CutsFailure
+#     end
 
-    @testset "Infinite duality gap: no primal assist" begin
-        # Example of polyhedral OA failure due to infinite duality gap from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
-        # min  z
-        # st   x == 0
-        #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
-        #      x in {0,1}
+#     @testset "Infinite duality gap: no primal assist" begin
+#         m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
 
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
+#         MathProgBase.loadproblem!(m,
+#         [ 0.0, 0.0, 1.0],
+#         [ -1.0  0.0  0.0;
+#         -1.0  0.0  0.0;
+#         0.0 -1.0  0.0;
+#         0.0  0.0 -1.0],
+#         [ 0.0, 0.0, 0.0, 0.0],
+#         Any[(:Zero,1:1),(:SOCRotated,2:4)],
+#         Any[(:Free,[1,2,3])])
+#         MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
 
-        MathProgBase.loadproblem!(m,
-        [ 0.0, 0.0, 1.0],
-        [ -1.0  0.0  0.0;
-        -1.0  0.0  0.0;
-        0.0 -1.0  0.0;
-        0.0  0.0 -1.0],
-        [ 0.0, 0.0, 0.0, 0.0],
-        Any[(:Zero,1:1),(:SOCRotated,2:4)],
-        Any[(:Free,[1,2,3])])
-        MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
+#         MathProgBase.optimize!(m)
 
-        MathProgBase.optimize!(m)
+#         status = MathProgBase.status(m)
+#         @test status == :CutsFailure
+#     end
 
-        status = MathProgBase.status(m)
-        @test_skip status == :CutsFailure
-    end
+#     @testset "Finite duality gap: primal assist" begin
+#         # Example of polyhedral OA failure due to finite duality gap, modified from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
+#         # min  z
+#         # st   x == 0
+#         #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
+#         #      z >= -10
+#         #      x in {0,1}
 
-    @testset "Finite duality gap: primal assist" begin
-        # Example of polyhedral OA failure due to finite duality gap, modified from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
-        # min  z
-        # st   x == 0
-        #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
-        #      z >= -10
-        #      x in {0,1}
+#         m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
 
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
+#         MathProgBase.loadproblem!(m,
+#         [ 0.0, 0.0, 1.0],
+#         [ -1.0  0.0  0.0;
+#          -1.0  0.0  0.0;
+#           0.0 -1.0  0.0;
+#           0.0  0.0 -1.0;
+#           0.0  0.0 -1.0],
+#         [ 0.0, 0.0, 0.0, 0.0, 10.0],
+#         Any[(:Zero,1:1),(:SOCRotated,2:4),(:NonNeg,5:5)],
+#         Any[(:Free,[1,2,3])])
+#         MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
 
-        MathProgBase.loadproblem!(m,
-        [ 0.0, 0.0, 1.0],
-        [ -1.0  0.0  0.0;
-         -1.0  0.0  0.0;
-          0.0 -1.0  0.0;
-          0.0  0.0 -1.0;
-          0.0  0.0 -1.0],
-        [ 0.0, 0.0, 0.0, 0.0, 10.0],
-        Any[(:Zero,1:1),(:SOCRotated,2:4),(:NonNeg,5:5)],
-        Any[(:Free,[1,2,3])])
-        MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
+#         MathProgBase.optimize!(m)
 
-        MathProgBase.optimize!(m)
+#         status = MathProgBase.status(m)
+#         @test status == :CutsFailure
+#     end
 
-        status = MathProgBase.status(m)
-        @test_skip status == :CutsFailure
-    end
+#     @testset "Finite duality gap: no primal assist" begin
+#         m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
 
-    @testset "Finite duality gap: no primal assist" begin
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
+#         MathProgBase.loadproblem!(m,
+#         [ 0.0, 0.0, 1.0],
+#         [ -1.0  0.0  0.0;
+#          -1.0  0.0  0.0;
+#           0.0 -1.0  0.0;
+#           0.0  0.0 -1.0;
+#           0.0  0.0 -1.0],
+#         [ 0.0, 0.0, 0.0, 0.0, 10.0],
+#         Any[(:Zero,1:1),(:SOCRotated,2:4),(:NonNeg,5:5)],
+#         Any[(:Free,[1,2,3])])
+#         MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
 
-        MathProgBase.loadproblem!(m,
-        [ 0.0, 0.0, 1.0],
-        [ -1.0  0.0  0.0;
-         -1.0  0.0  0.0;
-          0.0 -1.0  0.0;
-          0.0  0.0 -1.0;
-          0.0  0.0 -1.0],
-        [ 0.0, 0.0, 0.0, 0.0, 10.0],
-        Any[(:Zero,1:1),(:SOCRotated,2:4),(:NonNeg,5:5)],
-        Any[(:Free,[1,2,3])])
-        MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
+#         MathProgBase.optimize!(m)
 
-        MathProgBase.optimize!(m)
-
-        status = MathProgBase.status(m)
-        @test_skip status == :CutsFailure
-    end
+#         status = MathProgBase.status(m)
+#         @test status == :CutsFailure
+#     end
 
     @testset "Hijazi: L1, disagg, no abslift" begin
         m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=true, soc_disagg=true, soc_abslift=false))
