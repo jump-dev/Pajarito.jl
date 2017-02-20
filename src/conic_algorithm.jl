@@ -382,33 +382,36 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 @printf " - Relaxation objective = %14.6f\n" obj_relax
             end
 
-            # Optionally rescale dual
+            # Get dual and check for NaNs
             dual_conic = MathProgBase.getdual(model_relax)
-            if m.scale_subp_cuts
-                # Rescale by number of cones / absval of full conic objective
-                scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / (abs(obj_relax) + 1e-5))
-            end
+            if !isempty(dual_conic) && !any(isnan, dual_conic)
+                # Optionally scale dual
+                if m.scale_subp_cuts
+                    # Rescale by number of cones / absval of full conic objective
+                    scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / (abs(obj_relax) + 1e-5))
+                end
 
-            # Add relaxation cuts
-            for n in 1:m.num_soc
-                # Add SOC K* subproblem cuts from solution
-                add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[v_idxs_soc_relx[n]])
-            end
+                # Add relaxation cuts
+                for n in 1:m.num_soc
+                    # Add SOC K* subproblem cuts from solution
+                    add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[v_idxs_soc_relx[n]])
+                end
 
-            for n in 1:m.num_exp
-                # Add ExpPrimal K* subproblem cuts from solution
-                add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], dual_conic[r_idx_exp_relx[n]], dual_conic[s_idx_exp_relx[n]])
-            end
+                for n in 1:m.num_exp
+                    # Add ExpPrimal K* subproblem cuts from solution
+                    add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], dual_conic[r_idx_exp_relx[n]], dual_conic[s_idx_exp_relx[n]])
+                end
 
-            for n in 1:m.num_sdp
-                v_dual = dual_conic[v_idx_sdp_relx[n]]
-                V_dual = make_smat!(v_dual, m.smat_sdp[n])
-                (V_eigvals, V_eigvecs) = LAPACK.syev!('V', 'U', V_dual)
+                for n in 1:m.num_sdp
+                    v_dual = dual_conic[v_idx_sdp_relx[n]]
+                    V_dual = make_smat!(v_dual, m.smat_sdp[n])
+                    (V_eigvals, V_eigvecs) = LAPACK.syev!('V', 'U', V_dual)
 
-                # Add PSD K* subproblem cuts from solution
-                # Dual is sum_{j: lambda_j > 0} lamda_j V_j V_j'
-                pos_inds = V_eigvals .>= m.tol_zero
-                add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], view(V_eigvecs, :, pos_inds))
+                    # Add PSD K* subproblem cuts from solution
+                    # Dual is sum_{j: lambda_j > 0} lamda_j V_j V_j'
+                    pos_inds = V_eigvals .>= m.tol_zero
+                    add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], view(V_eigvecs, :, pos_inds))
+                end
             end
         end
 
@@ -1621,9 +1624,7 @@ function add_subp_incumb_cuts!(m)
             return (false, false)
         end
     elseif (status_conic == :Optimal) && !isempty(dual_conic)
-        # Subproblem feasible
-        # Clean zeros and calculate full objective value
-        clean_zeros!(m, soln_conic)
+        # Subproblem feasible: first calculate full objective value
         obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_conic)
 
         if m.scale_subp_cuts
