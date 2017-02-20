@@ -179,7 +179,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
         #      x in {0,1}
 
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
 
         MathProgBase.loadproblem!(m,
         [ 0.0, 0.0, 1.0],
@@ -205,7 +205,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
         #      x in {0,1}
 
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
 
         MathProgBase.loadproblem!(m,
         [ 0.0, 0.0, 1.0],
@@ -232,7 +232,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         #      z >= -10
         #      x in {0,1}
 
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
 
         MathProgBase.loadproblem!(m,
         [ 0.0, 0.0, 1.0],
@@ -253,7 +253,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
     end
 
     @testset "Finite duality gap: no primal assist" begin
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
 
         MathProgBase.loadproblem!(m,
         [ 0.0, 0.0, 1.0],
@@ -272,7 +272,6 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         status = MathProgBase.status(m)
         @test status == :CutsFailure
     end
-
 
     @testset "Hijazi: L1, disagg, no abslift" begin
         m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=true, soc_disagg=true, soc_abslift=false))

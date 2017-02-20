@@ -1857,8 +1857,6 @@ function add_cut_soc!(m, t, v, d, a, v_dual)
                 add_full = true
             end
 
-            # TODO is the coeff on a or v supposed to be negative?
-
             if m.soc_abslift
                 # Using SOC absvalue lifting, so add two-sided cut
                 # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j - 2*|v'_j|*a_j >= 0

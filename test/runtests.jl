@@ -80,7 +80,7 @@ flush(STDOUT)
 
 # Tests absolute tolerance and Pajarito printing options
 TOL = 1e-3
-ll = 3
+ll = 0
 
 # # NLP tests in nlptest.jl
 # @testset "NLP model - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
