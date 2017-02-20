@@ -1460,7 +1460,6 @@ function solve_mip_driven!(m)
         # Stop if unbounded (initial conic relax solve should detect this)
         warn("MIP solver returned status $status_mip, which could indicate a problem with the conic relaxation solve (try setting prim_cuts_assist = false)\n")
         m.status = :MIPFailure
-        break
     elseif status_mip == :UserLimit
         # Either a timeout, or a cuts failure terminated the MIP solver
         m.mip_obj = getobjbound(m.model_mip)
