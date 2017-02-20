@@ -358,6 +358,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
 
         status_relax = MathProgBase.status(model_relax)
+        obj_relax = MathProgBase.getobjval(model_relax)
+
         if status_relax == :Infeasible
             if m.log_level > 0
                 println("Initial conic relaxation status was $status_relax")
@@ -371,8 +373,10 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         elseif (status_relax != :Optimal) && (status_relax != :Suboptimal)
             warn("Conic solver failure on initial relaxation: returned status $status_relax\n")
             m.status = :CutsFailure
+        elseif isnan(obj_relax)
+            warn("Conic solver had objective value $obj_relax: returned status $status_relax\n")
+            m.status = :CutsFailure
         else
-            obj_relax = MathProgBase.getobjval(model_relax)
             if m.log_level > 2
                 @printf " - Relaxation status    = %14s\n" status_relax
                 @printf " - Relaxation objective = %14.6f\n" obj_relax
@@ -1604,7 +1608,7 @@ function add_subp_incumb_cuts!(m)
     (status_conic, soln_conic, dual_conic) = solve_subp!(m, b_sub_int)
 
     # Determine cut scaling factors and check if have new feasible incumbent solution
-    if status_conic == :Infeasible
+    if (status_conic == :Infeasible) && !isempty(dual_conic)
         # Subproblem infeasible: first check infeasible ray has negative value
         ray_value = vecdot(dual_conic, b_sub_int)
         if ray_value < -m.tol_zero
@@ -1616,7 +1620,7 @@ function add_subp_incumb_cuts!(m)
             warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (this should not happen: please submit an issue)\n")
             return (false, false)
         end
-    elseif status_conic == :Optimal
+    elseif (status_conic == :Optimal) && !isempty(dual_conic)
         # Subproblem feasible
         # Clean zeros and calculate full objective value
         clean_zeros!(m, soln_conic)
@@ -1736,9 +1740,9 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
         catch
             soln_conic = Float64[]
         end
-        if any(isnan, soln_conic)
-            soln_conic = Float64[]
-        end
+    end
+    if any(isnan, soln_conic)
+        soln_conic = Float64[]
     end
 
     if (status_conic == :Optimal) || (status_conic == :Infeasible)
@@ -1750,9 +1754,9 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
         catch
             dual_conic = Float64[]
         end
-        if any(isnan, dual_conic)
-            dual_conic = Float64[]
-        end
+    end
+    if any(isnan, dual_conic)
+        dual_conic = Float64[]
     end
 
     # Free the conic model if not saving it
