@@ -1,4 +1,4 @@
-# These problems with duality gaps should cause Pajarito to fail, because we cannot detect duality gaps
+# These problems with duality gaps can cause Pajarito to fail, because we cannot detect duality gaps
 
 using MathProgBase, Pajarito
 log_level = 3
@@ -15,7 +15,7 @@ cont_solver = MosekSolver(LOG=0)
 
 using CPLEX
 mip_solver = CplexSolver()
-mip_solver_drives = true
+mip_solver_drives = false
 
 
 solver = PajaritoSolver(

@@ -195,7 +195,11 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         MathProgBase.optimize!(m)
 
         status = MathProgBase.status(m)
-        @test status == :CutsFailure
+        if status == :Optimal
+            @test isapprox(MathProgBase.getsolution(m), [0.0,0.0,0.0], atol=TOL)
+        else
+            @test status == :CutsFailure
+        end
     end
 
     @testset "Infinite duality gap: no primal assist" begin
@@ -221,7 +225,11 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         MathProgBase.optimize!(m)
 
         status = MathProgBase.status(m)
-        @test status == :CutsFailure
+        if status == :Optimal
+            @test isapprox(MathProgBase.getsolution(m), [0.0,0.0,0.0], atol=TOL)
+        else
+            @test status == :CutsFailure
+        end
     end
 
     @testset "Finite duality gap: primal assist" begin
@@ -249,7 +257,11 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         MathProgBase.optimize!(m)
 
         status = MathProgBase.status(m)
-        @test status == :CutsFailure
+        if status == :Optimal
+            @test isapprox(MathProgBase.getsolution(m), [0.0,0.0,0.0], atol=TOL)
+        else
+            @test status == :CutsFailure
+        end
     end
 
     @testset "Finite duality gap: no primal assist" begin
@@ -270,7 +282,11 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         MathProgBase.optimize!(m)
 
         status = MathProgBase.status(m)
-        @test status == :CutsFailure
+        if status == :Optimal
+            @test isapprox(MathProgBase.getsolution(m), [0.0,0.0,0.0], atol=TOL)
+        else
+            @test status == :CutsFailure
+        end
     end
 
     @testset "Hijazi: L1, disagg, no abslift" begin
