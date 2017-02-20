@@ -1,7 +1,5 @@
+GLPKMathProgInterface
 ECOS
 SCS
-GLPKMathProgInterface
-Cbc
-Clp
 Ipopt
 Convex
