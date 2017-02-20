@@ -419,7 +419,7 @@ function runexpsocboth(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         @test problem.status == :Optimal
         @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, log(5.0), atol=TOL)
+        @test isapprox(y.value, 1.609438, atol=TOL)
     end
 
     @testset "No SOC disaggregation" begin
@@ -437,7 +437,7 @@ function runexpsocboth(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         @test problem.status == :Optimal
         @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, log(5.0), atol=TOL)
+        @test isapprox(y.value, 1.609438, atol=TOL)
     end
 
     @testset "Cone composition" begin

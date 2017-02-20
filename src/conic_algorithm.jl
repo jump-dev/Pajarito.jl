@@ -1282,7 +1282,7 @@ function solve_iterative!(m)
         elseif status_mip == :Unbounded
             # Stop if unbounded (initial conic relax solve should detect this)
             warn("MIP solver returned status $status_mip, which could indicate a problem with the conic relaxation solve (try setting prim_cuts_assist = false)\n")
-            m.status = :MIPFailure
+            m.status = :CutsFailure
             break
         elseif (status_mip == :UserLimit) || (status_mip == :Optimal)
             # Update OA bound if MIP bound is better than current OA bound
@@ -1312,7 +1312,7 @@ function solve_iterative!(m)
             end
         else
             warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
-            m.status = :MIPFailure
+            m.status = :CutsFailure
             break
         end
 
@@ -1459,7 +1459,7 @@ function solve_mip_driven!(m)
     elseif status_mip == :Unbounded
         # Stop if unbounded (initial conic relax solve should detect this)
         warn("MIP solver returned status $status_mip, which could indicate a problem with the conic relaxation solve (try setting prim_cuts_assist = false)\n")
-        m.status = :MIPFailure
+        m.status = :CutsFailure
     elseif status_mip == :UserLimit
         # Either a timeout, or a cuts failure terminated the MIP solver
         m.mip_obj = getobjbound(m.model_mip)
@@ -1498,7 +1498,7 @@ function solve_mip_driven!(m)
         return
     else
         warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
-        m.status = :MIPFailure
+        m.status = :CutsFailure
         return
     end
 end
