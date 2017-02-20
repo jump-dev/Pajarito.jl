@@ -232,7 +232,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         #      z >= -10
         #      x in {0,1}
 
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         MathProgBase.loadproblem!(m,
         [ 0.0, 0.0, 1.0],
@@ -253,7 +253,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
     end
 
     @testset "Finite duality gap: no primal assist" begin
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log, prim_cuts_assist=false))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false))
 
         MathProgBase.loadproblem!(m,
         [ 0.0, 0.0, 1.0],
