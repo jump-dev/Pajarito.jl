@@ -358,6 +358,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
 
         status_relax = MathProgBase.status(model_relax)
+        obj_relax = MathProgBase.getobjval(model_relax)
+
         if status_relax == :Infeasible
             if m.log_level > 0
                 println("Initial conic relaxation status was $status_relax")
@@ -367,44 +369,49 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             if m.log_level > 0
                 println("Initial conic relaxation status was $status_relax")
             end
-            m.status = :UnboundedRelaxation
+            m.status = :Unbounded
         elseif (status_relax != :Optimal) && (status_relax != :Suboptimal)
             warn("Conic solver failure on initial relaxation: returned status $status_relax\n")
-            m.status = :ConicFailure
+            m.status = :CutsFailure
+        elseif isnan(obj_relax)
+            warn("Conic solver had objective value $obj_relax: returned status $status_relax\n")
+            m.status = :CutsFailure
         else
-            obj_relax = MathProgBase.getobjval(model_relax)
             if m.log_level > 2
                 @printf " - Relaxation status    = %14s\n" status_relax
                 @printf " - Relaxation objective = %14.6f\n" obj_relax
             end
 
-            # Optionally rescale dual
+            # Get dual and check for NaNs
             dual_conic = MathProgBase.getdual(model_relax)
-            if m.scale_subp_cuts
-                # Rescale by number of cones / absval of full conic objective
-                scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / (abs(obj_relax) + 1e-5))
-            end
+            if !isempty(dual_conic) && !any(isnan, dual_conic)
+                # Optionally scale dual
+                if m.scale_subp_cuts
+                    # Rescale by number of cones / absval of full conic objective
+                    scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / (abs(obj_relax) + 1e-5))
+                end
 
-            # Add relaxation cuts
-            for n in 1:m.num_soc
-                # Add SOC K* subproblem cuts from solution
-                add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[v_idxs_soc_relx[n]])
-            end
+                # Add relaxation cuts
+                for n in 1:m.num_soc
+                    # Add SOC K* subproblem cuts from solution
+                    add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[v_idxs_soc_relx[n]])
+                end
 
-            for n in 1:m.num_exp
-                # Add ExpPrimal K* subproblem cuts from solution
-                add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], dual_conic[r_idx_exp_relx[n]], dual_conic[s_idx_exp_relx[n]])
-            end
+                for n in 1:m.num_exp
+                    # Add ExpPrimal K* subproblem cuts from solution
+                    add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], dual_conic[r_idx_exp_relx[n]], dual_conic[s_idx_exp_relx[n]])
+                end
 
-            for n in 1:m.num_sdp
-                v_dual = dual_conic[v_idx_sdp_relx[n]]
-                V_dual = make_smat!(v_dual, m.smat_sdp[n])
-                (V_eigvals, V_eigvecs) = LAPACK.syev!('V', 'U', V_dual)
+                for n in 1:m.num_sdp
+                    v_dual = dual_conic[v_idx_sdp_relx[n]]
+                    V_dual = make_smat!(v_dual, m.smat_sdp[n])
+                    (V_eigvals, V_eigvecs) = LAPACK.syev!('V', 'U', V_dual)
 
-                # Add PSD K* subproblem cuts from solution
-                # Dual is sum_{j: lambda_j > 0} lamda_j V_j V_j'
-                pos_inds = V_eigvals .>= m.tol_zero
-                add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], view(V_eigvecs, :, pos_inds))
+                    # Add PSD K* subproblem cuts from solution
+                    # Dual is sum_{j: lambda_j > 0} lamda_j V_j V_j'
+                    pos_inds = V_eigvals .>= m.tol_zero
+                    add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], view(V_eigvecs, :, pos_inds))
+                end
             end
         end
 
@@ -414,7 +421,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
     end
 
-    if (m.status != :Infeasible) && (m.status != :UnboundedRelaxation) && (m.status != :ConicFailure)
+    if (m.status != :Infeasible) && (m.status != :Unbounded) && (m.prim_cuts_assist || (m.status != :CutsFailure))
         tic()
         if m.log_level > 2
             @printf "\nCreating conic subproblem model..."
@@ -1281,11 +1288,7 @@ function solve_iterative!(m)
             break
         elseif status_mip == :Unbounded
             # Stop if unbounded (initial conic relax solve should detect this)
-            if m.solve_relax
-                warn("MIP solver returned status $status_mip, which suggests that the initial subproblem cuts added were too weak\n")
-            else
-                warn("MIP solver returned status $status_mip, because the initial conic relaxation was not solved\n")
-            end
+            warn("MIP solver returned status $status_mip, which could indicate a problem with the conic relaxation solve (try setting prim_cuts_assist = false)\n")
             m.status = :CutsFailure
             break
         elseif (status_mip == :UserLimit) || (status_mip == :Optimal)
@@ -1316,7 +1319,7 @@ function solve_iterative!(m)
             end
         else
             warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
-            m.status = :MIPFailure
+            m.status = :CutsFailure
             break
         end
 
@@ -1358,21 +1361,23 @@ function solve_iterative!(m)
                         break
                     end
                 end
-            elseif is_repeat && !is_viol_prim
-                # Integer solution has repeated, conic solution is infeasible, and no violated primal cuts were added
+            end
+
+            if is_repeat && !is_viol_prim
+                # Integer solution has repeated and no violated cuts were added
                 if count_subopt == 0
                     # Solve was optimal solve, so nothing more we can do
                     if m.prim_cuts_assist
-                        warn("No violated subproblem cuts or primal cuts were added on conic-infeasible OA solution (this should not happen: please submit an issue)\n")
+                        warn("No violated cuts were added on repeated integer solution (this should not happen: please submit an issue)\n")
                     else
-                        warn("No violated subproblem cuts or primal cuts were added on conic-infeasible OA solution (try using prim_cuts_assist = true)\n")
+                        warn("No violated cuts were added on repeated integer solution (try using prim_cuts_assist = true)\n")
                     end
                     m.status = :CutsFailure
                     break
                 end
 
                 # Try solving next MIP to optimality, if that doesn't help then we will fail next iteration
-                warn("Integer solution has repeated, solving next MIP to optimality\n")
+                warn("Integer solution has repeated and no violated cuts were added: solving next MIP to optimality\n")
                 count_subopt = m.mip_subopt_count
             end
         end
@@ -1459,13 +1464,9 @@ function solve_mip_driven!(m)
         m.status = :Infeasible
         return
     elseif status_mip == :Unbounded
-        if m.solve_relax
-            warn("MIP solver returned status $status_mip, which suggests that the initial subproblem cuts added were too weak\n")
-        else
-            warn("MIP solver returned status $status_mip, because the initial conic relaxation was not solved\n")
-        end
+        # Stop if unbounded (initial conic relax solve should detect this)
+        warn("MIP solver returned status $status_mip, which could indicate a problem with the conic relaxation solve (try setting prim_cuts_assist = false)\n")
         m.status = :CutsFailure
-        return
     elseif status_mip == :UserLimit
         # Either a timeout, or a cuts failure terminated the MIP solver
         m.mip_obj = getobjbound(m.model_mip)
@@ -1504,7 +1505,7 @@ function solve_mip_driven!(m)
         return
     else
         warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
-        m.status = :MIPFailure
+        m.status = :CutsFailure
         return
     end
 end
@@ -1610,7 +1611,7 @@ function add_subp_incumb_cuts!(m)
     (status_conic, soln_conic, dual_conic) = solve_subp!(m, b_sub_int)
 
     # Determine cut scaling factors and check if have new feasible incumbent solution
-    if status_conic == :Infeasible
+    if (status_conic == :Infeasible) && !isempty(dual_conic)
         # Subproblem infeasible: first check infeasible ray has negative value
         ray_value = vecdot(dual_conic, b_sub_int)
         if ray_value < -m.tol_zero
@@ -1622,10 +1623,8 @@ function add_subp_incumb_cuts!(m)
             warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (this should not happen: please submit an issue)\n")
             return (false, false)
         end
-    elseif status_conic == :Optimal
-        # Subproblem feasible
-        # Clean zeros and calculate full objective value
-        clean_zeros!(m, soln_conic)
+    elseif (status_conic == :Optimal) && !isempty(dual_conic)
+        # Subproblem feasible: first calculate full objective value
         obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_conic)
 
         if m.scale_subp_cuts
@@ -1733,18 +1732,32 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
         m.logs[:n_other] += 1
     end
 
-    # Try to get a solution
-    soln_conic = try
-        MathProgBase.getsolution(m.model_conic)
-    catch
-        Float64[]
+    if status_conic == :Optimal
+        soln_conic = MathProgBase.getsolution(m.model_conic)
+    else
+        # Try to get a solution
+        try
+            soln_conic = MathProgBase.getsolution(m.model_conic)
+        catch
+            soln_conic = Float64[]
+        end
+    end
+    if any(isnan, soln_conic)
+        soln_conic = Float64[]
     end
 
-    # Try to get a dual
-    dual_conic =  try
-        MathProgBase.getdual(m.model_conic)
-    catch
-        Float64[]
+    if (status_conic == :Optimal) || (status_conic == :Infeasible)
+        dual_conic = MathProgBase.getdual(m.model_conic)
+    else
+        # Try to get a dual
+        try
+            dual_conic = MathProgBase.getdual(m.model_conic)
+        catch
+            dual_conic = Float64[]
+        end
+    end
+    if any(isnan, dual_conic)
+        dual_conic = Float64[]
     end
 
     # Free the conic model if not saving it
@@ -1862,8 +1875,6 @@ function add_cut_soc!(m, t, v, d, a, v_dual)
                 # Cut is poorly conditioned, add it but also add full cut
                 add_full = true
             end
-
-            # TODO is the coeff on a or v supposed to be negative?
 
             if m.soc_abslift
                 # Using SOC absvalue lifting, so add two-sided cut
@@ -2218,7 +2229,7 @@ function print_finish(m::PajaritoConicModel)
     if m.log_level == 2
         return
     end
-    if !isfinite(m.best_obj) || any(isnan(m.final_soln))
+    if !isfinite(m.best_obj) || any(isnan, m.final_soln)
         return
     end
 

@@ -42,7 +42,7 @@ function runsocboth(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
-        @test problem.status == :UnboundedRelaxation
+        @test problem.status == :Unbounded
     end
 
     @testset "Equality constraint" begin
@@ -172,14 +172,14 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(MathProgBase.getsolution(m), [3.0,1.5,3.0,3.0], atol=TOL)
     end
 
-    @testset "Infinite duality gap failure" begin
+    @testset "Infinite duality gap: primal assist" begin
         # Example of polyhedral OA failure due to infinite duality gap from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
         # min  z
         # st   x == 0
         #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
         #      x in {0,1}
 
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
 
         MathProgBase.loadproblem!(m,
         [ 0.0, 0.0, 1.0],
@@ -194,7 +194,83 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         MathProgBase.optimize!(m)
 
-        @test MathProgBase.status(m) == :ConicFailure
+        status = MathProgBase.status(m)
+        @test_broken status == :CutsFailure
+    end
+
+    @testset "Infinite duality gap: no primal assist" begin
+        # Example of polyhedral OA failure due to infinite duality gap from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
+        # min  z
+        # st   x == 0
+        #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
+        #      x in {0,1}
+
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
+
+        MathProgBase.loadproblem!(m,
+        [ 0.0, 0.0, 1.0],
+        [ -1.0  0.0  0.0;
+        -1.0  0.0  0.0;
+        0.0 -1.0  0.0;
+        0.0  0.0 -1.0],
+        [ 0.0, 0.0, 0.0, 0.0],
+        Any[(:Zero,1:1),(:SOCRotated,2:4)],
+        Any[(:Free,[1,2,3])])
+        MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
+
+        MathProgBase.optimize!(m)
+
+        status = MathProgBase.status(m)
+        @test_broken status == :CutsFailure
+    end
+
+    @testset "Finite duality gap: primal assist" begin
+        # Example of polyhedral OA failure due to finite duality gap, modified from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
+        # min  z
+        # st   x == 0
+        #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
+        #      z >= -10
+        #      x in {0,1}
+
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
+
+        MathProgBase.loadproblem!(m,
+        [ 0.0, 0.0, 1.0],
+        [ -1.0  0.0  0.0;
+         -1.0  0.0  0.0;
+          0.0 -1.0  0.0;
+          0.0  0.0 -1.0;
+          0.0  0.0 -1.0],
+        [ 0.0, 0.0, 0.0, 0.0, 10.0],
+        Any[(:Zero,1:1),(:SOCRotated,2:4),(:NonNeg,5:5)],
+        Any[(:Free,[1,2,3])])
+        MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
+
+        MathProgBase.optimize!(m)
+
+        status = MathProgBase.status(m)
+        @test_broken status == :CutsFailure
+    end
+
+    @testset "Finite duality gap: no primal assist" begin
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
+
+        MathProgBase.loadproblem!(m,
+        [ 0.0, 0.0, 1.0],
+        [ -1.0  0.0  0.0;
+         -1.0  0.0  0.0;
+          0.0 -1.0  0.0;
+          0.0  0.0 -1.0;
+          0.0  0.0 -1.0],
+        [ 0.0, 0.0, 0.0, 0.0, 10.0],
+        Any[(:Zero,1:1),(:SOCRotated,2:4),(:NonNeg,5:5)],
+        Any[(:Free,[1,2,3])])
+        MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
+
+        MathProgBase.optimize!(m)
+
+        status = MathProgBase.status(m)
+        @test_broken status == :CutsFailure
     end
 
     @testset "Hijazi: L1, disagg, no abslift" begin
@@ -342,7 +418,7 @@ function runexpsocboth(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         @test problem.status == :Optimal
         @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, log(5.0), atol=TOL)
+        @test isapprox(y.value, 1.609438, atol=TOL)
     end
 
     @testset "No SOC disaggregation" begin
@@ -360,7 +436,7 @@ function runexpsocboth(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         @test problem.status == :Optimal
         @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, log(5.0), atol=TOL)
+        @test isapprox(y.value, 1.609438, atol=TOL)
     end
 
     @testset "Cone composition" begin
@@ -590,7 +666,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
-        @test problem.status == :UnboundedRelaxation
+        @test problem.status == :Unbounded
     end
 
     @testset "Infeasible" begin
@@ -791,5 +867,92 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(x.value, 2.0, atol=TOL)
         @test isapprox(y.value, 2.0, atol=TOL)
         @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+    end
+
+    @testset "A-opt design: defaults" begin
+        # A-optimal design
+        #   minimize    Trace (sum_i lambdai*vi*vi')^{-1}
+        #   subject to  lambda >= 0, 1'*lambda = 1
+        n = 7
+        nmax = 3
+        V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
+        (q, p) = size(V)
+
+        np = Convex.Variable(p, :Int)
+        u = Convex.Variable(q)
+
+        aOpt = Convex.minimize(
+            sum(u),
+            sum(np) <= n,
+            np >= 0,
+            np <= nmax
+        )
+        E = eye(q)
+        for i in 1:q
+        	aOpt.constraints += Convex.isposdef([V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]])
+        end
+
+        Convex.solve!(aOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=false))
+
+        @show aOpt.status, aOpt.optval, np.value
+        @test aOpt.status == :Optimal
+        @test isapprox(aOpt.optval, 0.177181, atol=TOL)
+        @test isapprox(np.value, [2.0,1.0,2.0,2.0], atol=TOL)
+    end
+
+    @testset "E-opt design: defaults" begin
+        # E-optimal design
+        #   maximize    w
+        #   subject to  sum_i lambda_i*vi*vi' >= w*I
+        #               lambda >= 0,  1'*lambda = 1;
+        n = 7
+        nmax = 3
+        V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
+        (q, p) = size(V)
+
+        np = Convex.Variable(p, :Int)
+        t = Convex.Variable()
+        eOpt = Convex.maximize(
+            t,
+            sum(np) <= n,
+            np >= 0,
+            np <= nmax,
+            Convex.isposdef(V * diagm(np./n) * V' - t * eye(q))
+        )
+
+        Convex.solve!(eOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+
+        @show eOpt.status, eOpt.optval, np.value
+        @test eOpt.status == :Optimal
+        @test isapprox(eOpt.optval, 10.466724, atol=TOL)
+        @test isapprox(np.value, [2.0,1.0,1.0,3.0], atol=TOL)
+    end
+end
+
+# SDP+Exp problems for conic algorithm
+function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
+    @testset "D-opt design: defaults" begin
+        # D-optimal design
+        #   maximize    nthroot det V*diag(lambda)*V'
+        #   subject to  sum(lambda)=1,  lambda >=0
+        n = 7
+        nmax = 3
+        V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
+        (q, p) = size(V)
+
+        np = Convex.Variable(p, :Int)
+        dOpt = Convex.maximize(
+            Convex.logdet(V * diagm(np./n) * V'),
+            sum(np) <= n,
+            np >= 0,
+            np <= nmax
+        )
+
+        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+
+        @show dOpt.status, dOpt.optval, np.value
+        @test dOpt.status == :Optimal
+        @test isapprox(dOpt.optval, 9.062207, atol=TOL)
+        @test isapprox(np.value, [2.0,2.0,2.0,1.0], atol=TOL)
     end
 end
