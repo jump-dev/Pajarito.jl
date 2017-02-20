@@ -26,7 +26,8 @@ solver = PajaritoSolver(
 	soc_disagg=false,
 	soc_abslift=false,
 	init_soc_one=false,
-	init_soc_inf=false
+	init_soc_inf=false,
+	prim_cuts_assist=true
 )
 
 
@@ -53,6 +54,7 @@ MathProgBase.optimize!(m)
 
 @show MathProgBase.status(m)
 @show MathProgBase.getobjval(m)
+@show MathProgBase.getsolution(m)
 
 
 # Finite duality gap
@@ -80,3 +82,4 @@ MathProgBase.optimize!(m)
 
 @show MathProgBase.status(m)
 @show MathProgBase.getobjval(m)
+@show MathProgBase.getsolution(m)
