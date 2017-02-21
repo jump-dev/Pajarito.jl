@@ -127,7 +127,7 @@ function runsocboth(mip_solver_drives, mip_solver, cont_solver, log_level)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
         @objective(m, Min, 0)
 
-        @test solve(m) == :Infeasible
+        @test solve(m, suppress_warnings=true) == :Infeasible
     end
 end
 
@@ -277,7 +277,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        @test solve(m) == :Infeasible
+        @test solve(m, suppress_warnings=true) == :Infeasible
         @test internalmodel(m).logs[:n_inf] == 0
     end
 
@@ -291,7 +291,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        @test solve(m) == :Infeasible
+        @test solve(m, suppress_warnings=true) == :Infeasible
         @test internalmodel(m).logs[:n_inf] == 0
     end
 
@@ -305,7 +305,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        @test solve(m) == :Infeasible
+        @test solve(m, suppress_warnings=true) == :Infeasible
         @test internalmodel(m).logs[:n_inf] == 0
     end
 
@@ -319,7 +319,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        @test solve(m) == :Infeasible
+        @test solve(m, suppress_warnings=true) == :Infeasible
         # @test internalmodel(m).logs[:n_inf] == 2^dim
     end
 
@@ -333,7 +333,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        @test solve(m) == :Infeasible
+        @test solve(m, suppress_warnings=true) == :Infeasible
         # @test internalmodel(m).logs[:n_inf] == 2
     end
 
@@ -347,7 +347,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        @test solve(m) == :Infeasible
+        @test solve(m, suppress_warnings=true) == :Infeasible
         # @test internalmodel(m).logs[:n_inf] == 1
     end
 
@@ -361,7 +361,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
         @objective(m, Min, 0)
 
-        @test solve(m) == :Infeasible
+        @test solve(m, suppress_warnings=true) == :Infeasible
         # @test internalmodel(m).logs[:n_inf] == 1
     end
 end
@@ -873,23 +873,26 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         (q, p) = size(V)
 
         np = Convex.Variable(p, :Int)
+        Q = Convex.Variable(q, q)
         u = Convex.Variable(q)
 
         aOpt = Convex.minimize(
             sum(u),
+            Q == V * diagm(np./n) * V',
             sum(np) <= n,
             np >= 0,
             np <= nmax
         )
         E = eye(q)
         for i in 1:q
-        	aOpt.constraints += Convex.isposdef([V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]])
+        	aOpt.constraints += Convex.isposdef([Q E[:,i]; E[i,:]' u[i]])
         end
 
         Convex.solve!(aOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=false))
 
         @test aOpt.status == :Optimal
         @test isapprox(aOpt.optval, 0.177181, atol=TOL)
+        @test isapprox(Convex.evaluate(sum(u)), aOpt.optval, atol=TOL)
         @test isapprox(np.value, [2.0,1.0,2.0,2.0], atol=TOL)
     end
 
@@ -904,19 +907,23 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         (q, p) = size(V)
 
         np = Convex.Variable(p, :Int)
+        Q = Convex.Variable(q, q)
         t = Convex.Variable()
+
         eOpt = Convex.maximize(
             t,
+            Q == V * diagm(np./n) * V',
             sum(np) <= n,
             np >= 0,
             np <= nmax,
-            Convex.isposdef(V * diagm(np./n) * V' - t * eye(q))
+            Convex.isposdef(Q - t * eye(q))
         )
 
         Convex.solve!(eOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         @test eOpt.status == :Optimal
         @test isapprox(eOpt.optval, 10.466724, atol=TOL)
+        @test isapprox(Convex.evaluate(t), eOpt.optval, atol=TOL)
         @test isapprox(np.value, [2.0,1.0,1.0,3.0], atol=TOL)
     end
 end
@@ -933,8 +940,11 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         (q, p) = size(V)
 
         np = Convex.Variable(p, :Int)
+        Q = Convex.Variable(q, q)
+
         dOpt = Convex.maximize(
-            Convex.logdet(V * diagm(np./n) * V'),
+            Convex.logdet(Q),
+            Q == V * diagm(np./n) * V',
             sum(np) <= n,
             np >= 0,
             np <= nmax
@@ -944,6 +954,7 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         @test dOpt.status == :Optimal
         @test isapprox(dOpt.optval, 9.062207, atol=TOL)
+        @test isapprox(Convex.evaluate(Convex.logdet(V * diagm(np./n) * V')), dOpt.optval, atol=TOL)
         @test isapprox(np.value, [2.0,2.0,2.0,1.0], atol=TOL)
     end
 end
