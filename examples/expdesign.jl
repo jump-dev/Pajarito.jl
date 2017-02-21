@@ -97,7 +97,7 @@ function eigenvals(dOpt, A::Array{JuMP.Variable,2})
     for i in 1:dimA
         setlowerbound(U[i,i], 0)
     end
-    # @SDconstraint(dOpt, A >= 0) # do we want this? A = V * diagm(x./n) * V' is PSD automatically if x >= 0
+    # @SDconstraint(dOpt, A >= 0) # Not necessary since A = V * diagm(np./n) * V' is PSD automatically if np >= 0
     Umat = AffExpr[((j < i) ? 0 : U[i,j]) for i=1:dimA, j=1:dimA]
     @SDconstraint(dOpt, [diagm([U[i,i] for i in 1:dimA]) Umat; Umat' A] >= 0)
     return [U[i,i] for i in 1:dimA]
@@ -129,7 +129,8 @@ dOpt = Model(solver=solver)
 np = @variable(dOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
 @constraint(dOpt, sum(np) <= n)
 Q = @variable(dOpt, [1:q,1:q], Symmetric)
-@constraint(dOpt, Q .== V * diagm(np./n) * V')
+T = V * diagm(np./n) * V'
+@constraint(dOpt, [i1=1:q,i2=i1:q], Q[i1,i2] == T[i1,i2])
 @objective(dOpt, Max, scaledGeomean(dOpt, eigenvals(dOpt, Q)))
 
 # (c, A, b, var_cones, con_cones) = JuMP.conicdata(dOpt)
@@ -181,7 +182,8 @@ aOpt = Model(solver=solver)
 np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
 @constraint(aOpt, sum(np) <= n)
 Q = @variable(aOpt, [1:q,1:q], Symmetric)
-@constraint(aOpt, Q .== V * diagm(np./n) * V')
+T = V * diagm(np./n) * V'
+@constraint(aOpt, [i1=1:q,i2=i1:q], Q[i1,i2] == T[i1,i2])
 u = @variable(aOpt, [i=1:q], lowerbound=0)
 @objective(aOpt, Min, sum(u))
 E = eye(q)
@@ -236,7 +238,8 @@ eOpt = Model(solver=solver)
 np = @variable(eOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
 @constraint(eOpt, sum(np) <= n)
 Q = @variable(eOpt, [1:q,1:q], Symmetric)
-@constraint(eOpt, Q .== V * diagm(np./n) * V')
+T = V * diagm(np./n) * V'
+@constraint(eOpt, [i1=1:q,i2=i1:q], Q[i1,i2] == T[i1,i2])
 t = @variable(eOpt)
 @objective(eOpt, Max, t)
 @SDconstraint(eOpt, Q - t * eye(q) >= 0)
