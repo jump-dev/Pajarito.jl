@@ -91,7 +91,7 @@ println("  solution\n$(np.value)")
 #   subject to  sum(lambda)=1,  lambda >=0
 println("\n\n****D optimal: JuMP.jl****\n")
 
-function eigenvals(dOpt, A::Array{AffExpr,2})
+function eigenvals(dOpt, A::Array{JuMP.Variable,2})
     dimA = size(A,1)
     U = @variable(dOpt, [i=1:dimA, j=i:dimA])
     for i in 1:dimA
@@ -127,8 +127,17 @@ end
 
 dOpt = Model(solver=solver)
 np = @variable(dOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-@objective(dOpt, Max, scaledGeomean(dOpt, eigenvals(dOpt, V * diagm(np./n) * V')))
 @constraint(dOpt, sum(np) <= n)
+Q = @variable(dOpt, [1:q,1:q])
+@constraint(dOpt, Q .== V * diagm(np./n) * V')
+@objective(dOpt, Max, scaledGeomean(dOpt, eigenvals(dOpt, Q)))
+
+# (c, A, b, var_cones, con_cones) = JuMP.conicdata(dOpt)
+# @show c
+# @show A
+# @show b
+# @show var_cones
+# @show con_cones
 
 solve(dOpt)
 println("\n  objective $(getobjectivevalue(dOpt))")
@@ -170,13 +179,22 @@ println("  solution\n$(np.value)")
 println("\n\n****A optimal: JuMP.jl****\n")
 aOpt = Model(solver=solver)
 np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
+@constraint(aOpt, sum(np) <= n)
+Q = @variable(aOpt, [1:q,1:q])
+@constraint(aOpt, Q .== V * diagm(np./n) * V')
 u = @variable(aOpt, [i=1:q], lowerbound=0)
 @objective(aOpt, Min, sum(u))
-@constraint(aOpt, sum(np) <= n)
 E = eye(q)
 for i=1:q
-    @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
+    @SDconstraint(aOpt, [Q E[:,i]; E[i,:]' u[i]] >= 0)
 end
+
+# (c, A, b, var_cones, con_cones) = JuMP.conicdata(aOpt)
+# @show c
+# @show A
+# @show b
+# @show var_cones
+# @show con_cones
 
 solve(aOpt)
 println("\n  objective $(getobjectivevalue(aOpt))")
@@ -216,10 +234,19 @@ println("  solution\n$(np.value)")
 println("\n\n****E optimal: JuMP.jl****\n")
 eOpt = Model(solver=solver)
 np = @variable(eOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
+@constraint(eOpt, sum(np) <= n)
+Q = @variable(eOpt, [1:q,1:q])
+@constraint(eOpt, Q .== V * diagm(np./n) * V')
 t = @variable(eOpt)
 @objective(eOpt, Max, t)
-@constraint(eOpt, sum(np) <= n)
-@SDconstraint(eOpt, V * diagm(np./n) * V' - t * eye(q) >= 0)
+@SDconstraint(eOpt, Q - t * eye(q) >= 0)
+
+# (c, A, b, var_cones, con_cones) = JuMP.conicdata(eOpt)
+# @show c
+# @show A
+# @show b
+# @show var_cones
+# @show con_cones
 
 solve(eOpt)
 println("\n  objective $(getobjectivevalue(eOpt))")
