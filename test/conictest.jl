@@ -890,6 +890,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         @test aOpt.status == :Optimal
         @test isapprox(aOpt.optval, 0.177181, atol=TOL)
+        @test isapprox(Convex.evaluate(sum(u)), aOpt.optval, atol=TOL)
         @test isapprox(np.value, [2.0,1.0,2.0,2.0], atol=TOL)
     end
 
@@ -917,6 +918,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         @test eOpt.status == :Optimal
         @test isapprox(eOpt.optval, 10.466724, atol=TOL)
+        @test isapprox(Convex.evaluate(t), eOpt.optval, atol=TOL)
         @test isapprox(np.value, [2.0,1.0,1.0,3.0], atol=TOL)
     end
 end
@@ -944,6 +946,7 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         @test dOpt.status == :Optimal
         @test isapprox(dOpt.optval, 9.062207, atol=TOL)
+        @test isapprox(Convex.evaluate(Convex.logdet(V * diagm(np./n) * V')), dOpt.optval, atol=TOL)
         @test isapprox(np.value, [2.0,2.0,2.0,1.0], atol=TOL)
     end
 end
