@@ -135,12 +135,12 @@ np = @variable(dOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
 @constraint(dOpt, sum(np) <= n)
 @objective(dOpt, Max, scaledGeomean(dOpt, eigenvals(dOpt, V * diagm(np./n) * V')))
 
-(c, A, b, var_cones, con_cones) = JuMP.conicdata(dOpt)
-@show c
-@show A
-@show b
-@show var_cones
-@show con_cones
+# (c, A, b, var_cones, con_cones) = JuMP.conicdata(dOpt)
+# @show c
+# @show A
+# @show b
+# @show var_cones
+# @show con_cones
 
 solve(dOpt)
 println("\n  objective $(getobjectivevalue(dOpt))")
