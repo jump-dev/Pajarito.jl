@@ -712,7 +712,7 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
             if mip_status == :Infeasible || mip_status == :InfeasibleOrUnbounded
                 (m.verbose > 1) && println("MIP Infeasible")
                 m.status = :Infeasible
-                return
+                break
             else
                 (m.verbose > 1) && println("MIP Status: $mip_status")
             end
