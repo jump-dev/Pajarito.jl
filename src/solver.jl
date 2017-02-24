@@ -54,13 +54,13 @@ function PajaritoSolver(;
     rel_gap = 1e-5,
 
     mip_solver_drives = false,
-    mip_solver = MathProgBase.defaultMIPsolver,
-    mip_subopt_solver = MathProgBase.defaultMIPsolver,
+    mip_solver = nothing,
+    mip_subopt_solver = nothing,
     mip_subopt_count = 0,
     round_mip_sols = false,
     pass_mip_sols = true,
 
-    cont_solver = MathProgBase.defaultConicsolver,
+    cont_solver = nothing,
     solve_relax = true,
     dualize_relax = false,
     dualize_sub = false,
@@ -87,6 +87,16 @@ function PajaritoSolver(;
     tol_prim_infeas = 1e-6,
     )
 
+    if mip_solver == nothing
+        error("No MIP solver specified\n")
+    end
+    if (mip_subopt_solver == nothing) && (mip_subopt_count > 0)
+        error("Using suboptimal solves, but no suboptimal MIP solver specified\n")
+    end
+    if cont_solver == nothing
+        error("No continuous solver specified\n")
+    end
+    
     if viol_cuts_only == nothing
         # If user has not set option, default is true on MSD and false on iterative
         viol_cuts_only = mip_solver_drives
