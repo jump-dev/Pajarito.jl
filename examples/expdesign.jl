@@ -17,10 +17,15 @@ cont_solver = SCSSolver(eps=1e-6, max_iters=1000000, verbose=0)
 # mip_solver_drives = false
 
 using CPLEX
-mip_solver = CplexSolver(CPX_PARAM_SCRIND=(mip_solver_drives ? 1 : 0), CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-6, CPX_PARAM_EPGAP=0.)
+mip_solver = CplexSolver(
+    CPX_PARAM_SCRIND=(mip_solver_drives ? 1 : 0),
+    CPX_PARAM_EPINT=1e-9,
+    CPX_PARAM_EPRHS=1e-9,
+    CPX_PARAM_EPGAP=(mip_solver_drives ? 1e-5 : 0))
 
 
 solver = PajaritoSolver(
+    rel_gap=1e-5,
 	mip_solver_drives=mip_solver_drives,
 	mip_solver=mip_solver,
 	cont_solver=cont_solver,
@@ -91,7 +96,7 @@ println("  solution\n$(np.value)")
 #   subject to  sum(lambda)=1,  lambda >=0
 println("\n\n****D optimal: JuMP.jl****\n")
 
-function eigenvals(dOpt, A::Array{JuMP.Variable,2})
+function eigenvals(dOpt, A)
     dimA = size(A,1)
     U = @variable(dOpt, [i=1:dimA, j=i:dimA])
     for i in 1:dimA
@@ -103,7 +108,7 @@ function eigenvals(dOpt, A::Array{JuMP.Variable,2})
     return [U[i,i] for i in 1:dimA]
 end
 
-function scaledGeomean(dOpt, x::Vector{JuMP.Variable})
+function scaledGeomean(dOpt, x)
     dimx = length(x)
     if dimx > 2
         dimxbar = Int(2^ceil(log(2, dimx)))
@@ -119,7 +124,7 @@ function scaledGeomean(dOpt, x::Vector{JuMP.Variable})
     end
 end
 
-function geomean(dOpt, x::JuMP.Variable, y::JuMP.Variable) # SOCRotated
+function geomean(dOpt, x, y) # SOCRotated
     t = @variable(dOpt, lowerbound=0)
     @constraint(dOpt, x*y >= t^2)
     return t
@@ -128,10 +133,7 @@ end
 dOpt = Model(solver=solver)
 np = @variable(dOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
 @constraint(dOpt, sum(np) <= n)
-Q = @variable(dOpt, [1:q,1:q], Symmetric)
-T = V * diagm(np./n) * V'
-@constraint(dOpt, [i1=1:q,i2=i1:q], Q[i1,i2] == T[i1,i2])
-@objective(dOpt, Max, scaledGeomean(dOpt, eigenvals(dOpt, Q)))
+@objective(dOpt, Max, scaledGeomean(dOpt, eigenvals(dOpt, V * diagm(np./n) * V')))
 
 # (c, A, b, var_cones, con_cones) = JuMP.conicdata(dOpt)
 # @show c
@@ -181,14 +183,11 @@ println("\n\n****A optimal: JuMP.jl****\n")
 aOpt = Model(solver=solver)
 np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
 @constraint(aOpt, sum(np) <= n)
-Q = @variable(aOpt, [1:q,1:q], Symmetric)
-T = V * diagm(np./n) * V'
-@constraint(aOpt, [i1=1:q,i2=i1:q], Q[i1,i2] == T[i1,i2])
 u = @variable(aOpt, [i=1:q], lowerbound=0)
 @objective(aOpt, Min, sum(u))
 E = eye(q)
 for i=1:q
-    @SDconstraint(aOpt, [Q E[:,i]; E[i,:]' u[i]] >= 0)
+    @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
 end
 
 # (c, A, b, var_cones, con_cones) = JuMP.conicdata(aOpt)
@@ -237,12 +236,9 @@ println("\n\n****E optimal: JuMP.jl****\n")
 eOpt = Model(solver=solver)
 np = @variable(eOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
 @constraint(eOpt, sum(np) <= n)
-Q = @variable(eOpt, [1:q,1:q], Symmetric)
-T = V * diagm(np./n) * V'
-@constraint(eOpt, [i1=1:q,i2=i1:q], Q[i1,i2] == T[i1,i2])
 t = @variable(eOpt)
 @objective(eOpt, Max, t)
-@SDconstraint(eOpt, Q - t * eye(q) >= 0)
+@SDconstraint(eOpt, V * diagm(np./n) * V' - t * eye(q) >= 0)
 
 # (c, A, b, var_cones, con_cones) = JuMP.conicdata(eOpt)
 # @show c

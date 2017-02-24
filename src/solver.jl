@@ -9,6 +9,13 @@ This file implements the default PajaritoSolver
 
 export PajaritoSolver
 
+
+# Dummy solver
+type UnsetSolver <: MathProgBase.AbstractMathProgSolver
+end
+
+
+# Pajarito solver
 immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     log_level::Int              # Verbosity flag: 0 for minimal information, 1 for basic solve statistics, 2 for iteration information, 3 for cone information
     timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
@@ -54,13 +61,13 @@ function PajaritoSolver(;
     rel_gap = 1e-5,
 
     mip_solver_drives = false,
-    mip_solver = MathProgBase.defaultMIPsolver,
-    mip_subopt_solver = MathProgBase.defaultMIPsolver,
+    mip_solver = UnsetSolver(),
+    mip_subopt_solver = UnsetSolver(),
     mip_subopt_count = 0,
     round_mip_sols = false,
     pass_mip_sols = true,
 
-    cont_solver = MathProgBase.defaultConicsolver,
+    cont_solver = UnsetSolver(),
     solve_relax = true,
     dualize_relax = false,
     dualize_sub = false,
@@ -86,6 +93,16 @@ function PajaritoSolver(;
     tol_zero = 1e-10,
     tol_prim_infeas = 1e-6,
     )
+
+    if mip_solver == UnsetSolver()
+        error("No MIP solver specified (set mip_solver)\n")
+    end
+    if (mip_subopt_solver == UnsetSolver()) && (mip_subopt_count > 0)
+        error("Using suboptimal solves (mip_subopt_count > 0), but no suboptimal MIP solver specified (set mip_subopt_solver)\n")
+    end
+    if cont_solver == UnsetSolver()
+        error("No continuous solver specified (set cont_solver)\n")
+    end
 
     if viol_cuts_only == nothing
         # If user has not set option, default is true on MSD and false on iterative
