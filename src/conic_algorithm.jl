@@ -231,21 +231,18 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     # Verify consistency of conic data
     verify_data(m, c, A, b, cone_con, cone_var)
 
-    # Verify cone compatibility with solver (if solver is not defaultConicsolver: an MPB issue)
-    if m.cont_solver != MathProgBase.defaultConicsolver
-        # Get cones supported by conic solver
-        conic_spec = MathProgBase.supportedcones(m.cont_solver)
+    # Get cones supported by conic solver
+    conic_spec = MathProgBase.supportedcones(m.cont_solver)
 
-        # Pajarito converts rotated SOCs to standard SOCs
-        if :SOC in conic_spec
-            push!(conic_spec, :SOCRotated)
-        end
+    # Pajarito converts rotated SOCs to standard SOCs
+    if :SOC in conic_spec
+        push!(conic_spec, :SOCRotated)
+    end
 
-        # Error if a cone in data is not supported
-        for (spec, _) in vcat(cone_con, cone_var)
-            if !(spec in conic_spec)
-                error("Cones $spec are not supported by the specified conic solver\n")
-            end
+    # Error if a cone in data is not supported
+    for (spec, _) in vcat(cone_con, cone_var)
+        if !(spec in conic_spec)
+            error("Cones $spec are not supported by the specified conic solver\n")
         end
     end
 
