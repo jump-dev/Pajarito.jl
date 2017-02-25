@@ -38,33 +38,45 @@ solver = PajaritoSolver(
 )
 
 
-# Use a matrix of values generated similarly to Boyd & Vandenberghe
-# May cause numerical difficulties
-# m = 4
-# angles1 = linspace(3/4*pi, pi, m)
-# angles2 = linspace(-3/8*pi, -5/8*pi, m)
-# angles3 = linspace(-1/6*pi, 1/4*pi, m)
-# V = [
-#     3.*cos(angles1)' 1.8.*cos(angles2)' 1.*cos(angles3)';
-#     3.*sin(angles1)' 1.8.*sin(angles2)' 1.*sin(angles3)';
-#     3.*cos(angles2)' 1.8.*cos(angles3)' 1.*cos(angles1)';
-#     3.*sin(angles2)' 1.8.*sin(angles3)' 1.*sin(angles1)';
-#     3.*cos(angles3)' 1.8.*cos(angles1)' 1.*cos(angles2)';
-#     3.*sin(angles3)' 1.8.*sin(angles1)' 1.*sin(angles2)'
-#     ]
-# V = trunc(V, 5)
-
-# Use a random matrix of integers in (-10, 10)
-# V = round.(20 .* rand(4, 7) .- 10)
-
-# Use a fixed matrix
+# Specify data
 V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
-
-
 (q, p) = size(V)
 n = 7
 nmax = 3
-# nmax = ceil(Int, 2*n/p)
+
+
+# Find optimal solutions for each objective (D, A, E - optimal) by enumeration
+using Combinatorics
+
+DAEval = fill(Inf, 3)
+DAEmin = fill(Inf, 3)
+DAEvec = [Set{Vector{Int}}(), Set{Vector{Int}}(), Set{Vector{Int}}()]
+
+for comb = [[0,1,3,3], [1,1,2,3], [1,2,2,2]]
+    for perm in permutations(comb)
+        E = inv(V * diagm(perm./n) * V') # Error covariance matrix
+
+        DAEval = [det(E), trace(E), eigmax(E)] # Minimize determinant, trace, max eigenvalue
+
+        for i in 1:3
+            if DAEval[i] == DAEmin[i]
+                push!(DAEvec[i], copy(perm))
+                println("same min")
+                @show perm
+            elseif DAEval[i] < DAEmin[i]
+                DAEmin[i] = DAEval[i]
+                empty!(DAEvec[i])
+                push!(DAEvec[i], copy(perm))
+                println("new min")
+                @show perm
+            end
+        end
+    end
+end
+
+println("\nD-opt: det(E)\n$(DAEmin[1])\n$(DAEvec[1])")
+println("\nA-opt: trace(E)\n$(DAEmin[2])\n$(DAEvec[2])")
+println("\nE-opt: eigmax(E)\n$(DAEmin[3])\n$(DAEvec[3])")
 
 
 # D-optimal design
