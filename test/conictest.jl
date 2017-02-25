@@ -863,7 +863,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
     end
 
-    @testset "A-opt design: defaults" begin
+    @testset "Convex.jl A-opt design: defaults" begin
         # A-optimal design
         #   minimize    Trace (sum_i lambdai*vi*vi')^{-1}
         #   subject to  lambda >= 0, 1'*lambda = 1
@@ -888,7 +888,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         	aOpt.constraints += Convex.isposdef([Q E[:,i]; E[i,:]' u[i]])
         end
 
-        Convex.solve!(aOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=false))
+        Convex.solve!(aOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         @test aOpt.status == :Optimal
         @test isapprox(aOpt.optval, 0.177181, atol=TOL)
@@ -896,7 +896,31 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(np.value, [2.0,1.0,2.0,2.0], atol=TOL)
     end
 
-    @testset "E-opt design: defaults" begin
+    @testset "JuMP.jl A-opt design: defaults" begin
+        aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+
+        n = 7
+        nmax = 3
+        V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
+        (q, p) = size(V)
+
+        np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
+        @constraint(aOpt, sum(np) <= n)
+        u = @variable(aOpt, [i=1:q], lowerbound=0)
+        @objective(aOpt, Min, sum(u))
+        E = eye(q)
+        for i=1:q
+            @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
+        end
+
+        @test solve(aOpt, suppress_warnings=true) == :Optimal
+
+        @test isapprox(getobjectivevalue(aOpt), 0.177181, atol=TOL)
+        @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
+        @test isapprox(getvalue(np), [2.0,1.0,2.0,2.0], atol=TOL)
+    end
+
+    @testset "Convex.jl E-opt design: defaults" begin
         # E-optimal design
         #   maximize    w
         #   subject to  sum_i lambda_i*vi*vi' >= w*I
@@ -926,11 +950,32 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(Convex.evaluate(t), eOpt.optval, atol=TOL)
         @test isapprox(np.value, [2.0,1.0,1.0,3.0], atol=TOL)
     end
+
+    @testset "JuMP.jl E-opt design: defaults" begin
+        eOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+
+        n = 7
+        nmax = 3
+        V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
+        (q, p) = size(V)
+
+        np = @variable(eOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
+        @constraint(eOpt, sum(np) <= n)
+        t = @variable(eOpt)
+        @objective(eOpt, Max, t)
+        @SDconstraint(eOpt, V * diagm(np./n) * V' - t * eye(q) >= 0)
+
+        @test solve(eOpt, suppress_warnings=true) == :Optimal
+
+        @test isapprox(getobjectivevalue(eOpt), 10.466724, atol=TOL)
+        @test isapprox(getvalue(t), getobjectivevalue(eOpt), atol=TOL)
+        @test isapprox(getvalue(np), [2.0,1.0,1.0,3.0], atol=TOL)
+    end
 end
 
 # SDP+Exp problems for conic algorithm
 function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "D-opt design: defaults" begin
+    @testset "Convex.jl D-opt design: defaults" begin
         # D-optimal design
         #   maximize    nthroot det V*diag(lambda)*V'
         #   subject to  sum(lambda)=1,  lambda >=0

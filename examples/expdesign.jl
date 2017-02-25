@@ -6,11 +6,11 @@ using Convex, JuMP, Pajarito
 log_level = 3
 mip_solver_drives = false
 
-using SCS
-cont_solver = SCSSolver(eps=1e-6, max_iters=1000000, verbose=0)
+# using SCS
+# cont_solver = SCSSolver(eps=1e-6, max_iters=1000000, verbose=0)
 
-# using Mosek
-# cont_solver = MosekSolver(LOG=0)
+using Mosek
+cont_solver = MosekSolver(LOG=0)
 
 # using Cbc
 # mip_solver = CbcSolver()
@@ -19,8 +19,8 @@ cont_solver = SCSSolver(eps=1e-6, max_iters=1000000, verbose=0)
 using CPLEX
 mip_solver = CplexSolver(
     CPX_PARAM_SCRIND=(mip_solver_drives ? 1 : 0),
-    CPX_PARAM_EPINT=1e-9,
-    CPX_PARAM_EPRHS=1e-9,
+    CPX_PARAM_EPINT=1e-8,
+    CPX_PARAM_EPRHS=1e-7,
     CPX_PARAM_EPGAP=(mip_solver_drives ? 1e-5 : 0))
 
 
@@ -32,40 +32,55 @@ solver = PajaritoSolver(
 	log_level=log_level,
 	sdp_eig=true,
 	init_sdp_lin=true,
+    # prim_cuts_only=true,
+    # prim_cuts_always=true,
+    # prim_cuts_assist=true
 )
 
 
-# Use a matrix of values generated similarly to Boyd & Vandenberghe
-# May cause numerical difficulties
-# m = 4
-# angles1 = linspace(3/4*pi, pi, m)
-# angles2 = linspace(-3/8*pi, -5/8*pi, m)
-# angles3 = linspace(-1/6*pi, 1/4*pi, m)
-# V = [
-#     3.*cos(angles1)' 1.8.*cos(angles2)' 1.*cos(angles3)';
-#     3.*sin(angles1)' 1.8.*sin(angles2)' 1.*sin(angles3)';
-#     3.*cos(angles2)' 1.8.*cos(angles3)' 1.*cos(angles1)';
-#     3.*sin(angles2)' 1.8.*sin(angles3)' 1.*sin(angles1)';
-#     3.*cos(angles3)' 1.8.*cos(angles1)' 1.*cos(angles2)';
-#     3.*sin(angles3)' 1.8.*sin(angles1)' 1.*sin(angles2)'
-#     ]
-# V = trunc(V, 5)
-
-# Use a random matrix of integers in (-10, 10)
-# V = round.(20 .* rand(4, 7) .- 10)
-
-# Use a fixed matrix
+# Specify data
 V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
-
-
 (q, p) = size(V)
 n = 7
-# nmax = 3
-nmax = ceil(Int, 2*n/p)
+nmax = 3
+
+
+# Find optimal solutions for each objective (D, A, E - optimal) by enumeration
+using Combinatorics
+
+DAEval = fill(Inf, 3)
+DAEmin = fill(Inf, 3)
+DAEvec = [Set{Vector{Int}}(), Set{Vector{Int}}(), Set{Vector{Int}}()]
+
+for comb = [[0,1,3,3], [1,1,2,3], [1,2,2,2]]
+    for perm in permutations(comb)
+        E = inv(V * diagm(perm./n) * V') # Error covariance matrix
+
+        DAEval = [det(E), trace(E), eigmax(E)] # Minimize determinant, trace, max eigenvalue
+
+        for i in 1:3
+            if DAEval[i] == DAEmin[i]
+                push!(DAEvec[i], copy(perm))
+                println("same min")
+                @show perm
+            elseif DAEval[i] < DAEmin[i]
+                DAEmin[i] = DAEval[i]
+                empty!(DAEvec[i])
+                push!(DAEvec[i], copy(perm))
+                println("new min")
+                @show perm
+            end
+        end
+    end
+end
+
+println("\nD-opt: det(E)\n$(DAEmin[1])\n$(DAEvec[1])")
+println("\nA-opt: trace(E)\n$(DAEmin[2])\n$(DAEvec[2])")
+println("\nE-opt: eigmax(E)\n$(DAEmin[3])\n$(DAEvec[3])")
 
 
 # D-optimal design
-#   maximize    nthroot det V*diag(lambda)*V'
+#   maximize    log det V*diag(lambda)*V'
 #   subject to  sum(lambda)=1,  lambda >=0
 
 # Convex.jl
@@ -92,9 +107,11 @@ println("  solution\n$(np.value)")
 
 # JuMP.jl
 # MI-SOC-SDP reformulation of D-optimal design
-#   maximize    nthroot det V*diag(lambda)*V'
+#   maximize    q-th-root det V*diag(lambda)*V'
 #   subject to  sum(lambda)=1,  lambda >=0
 println("\n\n****D optimal: JuMP.jl****\n")
+
+warn("This formulation appears to be broken currently! There is a mistake\n")
 
 function eigenvals(dOpt, A)
     dimA = size(A,1)
@@ -115,7 +132,7 @@ function scaledGeomean(dOpt, x)
         half_dimxbar = Int(dimxbar / 2)
         first_half = x[1:half_dimxbar]
         xone = @variable(dOpt, [1:(dimxbar - dimx)], lowerbound=1, upperbound=1)
-        last_half = vcat(vec(x[(half_dimxbar + 1):end]), xone) # append ones to last half until it's a power of 2
+        last_half = vcat(vec(x[(half_dimxbar + 1):end]), xone) # Append ones to last half until it's a power of 2
         return geomean(dOpt, scaledGeomean(dOpt, first_half), scaledGeomean(dOpt, last_half))
     elseif dimx == 2
         return geomean(dOpt, x[1], x[2])
