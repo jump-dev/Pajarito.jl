@@ -397,8 +397,12 @@ function loadMIPModel(m::PajaritoNonlinearModel, mip_model)
     setcategory(x[m.numVar+1], :Cont)
     for i = 1:m.numConstr-m.numNLConstr
         if m.A_lb[i] > -Inf && m.A_ub[i] < Inf
-            @constraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .>= m.A_lb[i])
-            @constraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .<= m.A_ub[i])
+            if m.A_lb[i] == m.A_ub[i]
+                @constraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .== m.A_lb[i])
+            else
+                @constraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .>= m.A_lb[i])
+                @constraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .<= m.A_ub[i])
+            end
         elseif m.A_lb[i] > -Inf
             @constraint(mip_model, m.A[i:i,:]*x[1:m.numVar] .>= m.A_lb[i])
         else
@@ -423,17 +427,16 @@ end
 
 function checkInfeasibility(m::PajaritoNonlinearModel, solution)
     g = zeros(m.numConstr)
-    g_val = -1e+5*ones(m.numConstr)
     MathProgBase.eval_g(m.d, g, solution[1:m.numVar])
+    max_infeas = 0.0
     for i = 1:m.numConstr
-        if m.constrtype[i] == :(<=)
-            g_val[i] = g[i] - m.ub[i]
-        else
-            g_val[i] = m.lb[i] - g[i]
-        end
+        max_infeas = max(max_infeas, g[i]-m.ub[i], m.lb[i]-g[i])
+    end
+    for i = 1:m.numVar
+        max_infeas = max(max_infeas, solution[i]-m.u[i], m.l[i]-solution[i])
     end
 
-    return maximum(g_val)
+    return max_infeas
 end
 
 function compareIntegerSolutions(m::PajaritoNonlinearModel, sol1, sol2)
