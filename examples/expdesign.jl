@@ -105,64 +105,6 @@ solve!(dOpt, solver)
 println("\n  objective $(dOpt.optval)")
 println("  solution\n$(np.value)")
 
-# JuMP.jl
-# MI-SOC-SDP reformulation of D-optimal design
-#   maximize    q-th-root det V*diag(lambda)*V'
-#   subject to  sum(lambda)=1,  lambda >=0
-println("\n\n****D optimal: JuMP.jl****\n")
-
-warn("This formulation appears to be broken currently! There is a mistake\n")
-
-function eigenvals(dOpt, A)
-    dimA = size(A,1)
-    U = @variable(dOpt, [i=1:dimA, j=i:dimA])
-    for i in 1:dimA
-        setlowerbound(U[i,i], 0)
-    end
-    # @SDconstraint(dOpt, A >= 0) # Not necessary since A = V * diagm(np./n) * V' is PSD automatically if np >= 0
-    Umat = AffExpr[((j < i) ? 0 : U[i,j]) for i=1:dimA, j=1:dimA]
-    @SDconstraint(dOpt, [diagm([U[i,i] for i in 1:dimA]) Umat; Umat' A] >= 0)
-    return [U[i,i] for i in 1:dimA]
-end
-
-function scaledGeomean(dOpt, x)
-    dimx = length(x)
-    if dimx > 2
-        dimxbar = Int(2^ceil(log(2, dimx)))
-        half_dimxbar = Int(dimxbar / 2)
-        first_half = x[1:half_dimxbar]
-        xone = @variable(dOpt, [1:(dimxbar - dimx)], lowerbound=1, upperbound=1)
-        last_half = vcat(vec(x[(half_dimxbar + 1):end]), xone) # Append ones to last half until it's a power of 2
-        return geomean(dOpt, scaledGeomean(dOpt, first_half), scaledGeomean(dOpt, last_half))
-    elseif dimx == 2
-        return geomean(dOpt, x[1], x[2])
-    else
-        return x
-    end
-end
-
-function geomean(dOpt, x, y) # SOCRotated
-    t = @variable(dOpt, lowerbound=0)
-    @constraint(dOpt, x*y >= t^2)
-    return t
-end
-
-dOpt = Model(solver=solver)
-np = @variable(dOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-@constraint(dOpt, sum(np) <= n)
-@objective(dOpt, Max, scaledGeomean(dOpt, eigenvals(dOpt, V * diagm(np./n) * V')))
-
-# (c, A, b, var_cones, con_cones) = JuMP.conicdata(dOpt)
-# @show c
-# @show A
-# @show b
-# @show var_cones
-# @show con_cones
-
-solve(dOpt)
-println("\n  objective $(getobjectivevalue(dOpt))")
-println("  solution\n$(getvalue(np))\n")
-
 
 # A-optimal design
 #   minimize    Trace (sum_i lambdai*vi*vi')^{-1}
