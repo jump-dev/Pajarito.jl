@@ -6,11 +6,11 @@ using Convex, JuMP, Pajarito
 log_level = 3
 mip_solver_drives = false
 
-# using SCS
-# cont_solver = SCSSolver(eps=1e-6, max_iters=1000000, verbose=0)
+using SCS
+cont_solver = SCSSolver(eps=1e-6, max_iters=1000000, verbose=0)
 
-using Mosek
-cont_solver = MosekSolver(LOG=0)
+# using Mosek
+# cont_solver = MosekSolver(LOG=0)
 
 # using Cbc
 # mip_solver = CbcSolver()
