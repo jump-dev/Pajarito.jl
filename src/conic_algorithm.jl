@@ -1367,7 +1367,7 @@ function solve_iterative!(m)
                     if m.prim_cuts_assist
                         warn("No violated cuts were added on repeated integer solution (this should not happen: please submit an issue)\n")
                     else
-                        warn("No violated cuts were added on repeated integer solution (try using prim_cuts_assist = true)\n")
+                        warn("No violated cuts were added on repeated integer solution (try setting prim_cuts_assist = true)\n")
                     end
                     m.status = :CutsFailure
                     break
@@ -1429,7 +1429,7 @@ function solve_mip_driven!(m)
         if m.prim_cuts_assist
             warn("No violated subproblem cuts or primal cuts were added on conic-infeasible OA solution (this should not happen: please submit an issue)\n")
         else
-            warn("No violated subproblem cuts or primal cuts were added on conic-infeasible OA solution (try using prim_cuts_assist = true)\n")
+            warn("No violated subproblem cuts or primal cuts were added on conic-infeasible OA solution (try setting prim_cuts_assist = true)\n")
         end
         m.status = :CutsFailure
         return JuMP.StopTheSolver
