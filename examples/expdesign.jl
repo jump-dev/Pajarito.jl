@@ -6,11 +6,11 @@ using Convex, JuMP, Pajarito
 log_level = 3
 mip_solver_drives = false
 
-using SCS
-cont_solver = SCSSolver(eps=1e-6, max_iters=1000000, verbose=0)
+# using SCS
+# cont_solver = SCSSolver(eps=1e-6, max_iters=1000000, verbose=0)
 
-# using Mosek
-# cont_solver = MosekSolver(LOG=0)
+using Mosek
+cont_solver = MosekSolver(LOG=0)
 
 # using Cbc
 # mip_solver = CbcSolver()
@@ -19,8 +19,8 @@ cont_solver = SCSSolver(eps=1e-6, max_iters=1000000, verbose=0)
 using CPLEX
 mip_solver = CplexSolver(
     CPX_PARAM_SCRIND=(mip_solver_drives ? 1 : 0),
-    CPX_PARAM_EPINT=1e-9,
-    CPX_PARAM_EPRHS=1e-9,
+    CPX_PARAM_EPINT=1e-8,
+    CPX_PARAM_EPRHS=1e-7,
     CPX_PARAM_EPGAP=(mip_solver_drives ? 1e-5 : 0))
 
 
@@ -32,6 +32,9 @@ solver = PajaritoSolver(
 	log_level=log_level,
 	sdp_eig=true,
 	init_sdp_lin=true,
+    # prim_cuts_only=true,
+    # prim_cuts_always=true,
+    # prim_cuts_assist=true
 )
 
 
@@ -60,12 +63,12 @@ V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
 
 (q, p) = size(V)
 n = 7
-# nmax = 3
-nmax = ceil(Int, 2*n/p)
+nmax = 3
+# nmax = ceil(Int, 2*n/p)
 
 
 # D-optimal design
-#   maximize    nthroot det V*diag(lambda)*V'
+#   maximize    log det V*diag(lambda)*V'
 #   subject to  sum(lambda)=1,  lambda >=0
 
 # Convex.jl
@@ -92,9 +95,11 @@ println("  solution\n$(np.value)")
 
 # JuMP.jl
 # MI-SOC-SDP reformulation of D-optimal design
-#   maximize    nthroot det V*diag(lambda)*V'
+#   maximize    q-th-root det V*diag(lambda)*V'
 #   subject to  sum(lambda)=1,  lambda >=0
 println("\n\n****D optimal: JuMP.jl****\n")
+
+warn("This formulation appears to be broken currently! There is a mistake\n")
 
 function eigenvals(dOpt, A)
     dimA = size(A,1)
@@ -115,7 +120,7 @@ function scaledGeomean(dOpt, x)
         half_dimxbar = Int(dimxbar / 2)
         first_half = x[1:half_dimxbar]
         xone = @variable(dOpt, [1:(dimxbar - dimx)], lowerbound=1, upperbound=1)
-        last_half = vcat(vec(x[(half_dimxbar + 1):end]), xone) # append ones to last half until it's a power of 2
+        last_half = vcat(vec(x[(half_dimxbar + 1):end]), xone) # Append ones to last half until it's a power of 2
         return geomean(dOpt, scaledGeomean(dOpt, first_half), scaledGeomean(dOpt, last_half))
     elseif dimx == 2
         return geomean(dOpt, x[1], x[2])
