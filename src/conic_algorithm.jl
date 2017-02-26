@@ -104,7 +104,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
     # SDP data
     num_sdp::Int                # Number of SDP cones
-    v_idx_sdp_subp::Vector{Vector{Int}} # Row indices of svec v variables in SDPs in subproblem
+    v_idxs_sdp_subp::Vector{Vector{Int}} # Row indices of svec v variables in SDPs in subproblem
     smat_sdp::Vector{Array{Float64,2}} # Preallocated array for smat space values
     v_sdp::Vector{Vector{JuMP.AffExpr}} # svec v variables in SDPs
     V_sdp::Vector{Array{JuMP.AffExpr,2}} # smat V variables in SDPs
@@ -329,7 +329,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         @printf "\nCreating MIP model..."
     end
     tic()
-    (v_idxs_soc_relx, r_idx_exp_relx, s_idx_exp_relx, v_idx_sdp_relx) = create_mip_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new, map_rows_sub, cols_cont, cols_int)
+    (v_idxs_soc_relx, r_idx_exp_relx, s_idx_exp_relx, v_idxs_sdp_relx) = create_mip_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new, map_rows_sub, cols_cont, cols_int)
     m.logs[:data_mip] += toq()
     if m.log_level > 1
         @printf "...Done %8.2fs\n" m.logs[:data_mip]
@@ -389,26 +389,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 end
 
                 # Add relaxation cuts
-                for n in 1:m.num_soc
-                    # Add SOC K* subproblem cuts from solution
-                    add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[v_idxs_soc_relx[n]])
-                end
-
-                for n in 1:m.num_exp
-                    # Add ExpPrimal K* subproblem cuts from solution
-                    add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], dual_conic[r_idx_exp_relx[n]], dual_conic[s_idx_exp_relx[n]])
-                end
-
-                for n in 1:m.num_sdp
-                    v_dual = dual_conic[v_idx_sdp_relx[n]]
-                    V_dual = make_smat!(m.smat_sdp[n], v_dual)
-                    (V_eigvals, V_eigvecs) = LAPACK.syev!('V', 'U', V_dual)
-
-                    # Add PSD K* subproblem cuts from solution
-                    # Dual is sum_{j: lambda_j > 0} lamda_j V_j V_j'
-                    pos_inds = V_eigvals .>= m.tol_zero
-                    add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], view(V_eigvecs, :, pos_inds))
-                end
+                add_subp_cuts!(m, dual_conic, v_idxs_soc_relx, r_idx_exp_relx, s_idx_exp_relx, v_idxs_sdp_relx)
             end
         end
 
@@ -1009,8 +990,8 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     t_exp = Vector{JuMP.AffExpr}(m.num_exp)
 
     # PSD data
-    v_idx_sdp_relx = Vector{Vector{Int}}(m.num_sdp)
-    v_idx_sdp_subp = Vector{Vector{Int}}(m.num_sdp)
+    v_idxs_sdp_relx = Vector{Vector{Int}}(m.num_sdp)
+    v_idxs_sdp_subp = Vector{Vector{Int}}(m.num_sdp)
     smat_sdp = Vector{Array{Float64,2}}(m.num_sdp)
     v_sdp = Vector{Vector{JuMP.AffExpr}}(m.num_sdp)
     V_sdp = Vector{Array{JuMP.AffExpr,2}}(m.num_sdp)
@@ -1182,8 +1163,8 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             n_sdp += 1
             dim = round(Int, sqrt(1/4+2*length(rows))-1/2) # smat space side dimension
 
-            v_idx_sdp_relx[n_sdp] = rows
-            v_idx_sdp_subp[n_sdp] = map_rows_sub[rows]
+            v_idxs_sdp_relx[n_sdp] = rows
+            v_idxs_sdp_subp[n_sdp] = map_rows_sub[rows]
 
             smat_sdp[n_sdp] = zeros(dim, dim)
 
@@ -1240,12 +1221,12 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     m.s_exp = s_exp
     m.t_exp = t_exp
 
-    m.v_idx_sdp_subp = v_idx_sdp_subp
+    m.v_idxs_sdp_subp = v_idxs_sdp_subp
     m.smat_sdp = smat_sdp
     m.v_sdp = v_sdp
     m.V_sdp = V_sdp
 
-    return (v_idxs_soc_relx, r_idx_exp_relx, s_idx_exp_relx, v_idx_sdp_relx)
+    return (v_idxs_soc_relx, r_idx_exp_relx, s_idx_exp_relx, v_idxs_sdp_relx)
 end
 
 
@@ -1321,7 +1302,7 @@ function solve_iterative!(m)
         end
 
         # Solve new conic subproblem, update incumbent solution if feasible
-        (is_repeat, is_viol_subp) = add_subp_incumb_cuts!(m)
+        (is_repeat, is_viol_subp) = solve_subp_add_subp_cuts!(m)
 
         if m.new_incumb
             # Have a new incumbent from conic solver, calculate relative outer approximation gap, finish if satisfy optimality gap condition
@@ -1336,7 +1317,7 @@ function solve_iterative!(m)
         if !is_viol_subp || m.prim_cuts_always
             # No violated subproblem cuts added, or always adding primal cuts
             # Check feasibility and add primal cuts if primal cuts for convergaence assistance
-            (is_infeas, is_viol_prim) = add_prim_feas_cuts!(m, m.prim_cuts_assist)
+            (is_infeas, is_viol_prim) = check_feas_add_prim_cuts!(m, m.prim_cuts_assist)
 
             if !is_infeas
                 # MIP solver solution is conic-feasible, check if it is a new incumbent
@@ -1409,7 +1390,7 @@ function solve_mip_driven!(m)
         reset_cone_logs!(m)
 
         # Solve new conic subproblem, update incumbent solution if feasible
-        (is_repeat, is_viol_subp) = add_subp_incumb_cuts!(m)
+        (is_repeat, is_viol_subp) = solve_subp_add_subp_cuts!(m)
 
         # Finish if any violated subproblem cuts were added and not using primal cuts always
         if is_viol_subp && !m.prim_cuts_always
@@ -1417,7 +1398,7 @@ function solve_mip_driven!(m)
         end
 
         # Check feasibility of current solution, try to add violated primal cuts if using primal cuts for convergence assistance
-        (is_infeas, is_viol_prim) = add_prim_feas_cuts!(m, m.prim_cuts_assist)
+        (is_infeas, is_viol_prim) = check_feas_add_prim_cuts!(m, m.prim_cuts_assist)
 
         # Finish if any violated cuts have been added or if solution is conic feasible
         if !is_infeas || is_viol_subp || is_viol_prim
@@ -1586,8 +1567,8 @@ end
  K^* cuts functions
 =========================================================#
 
-# Solve the subproblem for the current integer solution, add new incumbent conic solution if feasible and best, Add K* cuts from subproblem dual solution
-function add_subp_incumb_cuts!(m)
+# Solve the subproblem for the current integer solution, add new incumbent conic solution if feasible and best, add K* cuts from subproblem dual solution
+function solve_subp_add_subp_cuts!(m)
     # Get current integer solution
     soln_int = getvalue(m.x_int)
     if m.round_mip_sols
@@ -1671,41 +1652,12 @@ function add_subp_incumb_cuts!(m)
         end
     end
 
-    # Add subproblem cuts for each cone
-    is_viol_subp = false
-
-    for n in 1:m.num_soc
-        # Add SOC K* subproblem cuts from solution
-        if add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[m.v_idxs_soc_subp[n]])
-            is_viol_subp = true
-        end
-    end
-
-    for n in 1:m.num_exp
-        # Add ExpPrimal K* subproblem cuts from solution
-        if add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], dual_conic[m.r_idx_exp_subp[n]], dual_conic[m.s_idx_exp_subp[n]])
-            is_viol_subp = true
-        end
-    end
-
-    for n in 1:m.num_sdp
-        v_dual = dual_conic[m.v_idx_sdp_subp[n]]
-        V_dual = make_smat!(m.smat_sdp[n], v_dual)
-        (V_eigvals, V_eigvecs) = LAPACK.syev!('V', 'U', V_dual)
-
-        # Add PSD K* subproblem cuts from solution
-        # Dual is sum_{j: lambda_j > 0} lamda_j V_j V_j'
-        pos_inds = V_eigvals .>= m.tol_zero
-        if add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], view(V_eigvecs, :, pos_inds))
-            is_viol_subp = true
-        end
-    end
-
-    if !is_viol_subp
+    if add_subp_cuts!(m, dual_conic, m.v_idxs_soc_subp, m.r_idx_exp_subp, m.s_idx_exp_subp, m.v_idxs_sdp_subp)
+        return (false, true)
+    else
         m.logs[:n_nosubp] += 1
+        return (false, false)
     end
-
-    return (false, is_viol_subp)
 end
 
 # Solve conic subproblem given some solution to the integer variables, update incumbent
@@ -1782,8 +1734,42 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
     return (status_conic, soln_conic, dual_conic)
 end
 
+# Add K* cuts from subproblem dual solution
+function add_subp_cuts!(m, dual_conic, v_idxs_soc, r_idx_exp, s_idx_exp, v_idxs_sdp)
+    is_viol_subp = false
+
+    # Add SOC K* subproblem cuts
+    for n in 1:m.num_soc
+        if add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[v_idxs_soc[n]])
+            is_viol_subp = true
+        end
+    end
+
+    # Add ExpPrimal K* subproblem cuts
+    for n in 1:m.num_exp
+        if add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], dual_conic[r_idx_exp[n]], dual_conic[s_idx_exp[n]])
+            is_viol_subp = true
+        end
+    end
+
+    # Add SDP K* subproblem cuts
+    for n in 1:m.num_sdp
+        v_dual = dual_conic[v_idxs_sdp[n]]
+        V_dual = make_smat!(m.smat_sdp[n], v_dual)
+        (V_eigvals, V_eigvecs) = LAPACK.syev!('V', 'U', V_dual)
+
+        # Dual is sum_{j: lambda_j > 0} lamda_j V_j V_j'
+        pos_inds = V_eigvals .>= m.tol_zero
+        if add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], view(V_eigvecs, :, pos_inds))
+            is_viol_subp = true
+        end
+    end
+
+    return is_viol_subp
+end
+
 # Check cone infeasibilities of current solution, optionally add K* cuts from current solution for infeasible cones
-function add_prim_feas_cuts!(m, add_cuts::Bool)
+function check_feas_add_prim_cuts!(m, add_cuts::Bool)
     is_infeas = false
     is_viol_prim = false
 
