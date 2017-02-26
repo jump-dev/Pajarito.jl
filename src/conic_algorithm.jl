@@ -113,7 +113,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     update_conicsub::Bool       # Indicates whether to use setbvec! to update an existing conic subproblem model
     model_conic::MathProgBase.AbstractConicModel # Conic subproblem model: persists when the conic solver implements MathProgBase.setbvec!
     oa_started::Bool            # Indicator for Iterative or MIP-solver-driven algorithms started
-    cache_soln::Set{Vector{Float64}} # Set of integer solution subvectors already seen
+    cache_dual::Dict{Vector{Float64},Vector{Float64}} # Set of integer solution subvectors already seen
     new_incumb::Bool            # Indicates whether a new incumbent solution from the conic solver is waiting to be added as warm-start or heuristic
     cb_heur                     # Heuristic callback reference (MIP-driven only)
     cb_lazy                     # Lazy callback reference (MIP-driven only)
@@ -425,7 +425,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         m.logs[:oa_alg] = time()
         m.oa_started = true
         m.new_incumb = false
-        m.cache_soln = Set{Vector{Float64}}()
+        m.cache_dual = Dict{Vector{Float64},Vector{Float64}}()
 
         if m.mip_solver_drives
             if m.log_level > 0
@@ -1569,70 +1569,87 @@ end
 
 # Solve the subproblem for the current integer solution, add new incumbent conic solution if feasible and best, add K* cuts from subproblem dual solution
 function solve_subp_add_subp_cuts!(m)
-    # Get current integer solution and check if it is new
+    # Get current integer solution
     soln_int = getvalue(m.x_int)
     if m.round_mip_sols
         # Round the integer values
         soln_int = map!(round, soln_int)
     end
-    if soln_int in m.cache_soln
+
+    if haskey(m.cache_dual, soln_int)
         # Integer solution has been seen before, cannot get new subproblem cuts
         m.logs[:n_repeat] += 1
-        return (true, false)
-    end
 
-    # Integer solution is new
-    push!(m.cache_soln, soln_int)
-
-    # Calculate new b vector from integer solution and solve conic subproblem model
-    b_sub_int = m.b_sub - m.A_sub_int*soln_int
-    (status_conic, soln_conic, dual_conic) = solve_subp!(m, b_sub_int)
-
-    # Determine cut scaling factors and check if have new feasible incumbent solution
-    if (status_conic == :Infeasible) && !isempty(dual_conic)
-        # Subproblem infeasible: first check infeasible ray has negative value
-        ray_value = vecdot(dual_conic, b_sub_int)
-        if ray_value < -m.tol_zero
-            if m.scale_subp_cuts
-                # Rescale by number of cones / value of ray
-                scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / ray_value)
-            end
+        if !m.mip_solver_drives || m.prim_cuts_only
+            # Nothing to do if using iterative, or if not using subproblem cuts
+            return (true, false)
         else
-            warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (this should not happen: please submit an issue)\n")
-            return (false, false)
-        end
-    elseif (status_conic == :Optimal) && !isempty(dual_conic)
-        # Subproblem feasible: first calculate full objective value
-        obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_conic)
-
-        if m.scale_subp_cuts
-            # Rescale by number of cones / abs(objective + 1e-5)
-            scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / (abs(obj_full) + 1e-5))
-        end
-
-        if obj_full < m.best_obj
-            # Conic solver solution is a new incumbent
-            m.best_obj = obj_full
-            m.best_int = soln_int
-            m.best_cont = soln_conic
-            m.best_slck = b_sub_int - m.A_sub_cont * soln_conic
-            m.new_incumb = true
-        end
-    elseif !isempty(dual_conic)
-        # We have a dual but don't know the status, so we can't use subproblem scaling
-        if m.scale_subp_cuts
-            # Rescale by number of cones
-            scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp))
+            # In MSD, re-add subproblem cuts from existing conic dual
+            dual_conic = m.cache_dual[soln_int]
+            if isempty(dual_conic)
+                # Don't have a conic dual due to conic failure, nothing to do
+                return (true, false)
+            end
         end
     else
-        # Status not handled, cannot add subproblem cuts
-        warn("Conic solver failure: returned status $status_conic\n")
-        return (false, false)
-    end
+        # Integer solution is new, save it
+        m.cache_dual[soln_int] = Float64[]
 
-    # If not using subproblem cuts, return, else add and check whether any are violated
-    if m.prim_cuts_only
-        return (false, false)
+        # Calculate new b vector from integer solution and solve conic subproblem model
+        b_sub_int = m.b_sub - m.A_sub_int*soln_int
+        (status_conic, soln_conic, dual_conic) = solve_subp!(m, b_sub_int)
+
+        # Determine cut scaling factors and check if have new feasible incumbent solution
+        if (status_conic == :Infeasible) && !isempty(dual_conic)
+            # Subproblem infeasible: first check infeasible ray has negative value
+            ray_value = vecdot(dual_conic, b_sub_int)
+            if ray_value < -m.tol_zero
+                if m.scale_subp_cuts
+                    # Rescale by number of cones / value of ray
+                    scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / ray_value)
+                end
+            else
+                warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (this should not happen: please submit an issue)\n")
+                return (false, false)
+            end
+        elseif (status_conic == :Optimal) && !isempty(dual_conic)
+            # Subproblem feasible: first calculate full objective value
+            obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_conic)
+
+            if m.scale_subp_cuts
+                # Rescale by number of cones / abs(objective + 1e-5)
+                scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / (abs(obj_full) + 1e-5))
+            end
+
+            if obj_full < m.best_obj
+                # Conic solver solution is a new incumbent
+                m.best_obj = obj_full
+                m.best_int = soln_int
+                m.best_cont = soln_conic
+                m.best_slck = b_sub_int - m.A_sub_cont * soln_conic
+                m.new_incumb = true
+            end
+        elseif !isempty(dual_conic)
+            # We have a dual but don't know the status, so we can't use subproblem scaling
+            if m.scale_subp_cuts
+                # Rescale by number of cones
+                scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp))
+            end
+        else
+            # Status not handled, cannot add subproblem cuts
+            warn("Conic solver failure: returned status $status_conic\n")
+            return (false, false)
+        end
+
+        # If not using subproblem cuts, return
+        if m.prim_cuts_only
+            return (false, false)
+        end
+
+        # In MSD, save the dual so can re-add subproblem cuts later
+        if m.mip_solver_drives
+            m.cache_dual[soln_int] = dual_conic
+        end
     end
 
     if add_subp_cuts!(m, dual_conic, m.v_idxs_soc_subp, m.r_idx_exp_subp, m.s_idx_exp_subp, m.v_idxs_sdp_subp)
