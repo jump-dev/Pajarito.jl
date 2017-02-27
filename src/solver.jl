@@ -104,9 +104,45 @@ function PajaritoSolver(;
         error("No continuous solver specified (set cont_solver)\n")
     end
 
+    if soc_in_mip || init_sdp_soc || sdp_soc
+        # If using MISOCP outer approximation, check MIP solver handles MISOCP
+        if !(:SOC in MathProgBase.supportedcones(mip_solver))
+            error("The MIP solver specified does not support MISOCP\n")
+        end
+    end
+
     if viol_cuts_only == nothing
         # If user has not set option, default is true on MSD and false on iterative
         viol_cuts_only = mip_solver_drives
+        if (log_level > 1) && viol_cuts_only
+            warn("Only violated cuts will be added in MIP-solver-driven algorithm (set viol_cuts_only = false to change)\n")
+        else
+            warn("Non-violated cuts will be added in iterative algorithm (set viol_cuts_only = true to change)\n")
+        end
+    end
+
+    if !solve_relax
+        warn("Not solving the conic continuous relaxation problem; Pajarito may fail if the outer approximation MIP is unbounded\n")
+    end
+    if (log_level > 1) && round_mip_sols
+        warn("Integer solutions will be rounded: if this seems to cause numerical challenges, change round_mip_sols option\n")
+    end
+
+    if prim_cuts_only
+        warn("Using primal cuts only may cause convergence issues\n")
+        prim_cuts_always = true
+    end
+    if prim_cuts_always
+        prim_cuts_assist = true
+    end
+
+    if init_soc_one && !(soc_disagg || soc_abslift)
+        warn("Cannot use initial SOC L_1 constraints if not using SOC disaggregation or SOC absvalue lifting\n")
+        init_soc_one = false
+    end
+    if sdp_soc && mip_solver_drives
+        warn("SOC cuts for SDP cones cannot be added during the MIP-solver-driven algorithm, but initial SOC cuts may be used\n")
+        sdp_soc = false
     end
 
     PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)

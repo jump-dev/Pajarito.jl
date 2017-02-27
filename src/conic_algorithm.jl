@@ -122,7 +122,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     best_obj::Float64           # Best feasible objective value
     best_int::Vector{Float64}   # Best feasible integer solution
     best_cont::Vector{Float64}  # Best feasible continuous solution
-    best_slck::Vector{Float64}  # Best feasible slack vector (for calculating MIP solution)
     gap_rel_opt::Float64        # Relative optimality gap = |mip_obj - best_obj|/|best_obj|
     final_soln::Vector{Float64} # Final solution on original variables
 
@@ -132,41 +131,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
     # Model constructor
     function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
-        # Errors
-        if soc_in_mip || init_sdp_soc || sdp_soc
-            # If using MISOCP outer approximation, check MIP solver handles MISOCP
-            mip_spec = MathProgBase.supportedcones(mip_solver)
-            if !(:SOC in mip_spec)
-                error("The MIP solver specified does not support MISOCP\n")
-            end
-        end
-        if prim_cuts_only && !prim_cuts_always
-            error("When using primal cuts only, they are also added always (set prim_cuts_always = prim_cuts_assist = true)\n")
-        end
-        if prim_cuts_always && !prim_cuts_assist
-            error("When using primal cuts always, they are also added for assistance (set prim_cuts_assist = true)\n")
-        end
-        if init_soc_one && !(soc_disagg || soc_abslift)
-            error("Cannot use initial SOC L_1 constraints if not using SOC disaggregation or SOC absvalue lifting\n")
-        end
-
-        # Warnings
-        if log_level > 1
-            if !solve_relax
-                warn("Not solving the conic continuous relaxation problem; Pajarito may fail if the outer approximation MIP is unbounded\n")
-            end
-            if sdp_soc && mip_solver_drives
-                warn("SOC cuts for SDP cones cannot be added during the MIP-solver-driven algorithm, but initial SOC cuts may be used\n")
-            end
-            if round_mip_sols
-                warn("Integer solutions will be rounded: if this seems to cause numerical challenges, change round_mip_sols option\n")
-            end
-            if prim_cuts_only
-                warn("Using primal cuts only may cause convergence issues\n")
-            end
-        end
-
-        # Initialize model
         m = new()
 
         m.log_level = log_level
@@ -381,9 +345,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             # Get solution and check for NaNs
             soln_relax = MathProgBase.getsolution(model_relax)
             if !isempty(soln_relax) && !any(isnan, soln_relax)
-                # Set relaxation solution as warmstart to MIP, enable spicking tightest relaxation SOC cuts for PSD cones also
-                set_soln!(m, m.x_int, soln_relax[cols_int])
-                set_soln!(m, m.x_cont, soln_relax[cols_cont])
+                # Set relaxation solution as warmstart to MIP, enables picking tightest relaxation SOC cuts for PSD cones also
+                set_best_soln!(m, soln_relax[cols_int], soln_relax[cols_cont])
             end
 
             # Get dual and check for NaNs
@@ -1384,7 +1347,7 @@ function solve_iterative!(m)
         # Give the best feasible solution to the MIP as a warm-start
         if m.pass_mip_sols && m.new_incumb
             m.logs[:n_add] += 1
-            set_best_soln!(m)
+            set_best_soln!(m, m.best_int, m.best_cont)
             m.new_incumb = false
         end
     end
@@ -1438,7 +1401,7 @@ function solve_mip_driven!(m)
             if m.new_incumb
                 m.logs[:n_add] += 1
                 m.cb_heur = cb
-                set_best_soln!(m)
+                set_best_soln!(m, m.best_int, m.best_cont)
                 addsolution(cb)
                 m.new_incumb = false
             end
@@ -1506,56 +1469,63 @@ end
  Warm-starting / heuristic functions
 =========================================================#
 
-# Construct and warm-start MIP solution using best solution
-function set_best_soln!(m)
-    set_soln!(m, m.x_int, m.best_int)
-    set_soln!(m, m.x_cont, m.best_cont)
+# Construct and warm-start MIP solution using given solution
+function set_best_soln!(m, soln_int, soln_cont)
+    if m.mip_solver_drives && m.oa_started
+        for j in 1:length(m.x_int)
+            setsolutionvalue(m.cb_heur, m.x_int[j], soln_int[j])
+        end
+        for j in 1:length(m.x_cont)
+            setsolutionvalue(m.cb_heur, m.x_cont[j], soln_cont[j])
+        end
+    else
+        for j in 1:length(m.x_int)
+            setvalue(m.x_int[j], soln_int[j])
+        end
+        for j in 1:length(m.x_cont)
+            setvalue(m.x_cont[j], soln_cont[j])
+        end
+    end
 
     for n in 1:m.num_soc
         if m.soc_disagg
-            set_d_soln!(m, m.d_soc[n], m.best_slck[m.v_idxs_soc_subp[n]], m.best_slck[m.t_idx_soc_subp[n]])
+            # Set disaggregated SOC variable values
+            if getvalue(m.t_soc[n]) < 1e-7
+                # If epigraph values is small, set d to 0
+                if m.mip_solver_drives && m.oa_started
+                    for j in 1:length(m.d_soc[n])
+                        setsolutionvalue(m.cb_heur, m.d_soc[n][j], 0)
+                    end
+                else
+                    for j in 1:length(m.d_soc[n])
+                        setvalue(m.d_soc[n][j], 0)
+                    end
+                end
+            else
+                # Calculate and set d
+                if m.mip_solver_drives && m.oa_started
+                    for j in 1:length(m.d_soc[n])
+                        setsolutionvalue(m.cb_heur, m.d_soc[n][j], getvalue(m.v_soc[n][j])^2/(2.*getvalue(m.t_soc[n])))
+                    end
+                else
+                    for j in 1:length(m.d_soc[n])
+                        setvalue(m.d_soc[n][j], getvalue(m.v_soc[n][j])^2/(2.*getvalue(m.t_soc[n])))
+                    end
+                end
+            end
         end
+
         if m.soc_abslift
-            set_a_soln!(m, m.a_soc[n], m.best_slck[m.v_idxs_soc_subp[n]])
-        end
-    end
-end
-
-# Call setvalue or setsolutionvalue solution for a vector of variables and a solution vector
-function set_soln!(m, vars::Vector{JuMP.Variable}, soln::Vector{Float64})
-    if m.mip_solver_drives && m.oa_started
-        for j in 1:length(vars)
-            setsolutionvalue(m.cb_heur, vars[j], soln[j])
-        end
-    else
-        for j in 1:length(vars)
-            setvalue(vars[j], soln[j])
-        end
-    end
-end
-
-# Call setvalue or setsolutionvalue solution for a vector of SOC disaggregated variables
-function set_d_soln!(m, d::Vector{JuMP.Variable}, v_slck::Vector{Float64}, t_slck::Float64)
-    if m.mip_solver_drives && m.oa_started
-        for j in 1:length(d)
-            setsolutionvalue(m.cb_heur, d[j], (v_slck[j]^2/(2.*t_slck)))
-        end
-    else
-        for j in 1:length(d)
-            setvalue(d[j], (v_slck[j]^2/(2.*t_slck)))
-        end
-    end
-end
-
-# Call setvalue or setsolutionvalue solution for a vector of SOC absvalue lifting variables
-function set_a_soln!(m, a::Vector{JuMP.Variable}, v_slck::Vector{Float64})
-    if m.mip_solver_drives && m.oa_started
-        for j in 1:length(a)
-            setsolutionvalue(m.cb_heur, a[j], abs(v_slck[j]))
-        end
-    else
-        for j in 1:length(a)
-            setvalue(a[j], abs(v_slck[j]))
+            # Set absval lifted variable values
+            if m.mip_solver_drives && m.oa_started
+                for j in 1:length(m.a_soc[n])
+                    setsolutionvalue(m.cb_heur, m.a_soc[n][j], abs(getvalue(m.v_soc[n][j])))
+                end
+            else
+                for j in 1:length(m.a_soc[n])
+                    setvalue(m.a_soc[n][j], abs(getvalue(m.v_soc[n][j])))
+                end
+            end
         end
     end
 end
@@ -1640,7 +1610,6 @@ function solve_subp_add_subp_cuts!(m)
                 m.best_obj = obj_full
                 m.best_int = soln_int
                 m.best_cont = soln_conic
-                m.best_slck = b_sub_int - m.A_sub_cont * soln_conic
                 m.new_incumb = true
             end
         elseif !isempty(dual_conic)
