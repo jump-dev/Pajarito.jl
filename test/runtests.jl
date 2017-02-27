@@ -13,15 +13,23 @@ include("nlptest.jl")
 include("conictest.jl")
 
 # Define solvers using JuMP/test/solvers.jl
-solvers_mip = []
+solvers_milp = []
 if grb
-    push!(solvers_mip, Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=1e-8, FeasibilityTol=1e-7, MIPGap=1e-8))
+    push!(solvers_milp, Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=1e-8, FeasibilityTol=1e-7, MIPGap=1e-8))
 end
 if cpx
-    push!(solvers_mip, CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-7, CPX_PARAM_EPGAP=1e-8))
+    push!(solvers_milp, CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-7, CPX_PARAM_EPGAP=1e-8))
 end
 if glp
-    push!(solvers_mip, GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_ERR, tol_int=1e-8, tol_bnd=1e-7, tol_obj=1e-8))
+    push!(solvers_milp, GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_ERR, tol_int=1e-8, tol_bnd=1e-7, tol_obj=1e-8))
+end
+
+solvers_misocp = []
+if grb
+    push!(solvers_misocp, Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=1e-8, FeasibilityTol=1e-7, MIPGap=1e-8))
+end
+if cpx
+    push!(solvers_misocp, CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-7, CPX_PARAM_EPGAP=1e-8))
 end
 
 solvers_nlp = []
@@ -51,8 +59,12 @@ if mos
     push!(solvers_sdpsoc, Mosek.MosekSolver(LOG=0))
 end
 
-println("\nMIP solvers:")
-for solver in solvers_mip
+println("\nMILP solvers:")
+for solver in solvers_milp
+    println(solver)
+end
+println("\nMISOCP solvers:")
+for solver in solvers_milp
     println(solver)
 end
 println("\nNLP solvers:")
@@ -83,37 +95,51 @@ TOL = 1e-3
 ll = 0
 
 # NLP tests in nlptest.jl
-@testset "NLP model - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
-    runnlptests(msd, mip, con, ll)
+@testset "NLP model - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_milp, msd in [false, true]
+    runnlp(msd, mip, con, ll)
 end
 flush(STDOUT)
 
-# Conic models tests in conictest.jl with NLP solver
-@testset "SOC NLP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
-    runsocboth(msd, mip, con, ll)
+# Conic models tests in conictest.jl with NLP solver and MILP solver
+@testset "SOC NLP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_milp, msd in [false, true]
+    runsocnlpconic(msd, mip, con, ll)
 end
 flush(STDOUT)
-@testset "Exp+SOC NLP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_mip, msd in [false, true]
-    runexpsocboth(msd, mip, con, ll)
+@testset "Exp+SOC NLP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_milp, msd in [false, true]
+    runexpsocnlpconic(msd, mip, con, ll)
 end
 flush(STDOUT)
 
-# Conic models tests in conictest.jl with conic solver
-@testset "SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_soc, mip in solvers_mip, msd in [false, true]
-    runsocboth(msd, mip, con, ll)
+# Conic models tests in conictest.jl with conic solver and MILP solver
+@testset "SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_soc, mip in solvers_milp, msd in [false, true]
+    runsocnlpconic(msd, mip, con, ll)
     runsocconic(msd, mip, con, ll)
 end
 flush(STDOUT)
-@testset "Exp+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_expsoc, mip in solvers_mip, msd in [false, true]
-    runexpsocboth(msd, mip, con, ll)
+@testset "Exp+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_expsoc, mip in solvers_milp, msd in [false, true]
+    runexpsocnlpconic(msd, mip, con, ll)
     runexpsocconic(msd, mip, con, ll)
 end
 flush(STDOUT)
-@testset "SDP+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpsoc, mip in solvers_mip, msd in [false, true]
+@testset "SDP+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpsoc, mip in solvers_milp, msd in [false, true]
     runsdpsocconic(msd, mip, con, ll)
 end
 flush(STDOUT)
-@testset "SDP+Exp conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpexp, mip in solvers_mip, msd in [false, true]
+@testset "SDP+Exp conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpexp, mip in solvers_milp, msd in [false, true]
     runsdpexpconic(msd, mip, con, ll)
+end
+flush(STDOUT)
+
+# Conic models tests in conictest.jl with conic solver and MISOCP solver
+@testset "Exp+SOC conic MISOCP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_expsoc, mip in solvers_misocp, msd in [false, true]
+    runexpsocconicmisocp(msd, mip, con, ll)
+end
+flush(STDOUT)
+@testset "SDP+SOC conic MISOCP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpsoc, mip in solvers_misocp, msd in [false, true]
+    runsdpsocconicmisocp(msd, mip, con, ll)
+end
+flush(STDOUT)
+@testset "SDP+Exp conic MISOCP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpexp, mip in solvers_misocp, msd in [false, true]
+    runsdpexpconicmisocp(msd, mip, con, ll)
 end
 flush(STDOUT)

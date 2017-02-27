@@ -378,6 +378,14 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 @printf " - Relaxation objective = %14.6f\n" obj_relax
             end
 
+            # Get solution and check for NaNs
+            soln_relax = MathProgBase.getsolution(model_relax)
+            if !isempty(soln_relax) && !any(isnan, soln_relax)
+                # Set relaxation solution as warmstart to MIP, enable spicking tightest relaxation SOC cuts for PSD cones also
+                set_soln!(m, m.x_int, soln_relax[cols_int])
+                set_soln!(m, m.x_cont, soln_relax[cols_cont])
+            end
+
             # Get dual and check for NaNs
             dual_conic = MathProgBase.getdual(model_relax)
             if !isempty(dual_conic) && !any(isnan, dual_conic)
@@ -1009,15 +1017,20 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
         elseif spec == :Zero
             @constraint(model_mip, lhs_expr[rows] .== 0.)
         elseif spec == :SOC
-            if m.soc_in_mip
-                # If putting SOCs in the MIP directly, don't need to use other SOC infrastructure
-                @constraint(model_mip, t >= norm(v))
-                continue
-            end
-
             # Set up a SOC
             # (t,v) in SOC <-> t >= norm(v)
             n_soc += 1
+
+            if m.soc_in_mip
+                # If putting SOCs in the MIP directly, don't need to use other SOC infrastructure
+                @constraint(model_mip, lhs_expr[rows[1]] >= norm(lhs_expr[rows[2:end]]))
+
+                v_idxs_soc_relx[n_soc] = Int[]
+                t_idx_soc_subp[n_soc] = 0
+                v_idxs_soc_subp[n_soc] = Int[]
+                continue
+            end
+
             v_idxs = rows[2:end]
             dim = length(v_idxs)
             v_idxs_soc_relx[n_soc] = v_idxs
@@ -1205,6 +1218,9 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     m.x_cont = x_all[cols_cont]
     # @show model_mip
 
+    if m.soc_in_mip
+        m.num_soc = 0
+    end
     m.v_idxs_soc_subp = v_idxs_soc_subp
     m.t_idx_soc_subp = t_idx_soc_subp
     m.t_soc = t_soc
@@ -1948,16 +1964,19 @@ function add_cut_sdp!(m, V, eig_dual)
                     y = VVd[i,i]
                     z = sum(VVd[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
                     x = sum(VVd[k,i] for k in 1:dim if k!=i)
-                    @expression(m.model_mip, cut_expr, num_eig*(y + z - norm(2*x, (y - z))))
+                    @expression(m.model_mip, cut_expr, num_eig*(y + z - norm([2*x, (y - z)])))
 
                     viol = -getvalue(cut_expr)
-                    if viol > viol_max
+                    if isnan(viol)
+                        cut_expr_max = cut_expr
+                        break
+                    elseif viol > viol_max
                         viol_max = viol
                         cut_expr_max = cut_expr
                     end
                 end
 
-                if (viol_max > m.tol_prim_infeas) && add_cut!(m, cut_expr_max, m.logs[:SDP])
+                if add_cut!(m, cut_expr_max, m.logs[:SDP])
                     is_viol = true
                 end
             else
@@ -1983,16 +2002,19 @@ function add_cut_sdp!(m, V, eig_dual)
                 y = VVd[i,i]
                 z = sum(VVd[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
                 @expression(m.model_mip, x[j in 1:num_eig], sum((V[k,i]*eig_dual[k, j]*eig_dual[i, j]) for k in 1:dim if k!=i))
-                @expression(m.model_mip, cut_expr, y + z - norm(2.*x, (y - z)))
+                @expression(m.model_mip, cut_expr, y + z - norm([(2.*x)..., (y - z)]))
 
                 viol = -getvalue(cut_expr)
-                if viol > viol_max
+                if isnan(viol)
+                    cut_expr_max = cut_expr
+                    break
+                elseif viol > viol_max
                     viol_max = viol
                     cut_expr_max = cut_expr
                 end
             end
 
-            if (viol_max > m.tol_prim_infeas) && add_cut!(m, cut_expr_max, m.logs[:SDP])
+            if add_cut!(m, cut_expr_max, m.logs[:SDP])
                 is_viol = true
             end
         else
@@ -2008,7 +2030,7 @@ function add_cut_sdp!(m, V, eig_dual)
 end
 
 # Check and record violation and add cut, return true if violated
-function add_cut!(m, cut_expr::JuMP.AffExpr, cone_logs::Dict{Symbol,Any})
+function add_cut!(m, cut_expr, cone_logs)
     if !m.oa_started
         @constraint(m.model_mip, cut_expr >= 0)
         return false
