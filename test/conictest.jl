@@ -1006,23 +1006,6 @@ end
 
 # Exp+SOC problems for conic algorithm with MISOCP
 function runexpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "SOC in MIP: Exp and SOC" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-
-        problem = Convex.maximize(3x + y,
-                            x >= 0,
-                            3x + 2y <= 10,
-                            exp(x) <= 10)
-
-       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true))
-
-       @test isapprox(problem.optval, 8.0, atol=TOL)
-       @test isapprox(x.value, 2.0, atol=TOL)
-       @test isapprox(y.value, 2.0, atol=TOL)
-       @test problem.status == :Optimal
-    end
-
     @testset "SOC in MIP: More constraints" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1)
