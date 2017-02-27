@@ -31,6 +31,9 @@ end
 if cpx
     push!(solvers_misocp, CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-7, CPX_PARAM_EPGAP=1e-8))
 end
+if glp && eco
+    push!(solvers_misocp, PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_ERR, tol_int=1e-8, tol_bnd=1e-7, tol_obj=1e-8), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-8))
+end
 
 solvers_nlp = []
 if ipt
@@ -64,7 +67,7 @@ for solver in solvers_milp
     println(solver)
 end
 println("\nMISOCP solvers:")
-for solver in solvers_milp
+for solver in solvers_misocp
     println(solver)
 end
 println("\nNLP solvers:")
@@ -92,54 +95,60 @@ flush(STDOUT)
 
 # Tests absolute tolerance and Pajarito printing options
 TOL = 1e-3
-ll = 0
+ll = 3
 
-# NLP tests in nlptest.jl
-@testset "NLP model - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_milp, msd in [false, true]
-    runnlp(msd, mip, con, ll)
-end
-flush(STDOUT)
-
-# Conic models tests in conictest.jl with NLP solver and MILP solver
-@testset "SOC NLP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_milp, msd in [false, true]
-    runsocnlpconic(msd, mip, con, ll)
-end
-flush(STDOUT)
-@testset "Exp+SOC NLP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_milp, msd in [false, true]
-    runexpsocnlpconic(msd, mip, con, ll)
-end
-flush(STDOUT)
-
-# Conic models tests in conictest.jl with conic solver and MILP solver
-@testset "SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_soc, mip in solvers_milp, msd in [false, true]
-    runsocnlpconic(msd, mip, con, ll)
-    runsocconic(msd, mip, con, ll)
-end
-flush(STDOUT)
-@testset "Exp+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_expsoc, mip in solvers_milp, msd in [false, true]
-    runexpsocnlpconic(msd, mip, con, ll)
-    runexpsocconic(msd, mip, con, ll)
-end
-flush(STDOUT)
-@testset "SDP+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpsoc, mip in solvers_milp, msd in [false, true]
-    runsdpsocconic(msd, mip, con, ll)
-end
-flush(STDOUT)
-@testset "SDP+Exp conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpexp, mip in solvers_milp, msd in [false, true]
-    runsdpexpconic(msd, mip, con, ll)
-end
-flush(STDOUT)
+# # NLP tests in nlptest.jl
+# @testset "NLP model - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_milp, msd in [false, true]
+#     runnlp(msd, mip, con, ll)
+# end
+# flush(STDOUT)
+#
+# # Conic models tests in conictest.jl with NLP solver and MILP solver
+# @testset "SOC NLP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_milp, msd in [false, true]
+#     runsocnlpconic(msd, mip, con, ll)
+# end
+# flush(STDOUT)
+# @testset "Exp+SOC NLP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_nlp, mip in solvers_milp, msd in [false, true]
+#     runexpsocnlpconic(msd, mip, con, ll)
+# end
+# flush(STDOUT)
+#
+# # Conic models tests in conictest.jl with conic solver and MILP solver
+# @testset "SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_soc, mip in solvers_milp, msd in [false, true]
+#     runsocnlpconic(msd, mip, con, ll)
+#     runsocconic(msd, mip, con, ll)
+# end
+# flush(STDOUT)
+# @testset "Exp+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_expsoc, mip in solvers_milp, msd in [false, true]
+#     runexpsocnlpconic(msd, mip, con, ll)
+#     runexpsocconic(msd, mip, con, ll)
+# end
+# flush(STDOUT)
+# @testset "SDP+SOC conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpsoc, mip in solvers_milp, msd in [false, true]
+#     runsdpsocconic(msd, mip, con, ll)
+# end
+# flush(STDOUT)
+# @testset "SDP+Exp conic - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpexp, mip in solvers_milp, msd in [false, true]
+#     runsdpexpconic(msd, mip, con, ll)
+# end
+# flush(STDOUT)
 
 # Conic models tests in conictest.jl with conic solver and MISOCP solver
 @testset "Exp+SOC conic MISOCP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_expsoc, mip in solvers_misocp, msd in [false, true]
-    runexpsocconicmisocp(msd, mip, con, ll)
+    if (msd == false) || applicable(MathProgBase.setlazycallback!, (MathProgBase.ConicModel(mip), _ -> _))
+        runexpsocconicmisocp(msd, mip, con, ll)
+    end
 end
 flush(STDOUT)
 @testset "SDP+SOC conic MISOCP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpsoc, mip in solvers_misocp, msd in [false, true]
-    runsdpsocconicmisocp(msd, mip, con, ll)
+    if (msd == false) || applicable(MathProgBase.setlazycallback!, (MathProgBase.ConicModel(mip), _ -> _))
+        runsdpsocconicmisocp(msd, mip, con, ll)
+    end
 end
 flush(STDOUT)
 @testset "SDP+Exp conic MISOCP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpexp, mip in solvers_misocp, msd in [false, true]
-    runsdpexpconicmisocp(msd, mip, con, ll)
+    if (msd == false) || applicable(MathProgBase.setlazycallback!, (MathProgBase.ConicModel(mip), _ -> _))
+        runsdpexpconicmisocp(msd, mip, con, ll)
+    end
 end
 flush(STDOUT)

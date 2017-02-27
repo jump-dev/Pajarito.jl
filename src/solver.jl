@@ -159,3 +159,7 @@ end
 
 # Create Pajarito linear-quadratic model: can solve with nonlinear algorithm wrapped with NonlinearToLPQPBridge
 MathProgBase.LinearQuadraticModel(s::PajaritoSolver) = MathProgBase.NonlinearToLPQPBridge(MathProgBase.NonlinearModel(s))
+
+
+# Supported cones are those supported by the continuous solvers
+MathProgBase.supportedcones(s::PajaritoSolver) = MathProgBase.supportedcones(s.cont_solver)
