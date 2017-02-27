@@ -105,8 +105,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # SDP data
     num_sdp::Int                # Number of SDP cones
     v_idxs_sdp_subp::Vector{Vector{Int}} # Row indices of svec v variables in SDPs in subproblem
-    smat_sdp::Vector{Array{Float64,2}} # Preallocated array for smat space values
-    v_sdp::Vector{Vector{JuMP.AffExpr}} # svec v variables in SDPs
+    smat_sdp::Vector{Symmetric{Float64,Array{Float64,2}}} # Preallocated array for smat space values
     V_sdp::Vector{Array{JuMP.AffExpr,2}} # smat V variables in SDPs
 
     # Miscellaneous for algorithms
@@ -992,8 +991,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     # PSD data
     v_idxs_sdp_relx = Vector{Vector{Int}}(m.num_sdp)
     v_idxs_sdp_subp = Vector{Vector{Int}}(m.num_sdp)
-    smat_sdp = Vector{Array{Float64,2}}(m.num_sdp)
-    v_sdp = Vector{Vector{JuMP.AffExpr}}(m.num_sdp)
+    smat_sdp = Vector{Symmetric{Float64,Array{Float64,2}}}(m.num_sdp)
     V_sdp = Vector{Array{JuMP.AffExpr,2}}(m.num_sdp)
 
     # Add constraint cones to MIP; if linear, add directly, else create slacks if necessary
@@ -1166,9 +1164,9 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             v_idxs_sdp_relx[n_sdp] = rows
             v_idxs_sdp_subp[n_sdp] = map_rows_sub[rows]
 
-            smat_sdp[n_sdp] = zeros(dim, dim)
+            smat_sdp[n_sdp] = Symmetric(zeros(dim, dim))
 
-            v_sdp[n_sdp] = v = lhs_expr[rows]
+            v = lhs_expr[rows]
             V_sdp[n_sdp] = V = Array{JuMP.AffExpr,2}(dim, dim)
 
             # Set up smat arrays and set bounds
@@ -1223,7 +1221,6 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
 
     m.v_idxs_sdp_subp = v_idxs_sdp_subp
     m.smat_sdp = smat_sdp
-    m.v_sdp = v_sdp
     m.V_sdp = V_sdp
 
     return (v_idxs_soc_relx, r_idx_exp_relx, s_idx_exp_relx, v_idxs_sdp_relx)
@@ -1548,14 +1545,15 @@ function set_a_soln!(m, a::Vector{JuMP.Variable}, v_slck::Vector{Float64})
 end
 
 # Transform svec vector into symmetric smat matrix
-function make_smat!(smat::Array{Float64,2}, svec::Vector{Float64})
+function make_smat!(smat::Symmetric{Float64,Array{Float64,2}}, svec::Vector{Float64})
+    # smat is uplo U Symmetric
     dim = size(smat, 1)
     kSD = 1
-    for jSD in 1:dim, iSD in jSD:dim
-        if jSD == iSD
-            smat[iSD, jSD] = svec[kSD]
+    for iSD in 1:dim, jSD in iSD:dim
+        if iSD == jSD
+            smat.data[iSD, jSD] = svec[kSD]
         else
-            smat[iSD, jSD] = smat[jSD, iSD] = sqrt2inv * svec[kSD]
+            smat.data[iSD, jSD] = sqrt2inv*svec[kSD]
         end
         kSD += 1
     end
@@ -1738,29 +1736,23 @@ end
 function add_subp_cuts!(m, dual_conic, v_idxs_soc, r_idx_exp, s_idx_exp, v_idxs_sdp)
     is_viol_subp = false
 
-    # Add SOC K* subproblem cuts
     for n in 1:m.num_soc
         if add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], dual_conic[v_idxs_soc[n]])
             is_viol_subp = true
         end
     end
 
-    # Add ExpPrimal K* subproblem cuts
     for n in 1:m.num_exp
         if add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], dual_conic[r_idx_exp[n]], dual_conic[s_idx_exp[n]])
             is_viol_subp = true
         end
     end
 
-    # Add SDP K* subproblem cuts
     for n in 1:m.num_sdp
-        v_dual = dual_conic[v_idxs_sdp[n]]
-        V_dual = make_smat!(m.smat_sdp[n], v_dual)
-        (V_eigvals, V_eigvecs) = LAPACK.syev!('V', 'U', V_dual)
-
         # Dual is sum_{j: lambda_j > 0} lamda_j V_j V_j'
-        pos_inds = V_eigvals .>= m.tol_zero
-        if add_cut_sdp!(m, m.V_sdp[n], V_eigvals[pos_inds], view(V_eigvecs, :, pos_inds))
+        v_dual = dual_conic[v_idxs_sdp[n]]
+        V_eig = eigfact!(make_smat!(m.smat_sdp[n], v_dual), m.tol_zero, Inf)
+        if add_cut_sdp!(m, m.V_sdp[n], V_eig[:vectors] * Diagonal(sqrt.(V_eig[:values])))
             is_viol_subp = true
         end
     end
@@ -1776,8 +1768,7 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
     for n in 1:m.num_soc
         # Get cone current solution, check infeasibility
         v_vals = getvalue(m.v_soc[n])
-        inf_outer = vecnorm(v_vals) - getvalue(m.t_soc[n])
-        if inf_outer < m.tol_prim_infeas
+        if (vecnorm(v_vals) - getvalue(m.t_soc[n])) < m.tol_prim_infeas
             continue
         end
         is_infeas = true
@@ -1785,7 +1776,6 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
             continue
         end
 
-        # Add SOC K* primal cuts from solution
         # Dual is (1, -1/norm(v)*v)
         if add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], -1/vecnorm(v_vals)*v_vals)
             is_viol_prim = true
@@ -1795,8 +1785,7 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
     for n in 1:m.num_exp
         r_val = getvalue(m.r_exp[n])
         s_val = getvalue(m.s_exp[n])
-        inf_outer = s_val*exp(r_val/s_val) - getvalue(m.t_exp[n])
-        if inf_outer < m.tol_prim_infeas
+        if (s_val*exp(r_val/s_val) - getvalue(m.t_exp[n])) < m.tol_prim_infeas
             continue
         end
         is_infeas = true
@@ -1804,7 +1793,6 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
             continue
         end
 
-        # Add ExpPrimal K* primal cuts from solution
         # Dual is (-exp(r/s), exp(r/s)(r/s-1), 1)
         ers = exp(r_val/s_val)
         if add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], -ers, ers*(r_val/s_val-1))
@@ -1813,10 +1801,8 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
     end
 
     for n in 1:m.num_sdp
-        V_vals = getvalue(m.V_sdp[n])
-        (V_eigvals, V_eigvecs) = LAPACK.syev!('V', 'U', V_vals)
-        inf_outer = -minimum(V_eigvals)
-        if inf_outer < m.tol_prim_infeas
+        V_eig = eigfact!(Symmetric(getvalue(m.V_sdp[n])), -Inf, -m.tol_prim_infeas)
+        if isempty(V_eig[:values])
             continue
         end
         is_infeas = true
@@ -1824,10 +1810,8 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
             continue
         end
 
-        # Add PSD K* primal cuts from solution
         # Dual is sum_{j: lambda_j < 0} lamda_j V_j V_j'
-        neg_inds = V_eigvals .<= -m.tol_zero
-        if add_cut_sdp!(m, m.V_sdp[n], ones(countnz(neg_inds)), view(V_eigvecs, :, neg_inds))
+        if add_cut_sdp!(m, m.V_sdp[n], V_eig[:vectors])
             is_viol_prim = true
         end
     end
@@ -1937,74 +1921,62 @@ function add_cut_exp!(m, r, s, t, r_dual, s_dual)
 end
 
 # Add K* cuts for a PSD, return true if a cut is violated by current solution
-function add_cut_sdp!(m, V, lam_dual, lamvec_dual)
-    dim = size(lamvec_dual, 1)
+function add_cut_sdp!(m, V, eig_dual)
+    # Remove near-zeros, return false if all near zero
+    if !clean_zeros!(m, eig_dual)
+        return false
+    end
+
+    (dim, num_eig) = size(eig_dual)
     is_viol = false
 
     if m.sdp_eig
         # Using PSD eigenvector cuts
-        for lam_j in 1:length(lam_dual)
-            V_dual_j = lam_dual[lam_j]*lamvec_dual[:, lam_j]*lamvec_dual[:, lam_j]'
+        for j in 1:num_eig
+            eig_j = eig_dual[:, j]
 
             if m.sdp_soc
                 # Using SDP SOC cuts
                 # Calculate SOC cut most violated by current solution
-                viol_max = 0.
-                cut_expr_max = JuMP.AffExpr()
-                for i in 1:dim
-                    error("SOC cuts for SDP currently broken\n")
-                end
-
-                if viol_max > 0.
-                    if add_cut!(m, cut_expr_max, m.logs[:SDP])
-                        is_viol = true
-                    end
-                end
+                error("SOC cuts for SDP currently broken\n")
             else
                 # Not using SDP SOC cuts
-                if clean_zeros!(m, V_dual_j)
-                    @expression(m.model_mip, cut_expr, vecdot(V_dual_j, V))
-                    if add_cut!(m, cut_expr, m.logs[:SDP])
-                        is_viol = true
-                    end
+                @expression(m.model_mip, cut_expr, num_eig*vecdot(eig_j*eig_j', V))
+                if add_cut!(m, cut_expr, m.logs[:SDP])
+                    is_viol = true
                 end
             end
         end
     else
         # Using full PSD cut
-        V_dual = lamvec_dual*diagm(lam_dual)*lamvec_dual'
-
         if m.sdp_soc
             # Using PSD SOC cut
             # Calculate SOC cut most violated by current solution
-            viol_max = 0.
-            cut_expr_max = JuMP.AffExpr()
-            for i in 1:dim
-                error("SOC cuts for SDP currently broken\n")
-
-                # Use norm and transformation from RSOC to SOC
-                # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
-                @expression(m.model_mip, z_expr, sum(V_dual[k,l]*V[k,l] for k in 1:dim, l in 1:dim if k!=i && l!=i))
-                @expression(m.model_mip, cut_expr, norm((k==i ? (V[i,i] - z_expr) : 2*V_dual[k,i]*V[k,i]) for k in 1:dim) - (V[i,i] + z_expr))
-                viol = getvalue(cut_expr)
-                if viol > viol_max
-                    viol_max = viol
-                    cut_expr_max = cut_expr
-                end
-            end
-
-            if viol_max > 0.
-                if add_cut!(m, cut_expr_max, m.logs[:SDP])
-                    is_viol = true
-                end
-            end
+            error("SOC cuts for SDP currently broken\n")
+            # viol_max = 0.
+            # cut_expr_max = JuMP.AffExpr()
+            # for i in 1:dim
+            #     # Use norm and transformation from RSOC to SOC
+            #     # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
+            #     @expression(m.model_mip, z_expr, sum(V_dual[k,l]*V[k,l] for k in 1:dim, l in 1:dim if k!=i && l!=i))
+            #     @expression(m.model_mip, cut_expr, norm((k==i ? (V[i,i] - z_expr) : 2*V_dual[k,i]*V[k,i]) for k in 1:dim) - (V[i,i] + z_expr))
+            #     viol = getvalue(cut_expr)
+            #     if viol > viol_max
+            #         viol_max = viol
+            #         cut_expr_max = cut_expr
+            #     end
+            # end
+            #
+            # if viol_max > 0.
+            #     if add_cut!(m, cut_expr_max, m.logs[:SDP])
+            #         is_viol = true
+            #     end
+            # end
         else
             # Using PSD linear cut
-            if clean_zeros!(m, V_dual)
-                @expression(m.model_mip, cut_expr, vecdot(V_dual, V))
-                if add_cut!(m, cut_expr, m.logs[:SDP])
-                    is_viol = true
-                end
+            @expression(m.model_mip, cut_expr, vecdot(eig_dual*eig_dual', V))
+            if add_cut!(m, cut_expr, m.logs[:SDP])
+                is_viol = true
             end
         end
     end
@@ -2261,7 +2233,7 @@ function print_finish(m::PajaritoConicModel)
             viol_exp = max(viol_exp, vals[idx[2]]*exp(vals[idx[1]]/vals[idx[2]]) - vals[idx[3]])
         elseif cone == :SDP
             dim = round(Int, sqrt(1/4+2*length(idx))-1/2) # smat space dimension
-            vals_smat = zeros(dim, dim)
+            vals_smat = Symmetric(zeros(dim, dim))
             make_smat!(vals_smat, vals[idx])
             viol_sdp = max(viol_sdp, -eigmin(vals_smat))
         else
@@ -2302,7 +2274,7 @@ function print_finish(m::PajaritoConicModel)
             viol_exp = max(viol_exp, vals[idx[2]]*exp(vals[idx[1]]/vals[idx[2]]) - vals[idx[3]])
         elseif cone == :SDP
             dim = round(Int, sqrt(1/4+2*length(idx))-1/2) # smat space dimension
-            vals_smat = zeros(dim, dim)
+            vals_smat = Symmetric(zeros(dim, dim))
             make_smat!(vals_smat, vals[idx])
             viol_sdp = max(viol_sdp, -eigmin(vals_smat))
         else
