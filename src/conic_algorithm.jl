@@ -1062,11 +1062,13 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
                         @constraint(model_mip, 2*(t + 2*dim*d[j] - 2*sqrt(dim)*v[j]) >= 0)
                         @constraint(model_mip, 2*(t + 2*dim*d[j] + 2*sqrt(dim)*v[j]) >= 0)
                     end
-                else
+                elseif m.soc_abslift
                     # Using absvalue lifting only
                     # t >= 1/sqrt(dim)*sum(a_j)
                     # Scale by 2
                     @constraint(model_mip, 2*(t - 1/sqrt(dim)*sum(a)) >= 0)
+                else
+                    warn("Cannot use initial SOC L_1 constraints if not using SOC disaggregation or SOC absvalue lifting\n")
                 end
             end
 
@@ -1158,19 +1160,23 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             end
 
             # Add initial (linear or SOC) SDP outer approximation cuts
-            # TODO what is the scaling on these cuts
-            for jSD in 1:dim, iSD in (jSD+1):dim
-                if m.init_sdp_soc
-                    # Add initial rotated SOC for off-diagonal element to enforce 2x2 principal submatrix PSDness
-                    # Use norm and transformation from RSOC to SOC
+            if m.init_sdp_soc
+                for jSD in 1:dim, iSD in (jSD+1):dim
+                    # Add initial SOC cut for off-diagonal element to enforce 2x2 principal submatrix PSDness
                     # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
                     @constraint(model_mip, V[iSD, iSD] + V[jSD, jSD] - norm(JuMP.AffExpr[2*V[iSD, jSD], V[iSD, iSD] - V[jSD, jSD]]) >= 0)
-                elseif m.init_sdp_lin
-                    # Add initial SDP linear cuts based on linearization of 3-dim rotated SOCs that enforce 2x2 principal submatrix PSDness (essentially the dual of SDSOS)
+                end
+            elseif m.init_sdp_lin
+                for jSD in 1:dim, iSD in (jSD+1):dim
+                    # Add initial linear cuts based on linearization of 3-dim rotated SOCs that enforce 2x2 principal submatrix PSDness (essentially the dual of SDSOS)
                     # 2|m_ij| <= m_ii + m_jj, where m_kk is scaled by sqrt2 in smat space
                     @constraint(model_mip, V[iSD, iSD] + V[jSD, jSD] - 2*V[iSD, jSD] >= 0)
                     @constraint(model_mip, V[iSD, iSD] + V[jSD, jSD] + 2*V[iSD, jSD] >= 0)
                 end
+            end
+
+            if m.sdp_soc && m.mip_solver_drives
+                warn("SOC cuts for SDP cones cannot be added in callbacks in the MIP-solver-driven algorithm\n")
             end
         end
     end
@@ -1920,7 +1926,7 @@ function add_cut_sdp!(m, V, eig_dual)
         for j in 1:num_eig
             eig_j = eig_dual[:, j]
 
-            if m.sdp_soc
+            if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
                 # Using SDP SOC eig cuts
                 VVd = V .* (eig_j * eig_j')
 
@@ -1928,7 +1934,6 @@ function add_cut_sdp!(m, V, eig_dual)
                 viol_max = m.tol_prim_infeas
                 cut_expr_max = JuMP.AffExpr()
                 for i in 1:dim
-                    # Use norm and transformation from RSOC to SOC
                     # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
                     y = VVd[i,i]
                     z = sum(VVd[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
@@ -1958,7 +1963,7 @@ function add_cut_sdp!(m, V, eig_dual)
         end
     else
         # Using full PSD cut
-        if m.sdp_soc
+        if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
             # Using SDP SOC full cut
             VVd = V .* (eig_dual * eig_dual')
 
