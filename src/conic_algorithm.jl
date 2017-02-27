@@ -1068,7 +1068,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
                     # Scale by 2
                     @constraint(model_mip, 2*(t - 1/sqrt(dim)*sum(a)) >= 0)
                 else
-                    warn("Cannot use initial SOC L_1 constraints if not using SOC disaggregation or SOC absvalue lifting\n")
+                    Base.warn_once("Cannot use initial SOC L_1 constraints if not using SOC disaggregation or SOC absvalue lifting\n")
                 end
             end
 
@@ -1176,7 +1176,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             end
 
             if m.sdp_soc && m.mip_solver_drives
-                warn("SOC cuts for SDP cones cannot be added in callbacks in the MIP-solver-driven algorithm\n")
+                Base.warn_once("SOC cuts for SDP cones cannot be added in callbacks in the MIP-solver-driven algorithm\n")
             end
         end
     end
@@ -1823,7 +1823,7 @@ function clean_zeros!{N}(m, data::Array{Float64,N})
     return keep
 end
 
-# Add K* cuts for a SOC, return true if a cut is violated by current solution
+# Add K* cuts for a SOC, where (t,v) is the vector of slacks, return true if a cut is violated by current solution
 function add_cut_soc!(m, t, v, d, a, v_dual)
     # Remove near-zeros, return false if all near zero
     if !clean_zeros!(m, v_dual)
@@ -1888,7 +1888,7 @@ function add_cut_soc!(m, t, v, d, a, v_dual)
     return is_viol
 end
 
-# Add K* cuts for a ExpPrimal, return true if a cut is violated by current solution
+# Add K* cuts for a ExpPrimal cone, where (r,s,t) is the vector of slacks, return true if a cut is violated by current solution
 function add_cut_exp!(m, r, s, t, r_dual, s_dual)
     # Clean zeros
     if r_dual >= -m.tol_zero
@@ -1911,7 +1911,7 @@ function add_cut_exp!(m, r, s, t, r_dual, s_dual)
     return add_cut!(m, cut_expr, m.logs[:ExpPrimal])
 end
 
-# Add K* cuts for a PSD, return true if a cut is violated by current solution
+# Add K* cuts for a PSD cone, where V is the matrix of smat-space slacks, return true if a cut is violated by current solution
 function add_cut_sdp!(m, V, eig_dual)
     # Remove near-zeros, return false if all near zero
     if !clean_zeros!(m, eig_dual)
@@ -1928,29 +1928,15 @@ function add_cut_sdp!(m, V, eig_dual)
 
             if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
                 # Using SDP SOC eig cuts
-                VVd = V .* (eig_j * eig_j')
+                # Over all diagonal entries i, exclude the largest one
+                (_, i) = findmax(abs.(eig_j))
 
-                # Over all diagonal entries i, calculate 3-dim RSOC cut most violated by current solution
-                viol_max = m.tol_prim_infeas
-                cut_expr_max = JuMP.AffExpr()
-                for i in 1:dim
-                    # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
-                    y = VVd[i,i]
-                    z = sum(VVd[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
-                    x = sum(VVd[k,i] for k in 1:dim if k!=i)
-                    @expression(m.model_mip, cut_expr, num_eig*(y + z - norm([2*x, (y - z)])))
-
-                    viol = -getvalue(cut_expr)
-                    if isnan(viol)
-                        cut_expr_max = cut_expr
-                        break
-                    elseif viol > viol_max
-                        viol_max = viol
-                        cut_expr_max = cut_expr
-                    end
-                end
-
-                if add_cut!(m, cut_expr_max, m.logs[:SDP])
+                # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
+                y = V[i,i]
+                z = sum(V[k,l]*eig_j[k]*eig_j[l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
+                x = sum(V[k,i]*eig_j[k] for k in 1:dim if k!=i)
+                @expression(m.model_mip, cut_expr, y + z - norm([2*x, (y - z)]))
+                if add_cut!(m, cut_expr, m.logs[:SDP])
                     is_viol = true
                 end
             else
@@ -1965,30 +1951,16 @@ function add_cut_sdp!(m, V, eig_dual)
         # Using full PSD cut
         if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
             # Using SDP SOC full cut
-            VVd = V .* (eig_dual * eig_dual')
+            # Over all diagonal entries i, exclude the largest one
+            mat_dual = eig_dual * eig_dual'
+            (_, i) = findmax(abs.(diag(mat_dual)))
 
-            # Over all diagonal entries i, calculate (num_eig+2)-dim RSOC cut most violated by current solution
-            viol_max = m.tol_prim_infeas
-            cut_expr_max = JuMP.AffExpr()
-            for i in 1:dim
-                # Use norm and transformation from RSOC to SOC
-                # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
-                y = VVd[i,i]
-                z = sum(VVd[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
-                @expression(m.model_mip, x[j in 1:num_eig], sum((V[k,i]*eig_dual[k, j]*eig_dual[i, j]) for k in 1:dim if k!=i))
-                @expression(m.model_mip, cut_expr, y + z - norm([(2.*x)..., (y - z)]))
-
-                viol = -getvalue(cut_expr)
-                if isnan(viol)
-                    cut_expr_max = cut_expr
-                    break
-                elseif viol > viol_max
-                    viol_max = viol
-                    cut_expr_max = cut_expr
-                end
-            end
-
-            if add_cut!(m, cut_expr_max, m.logs[:SDP])
+            # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
+            y = V[i,i]
+            z = sum(V[k,l]*mat_dual[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
+            @expression(m.model_mip, x[j in 1:num_eig], sum((V[k,i]*eig_dual[k,j]) for k in 1:dim if k!=i))
+            @expression(m.model_mip, cut_expr, y + z - norm([(2*x)..., (y - z)]))
+            if add_cut!(m, cut_expr, m.logs[:SDP])
                 is_viol = true
             end
         else
