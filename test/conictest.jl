@@ -40,7 +40,7 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
                             x^2 <= 2t,
                             t >= 5)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level), verbose=false)
 
         @test problem.status == :Unbounded
     end
@@ -658,7 +658,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
                             x^2 <= 4,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level), verbose=false)
 
         @test problem.status == :Unbounded
     end
@@ -675,7 +675,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
                             z[1,2] >= 2,
                             y >= z[2,2] + z[1,1])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level), verbose=false)
 
         @test problem.status == :Infeasible
     end
@@ -1093,7 +1093,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
                             x^2 <= 4,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true), verbose=false)
 
         @test problem.status == :Unbounded
     end
@@ -1110,7 +1110,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
                             z[1,2] >= 2,
                             y >= z[2,2] + z[1,1])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true), verbose=false)
 
         @test problem.status == :Infeasible
     end
@@ -1232,7 +1232,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
                             z[1,2] >= 2,
                             y >= z[2,2] + z[1,1])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_soc=true, sdp_eig=false))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_soc=true, sdp_eig=false), verbose=false)
 
         @test problem.status == :Infeasible
     end
@@ -1270,7 +1270,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
                             z[1,2] >= 2,
                             y >= z[2,2] + z[1,1])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true), verbose=false)
 
         @test problem.status == :Infeasible
     end
