@@ -1936,9 +1936,29 @@ function add_cut_sdp!(m, V, eig_dual)
             eig_j = eig_dual[:, j]
 
             if m.sdp_soc
-                # Using SDP SOC cuts
-                # Calculate SOC cut most violated by current solution
-                error("SOC cuts for SDP currently broken\n")
+                # Using SDP SOC eig cuts
+                # Over all diagonal entries, calculate 3-dim RSOC cut most violated by current solution
+                viol_max = m.tol_prim_infeas
+                cut_expr_max = JuMP.AffExpr()
+
+                for i in 1:dim
+                    # # Use norm and transformation from RSOC to SOC
+                    # # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
+                    # @expression(m.model_mip, z_expr, sum(V_dual[k,l]*V[k,l] for k in 1:dim, l in 1:dim if k!=i && l!=i))
+                    # @expression(m.model_mip, cut_expr, norm((k==i ? (V[i,i] - z_expr) : 2*V_dual[k,i]*V[k,i]) for k in 1:dim) - (V[i,i] + z_expr))
+
+
+
+                    viol = -getvalue(cut_expr)
+                    if viol > viol_max
+                        viol_max = viol
+                        cut_expr_max = cut_expr
+                    end
+                end
+
+                if (viol_max > m.tol_prim_infeas) && add_cut!(m, cut_expr_max, m.logs[:SDP])
+                    is_viol = true
+                end
             else
                 # Not using SDP SOC cuts
                 @expression(m.model_mip, cut_expr, num_eig*vecdot(eig_j*eig_j', V))
@@ -1951,27 +1971,11 @@ function add_cut_sdp!(m, V, eig_dual)
         # Using full PSD cut
         if m.sdp_soc
             # Using PSD SOC cut
-            # Calculate SOC cut most violated by current solution
+            # Over all diagonal entries, calculate (num_eig+2)-dim RSOC cut most violated by current solution
             error("SOC cuts for SDP currently broken\n")
-            # viol_max = 0.
-            # cut_expr_max = JuMP.AffExpr()
-            # for i in 1:dim
-            #     # Use norm and transformation from RSOC to SOC
-            #     # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
-            #     @expression(m.model_mip, z_expr, sum(V_dual[k,l]*V[k,l] for k in 1:dim, l in 1:dim if k!=i && l!=i))
-            #     @expression(m.model_mip, cut_expr, norm((k==i ? (V[i,i] - z_expr) : 2*V_dual[k,i]*V[k,i]) for k in 1:dim) - (V[i,i] + z_expr))
-            #     viol = getvalue(cut_expr)
-            #     if viol > viol_max
-            #         viol_max = viol
-            #         cut_expr_max = cut_expr
-            #     end
-            # end
-            #
-            # if viol_max > 0.
-            #     if add_cut!(m, cut_expr_max, m.logs[:SDP])
-            #         is_viol = true
-            #     end
-            # end
+
+
+
         else
             # Using PSD linear cut
             @expression(m.model_mip, cut_expr, vecdot(eig_dual*eig_dual', V))
