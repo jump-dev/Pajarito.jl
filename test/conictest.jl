@@ -1411,29 +1411,29 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(getvalue(np), [2.0,1.0,1.0,3.0], atol=TOL)
     end
 
-    @testset "Init SOC cuts: JuMP.jl A-opt design" begin
-        aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true))
-
-        n = 7
-        nmax = 3
-        V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
-        (q, p) = size(V)
-
-        np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-        @constraint(aOpt, sum(np) <= n)
-        u = @variable(aOpt, [i=1:q], lowerbound=0)
-        @objective(aOpt, Min, sum(u))
-        E = eye(q)
-        for i=1:q
-            @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
-        end
-
-        @test solve(aOpt, suppress_warnings=true) == :Optimal
-
-        @test isapprox(getobjectivevalue(aOpt), 0.177181, atol=TOL)
-        @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
-        @test isapprox(getvalue(np), [2.0,1.0,2.0,2.0], atol=TOL)
-    end
+    # @testset "Init SOC cuts: JuMP.jl A-opt design" begin
+    #     aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true))
+    #
+    #     n = 7
+    #     nmax = 3
+    #     V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
+    #     (q, p) = size(V)
+    #
+    #     np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
+    #     @constraint(aOpt, sum(np) <= n)
+    #     u = @variable(aOpt, [i=1:q], lowerbound=0)
+    #     @objective(aOpt, Min, sum(u))
+    #     E = eye(q)
+    #     for i=1:q
+    #         @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
+    #     end
+    #
+    #     @test solve(aOpt, suppress_warnings=true) == :Optimal
+    #
+    #     @test isapprox(getobjectivevalue(aOpt), 0.177181, atol=TOL)
+    #     @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
+    #     @test isapprox(getvalue(np), [2.0,1.0,2.0,2.0], atol=TOL)
+    # end
 
     @testset "SOC full cuts: JuMP.jl E-opt design" begin
         eOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true))
@@ -1456,29 +1456,29 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(getvalue(np), [2.0,1.0,1.0,3.0], atol=TOL)
     end
 
-    @testset "Init and eig SOC cuts: JuMP.jl A-opt design" begin
-        aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true))
-
-        n = 7
-        nmax = 3
-        V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
-        (q, p) = size(V)
-
-        np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-        @constraint(aOpt, sum(np) <= n)
-        u = @variable(aOpt, [i=1:q], lowerbound=0)
-        @objective(aOpt, Min, sum(u))
-        E = eye(q)
-        for i=1:q
-            @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
-        end
-
-        @test solve(aOpt, suppress_warnings=true) == :Optimal
-
-        @test isapprox(getobjectivevalue(aOpt), 0.177181, atol=TOL)
-        @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
-        @test isapprox(getvalue(np), [2.0,1.0,2.0,2.0], atol=TOL)
-    end
+    # @testset "Init and eig SOC cuts: JuMP.jl A-opt design" begin
+    #     aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true))
+    #
+    #     n = 7
+    #     nmax = 3
+    #     V = [-6.0 -3.0 8.0 3.0; -3.0 -9.0 -4.0 3.0; 3.0 1.0 5.0 5.0]
+    #     (q, p) = size(V)
+    #
+    #     np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
+    #     @constraint(aOpt, sum(np) <= n)
+    #     u = @variable(aOpt, [i=1:q], lowerbound=0)
+    #     @objective(aOpt, Min, sum(u))
+    #     E = eye(q)
+    #     for i=1:q
+    #         @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
+    #     end
+    #
+    #     @test solve(aOpt, suppress_warnings=true) == :Optimal
+    #
+    #     @test isapprox(getobjectivevalue(aOpt), 0.177181, atol=TOL)
+    #     @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
+    #     @test isapprox(getvalue(np), [2.0,1.0,2.0,2.0], atol=TOL)
+    # end
 
     @testset "Init and eig SOC cuts: JuMP.jl E-opt design" begin
         eOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true))
