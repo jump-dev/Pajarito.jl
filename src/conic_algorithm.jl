@@ -1742,7 +1742,7 @@ function add_subp_cuts!(m, dual_conic, v_idxs_soc, r_idx_exp, s_idx_exp, v_idxs_
     for n in 1:m.num_sdp
         # Dual is sum_{j: lambda_j > 0} lamda_j V_j V_j'
         v_dual = dual_conic[v_idxs_sdp[n]]
-        V_eig = eigfact!(make_smat!(m.smat_sdp[n], v_dual), m.tol_zero, Inf)
+        V_eig = eigfact!(make_smat!(m.smat_sdp[n], v_dual), sqrt(m.tol_zero), Inf)
         if add_cut_sdp!(m, m.V_sdp[n], V_eig[:vectors] * Diagonal(sqrt.(V_eig[:values])))
             is_viol_subp = true
         end
