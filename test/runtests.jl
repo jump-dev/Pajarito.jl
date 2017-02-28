@@ -43,9 +43,9 @@ solvers_nlp = []
 if ipt
     push!(solvers_nlp, Ipopt.IpoptSolver(print_level=0))
 end
-if kni
-    push!(solvers_nlp, KNITRO.KnitroSolver(objrange=1e16, outlev=0, maxit=100000))
-end
+# if kni
+#     push!(solvers_nlp, KNITRO.KnitroSolver(objrange=1e16, outlev=0, maxit=100000))
+# end
 
 solvers_soc = []
 solvers_expsoc = []
