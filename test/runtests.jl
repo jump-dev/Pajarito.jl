@@ -31,9 +31,13 @@ end
 if cpx
     push!(solvers_misocp, CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-7, CPX_PARAM_EPGAP=1e-8))
 end
-if glp && eco
-    push!(solvers_misocp, PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_ERR, tol_int=1e-8, tol_bnd=1e-7, tol_obj=1e-8), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-8))
+if cpx && mos
+    push!(solvers_misocp, PajaritoSolver(mip_solver=CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-9, CPX_PARAM_EPRHS=1e-9, CPX_PARAM_EPGAP=1e-9), cont_solver=Mosek.MosekSolver(LOG=0), log_level=0, rel_gap=1e-8))
 end
+if glp && eco
+    push!(solvers_misocp, PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_ERR, tol_int=1e-9, tol_bnd=1e-9, tol_obj=1e-9), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-8))
+end
+
 
 solvers_nlp = []
 if ipt
