@@ -1279,7 +1279,7 @@ function solve_iterative!(m)
             end
         else
             warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
-            m.status = :CutsFailure
+            m.status = :MIPFailure
             break
         end
 
@@ -1465,7 +1465,7 @@ function solve_mip_driven!(m)
         return
     else
         warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
-        m.status = :CutsFailure
+        m.status = :MIPFailure
         return
     end
 end
