@@ -139,19 +139,19 @@ flush(STDOUT)
 
 # Conic models tests in conictest.jl with conic solver and MISOCP solver
 @testset "Exp+SOC conic MISOCP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_expsoc, mip in solvers_misocp, msd in [false, true]
-    if (msd == false) || applicable(MathProgBase.setlazycallback!, (MathProgBase.ConicModel(mip), _ -> _))
+    if (msd == false) || applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip), _ -> _)
         runexpsocconicmisocp(msd, mip, con, ll)
     end
 end
 flush(STDOUT)
 @testset "SDP+SOC conic MISOCP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpsoc, mip in solvers_misocp, msd in [false, true]
-    if (msd == false) || applicable(MathProgBase.setlazycallback!, (MathProgBase.ConicModel(mip), _ -> _))
+    if (msd == false) || applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip), _ -> _)
         runsdpsocconicmisocp(msd, mip, con, ll)
     end
 end
 flush(STDOUT)
 @testset "SDP+Exp conic MISOCP - $(msd ? "MSD" : "Iter"), $(split(string(typeof(mip)), '.')[1]), $(split(string(typeof(con)), '.')[1])" for con in solvers_sdpexp, mip in solvers_misocp, msd in [false, true]
-    if (msd == false) || applicable(MathProgBase.setlazycallback!, (MathProgBase.ConicModel(mip), _ -> _))
+    if (msd == false) || applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip), _ -> _)
         runsdpexpconicmisocp(msd, mip, con, ll)
     end
 end
