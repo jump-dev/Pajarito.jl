@@ -5,7 +5,7 @@
 
 function runnlp(mip_solver_drives, mip_solver, nlp_solver, log)
     @testset "Sparse matrix bug test" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=3))
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -68,7 +68,7 @@ function runnlp(mip_solver_drives, mip_solver, nlp_solver, log)
     end
 
     @testset "Solver test" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log))
+        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=3))
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
