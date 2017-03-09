@@ -584,7 +584,7 @@ function verify_data(m, c, A, b, cone_con, cone_var)
         @printf "%22s | %8d | %8d | %8d\n" "Primal exponential" num_exp 3 3
     end
     if num_sdp > 0
-        @printf "%22s | %8d | %8d | %8d\n" "Positive semidef." num_sdp min_sdp max_sdp
+        @printf "%22s | %8d | %8d | %8d\n" "Pos. semidef. (svec)" num_sdp min_sdp max_sdp
     end
     flush(STDOUT)
 end
