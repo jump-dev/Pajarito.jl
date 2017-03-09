@@ -132,7 +132,7 @@ end
 MathProgBase.hesslag_structure(d::InfeasibleNLPEvaluator) = MathProgBase.hesslag_structure(d.d)
 MathProgBase.initialize(d::InfeasibleNLPEvaluator, requested_features::Vector{Symbol}) =
 MathProgBase.initialize(d.d, requested_features)
-MathProgBase.features_available(d::InfeasibleNLPEvaluator) = [:Grad,:Jac,:Hess]
+MathProgBase.features_available(d::InfeasibleNLPEvaluator) = [:Grad,:Hess]
 
 # function MathProgBase.eval_jac_prod(d::InfeasibleNLPEvaluator, y, x, w)
 #     jac_I, jac_J = MathProgBase.jac_structure(d)
