@@ -1030,7 +1030,7 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
             np <= nmax
         )
 
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3))
+        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=0))
 
         @test dOpt.status == :Optimal
         @test isapprox(dOpt.optval, 9.062207, atol=TOL)
@@ -1038,8 +1038,8 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(np.value, [2.0,2.0,2.0,1.0], atol=TOL)
     end
 
-    @testset "3s time limit" begin
-        (q, p, n, nmax) = (10, 10, 100, 15)
+    @testset "5s time limit" begin
+        (q, p, n, nmax) = (5, 10, 50, 15)
 
         srand(100)
         V = Array{Float64}(q, p)
@@ -1062,13 +1062,13 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
             np <= nmax
         )
 
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=3))
+        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=5))
 
         @test dOpt.status == :UserLimit
     end
 
-    @testset "10s time limit" begin
-        (q, p, n, nmax) = (10, 10, 100, 15)
+    @testset "15s time limit" begin
+    (q, p, n, nmax) = (5, 10, 50, 15)
 
         srand(100)
         V = Array{Float64}(q, p)
@@ -1091,7 +1091,7 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
             np <= nmax
         )
 
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=10))
+        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=15))
 
         @test dOpt.status == :UserLimit
     end
