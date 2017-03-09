@@ -46,9 +46,23 @@ The algorithm implemented by Pajarito itself is relatively simple, and most of t
 
 The mixed-integer solver is specified by using the `mip_solver` option to `PajaritoSolver`, e.g., `PajaritoSolver(mip_solver=CplexSolver())`. You must first load the Julia package which provides the mixed-integer solver, e.g., with `using CPLEX`. This solver is typically a mixed-integer linear solver, but if a conic problem has both second-order cones and other nonlinear cones, or if it has PSD cones, then the MIP solver can be an MISOCP solver and Pajarito can put second-order cones in the outer-approximation model.
 
-The convex subproblem solver is specified by using the `cont_solver` option, e.g., `PajaritoSolver(cont_solver=IpoptSolver())`. When given input in derivative-based nonlinear form, Pajarito requires a derivative-based nonlinear solver, e.g., [Ipopt](https://projects.coin-or.org/Ipopt) or [KNITRO](http://www.ziena.com/knitro.htm). When given input in conic form, the convex subproblem solver can be *either* a conic solver like [ECOS](https://github.com/JuliaOpt/ECOS.jl) *or* a derivative-based solver like Ipopt. If a derivative-based solver is provided in this case, then Pajarito will switch to the derivative-based algorithm by using the [ConicNonlinearBridge](https://github.com/mlubin/ConicNonlinearBridge.jl) package. Note that using derivative-based solvers for conic problems can cause numerical instability because conic problems are not always smooth.
+The convex subproblem solver is specified by using the `cont_solver` option, e.g., `PajaritoSolver(cont_solver=IpoptSolver())`. When given input in derivative-based nonlinear form, Pajarito requires a derivative-based nonlinear solver, e.g., [Ipopt](https://projects.coin-or.org/Ipopt) or [KNITRO](http://www.ziena.com/knitro.htm). When given input in conic form, the convex subproblem solver can be *either* a conic solver which supports the cones used *or* a derivative-based solver like Ipopt. If a derivative-based solver is provided in this case, then Pajarito will switch to the derivative-based algorithm by using the [ConicNonlinearBridge](https://github.com/mlubin/ConicNonlinearBridge.jl) (which does not support PSD cones). Note that using derivative-based solvers for conic problems can cause numerical instability because conic problems are not always smooth.
 
 All solvers can have their parameters specified through their corresponding Julia interfaces. For example, you may wish to turn off the output of these solvers, e.g., by using `IpoptSolver(print_level=0)` for the Ipopt solver.
+
+The possible cones are listed in the [MathProgBase](http://mathprogbasejl.readthedocs.io/en/latest/conic.html) documentation. Below we list a number of common conic solvers by which cones they support and if they are available under an open-source license.
+
+|                    | Second-order cone | PSD cone | Exponential cone | Open source |
+|--------------------|-------------------|----------|------------------|-------------|
+| [CSDP][csdp-url]   |                   | X        |                  | X           |
+| [ECOS][ecos-url]   | X                 |          | X                | X           |
+| [Mosek][mosek-url] | X                 | X        |                  |             |
+| [SCS][scs-url]     | X                 | X        | X                | X           |
+
+[csdp-url]: https://github.com/JuliaOpt/CSDP.jl
+[ecos-url]: https://github.com/JuliaOpt/ECOS.jl
+[mosek-url]: https://github.com/JuliaOpt/Mosek.jl
+[scs-url]: https://github.com/JuliaOpt/SCS.jl
 
 ## Pajarito solver options
 
