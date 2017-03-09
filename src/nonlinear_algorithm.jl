@@ -133,29 +133,30 @@ MathProgBase.hesslag_structure(d::InfeasibleNLPEvaluator) = MathProgBase.hesslag
 MathProgBase.initialize(d::InfeasibleNLPEvaluator, requested_features::Vector{Symbol}) =
 MathProgBase.initialize(d.d, requested_features)
 MathProgBase.features_available(d::InfeasibleNLPEvaluator) = [:Grad,:Jac,:Hess]
-function MathProgBase.eval_jac_prod(d::InfeasibleNLPEvaluator, y, x, w)
-    jac_I, jac_J = MathProgBase.jac_structure(d)
-    jac_V = zeros(length(jac_I))
-    MathProgBase.eval_jac_g(d, jac_V, x)
-    varidx_new = [zeros(0) for i in 1:m.numConstr]
-    coef_new = [zeros(0) for i in 1:m.numConstr]
-    for k in 1:length(jac_I)
-        row = jac_I[k]
-        push!(varidx_new[row], jac_J[k]); push!(coef_new[row], jac_V[k])
-    end
 
-    for i = 1:d.numConstr
-        retval = 0.0
-        for j in 1:length(varidx_new[i])
-            retval += coef_new[i][j] * w[varidx_new[i][j]]
-        end
-        y[i] = retval
-    end
-end
-
-#DONT NEED IT FOR NOW
-#eval_jac_prod_t(d::AbstractNLPEvaluator, y, x, w)
-#eval_hesslag_prod(d::AbstractNLPEvaluator, h, x, v, σ, μ)
+# function MathProgBase.eval_jac_prod(d::InfeasibleNLPEvaluator, y, x, w)
+#     jac_I, jac_J = MathProgBase.jac_structure(d)
+#     jac_V = zeros(length(jac_I))
+#     MathProgBase.eval_jac_g(d, jac_V, x)
+#     varidx_new = [zeros(0) for i in 1:m.numConstr]
+#     coef_new = [zeros(0) for i in 1:m.numConstr]
+#     for k in 1:length(jac_I)
+#         row = jac_I[k]
+#         push!(varidx_new[row], jac_J[k]); push!(coef_new[row], jac_V[k])
+#     end
+#
+#     for i = 1:d.numConstr
+#         retval = 0.0
+#         for j in 1:length(varidx_new[i])
+#             retval += coef_new[i][j] * w[varidx_new[i][j]]
+#         end
+#         y[i] = retval
+#     end
+# end
+#
+# DONT NEED IT FOR NOW
+# eval_jac_prod_t(d::AbstractNLPEvaluator, y, x, w)
+# eval_hesslag_prod(d::AbstractNLPEvaluator, h, x, v, σ, μ)
 
 MathProgBase.isobjlinear(d::InfeasibleNLPEvaluator) = true
 MathProgBase.isobjquadratic(d::InfeasibleNLPEvaluator) = true #MathProgBase.isobjquadratic(d.d)
