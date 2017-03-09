@@ -195,8 +195,8 @@ Specify data dimensions
 # Uncomment only the line with the desired data dimensions
 (q, p, n, nmax) = (
     # 100, 250, 500, 5   # Large
-    25, 75, 125, 5     # Medium
-    # 5, 15, 25, 5       # Small
+    # 25, 75, 125, 5     # Medium
+    5, 15, 25, 5       # Small
 )
 
 # Generate matrix of experimental vectors
