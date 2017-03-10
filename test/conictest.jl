@@ -1039,7 +1039,7 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
     end
 
     @testset "3s time limit" begin
-        (q, p, n, nmax) = (7, 10, 50, 15)
+        (q, p, n, nmax) = (7, 30, 50, 30)
 
         srand(100)
         V = Array{Float64}(q, p)
@@ -1068,7 +1068,7 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
     end
 
     @testset "10s time limit" begin
-    (q, p, n, nmax) = (7, 10, 50, 15)
+    (q, p, n, nmax) = (7, 30, 50, 30)
 
         srand(100)
         V = Array{Float64}(q, p)
@@ -1709,8 +1709,8 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(np.value, [2.0,2.0,2.0,1.0], atol=TOL)
     end
 
-    @testset "3s time limit" begin
-        (q, p, n, nmax) = (7, 10, 50, 15)
+    @testset "6s time limit" begin
+        (q, p, n, nmax) = (7, 30, 50, 30)
 
         srand(100)
         V = Array{Float64}(q, p)
@@ -1733,13 +1733,13 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
             np <= nmax
         )
 
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=3., init_sdp_soc=true, sdp_soc=true))
+        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=6., init_sdp_soc=true, sdp_soc=true))
 
         @test dOpt.status == :UserLimit
     end
 
-    @testset "10s time limit" begin
-    (q, p, n, nmax) = (7, 10, 50, 15)
+    @testset "12s time limit" begin
+    (q, p, n, nmax) = (7, 30, 50, 30)
 
         srand(100)
         V = Array{Float64}(q, p)
@@ -1762,7 +1762,7 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
             np <= nmax
         )
 
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=10., init_sdp_soc=true, sdp_soc=true))
+        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=12., init_sdp_soc=true, sdp_soc=true))
 
         @test dOpt.status == :UserLimit
     end
