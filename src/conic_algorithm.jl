@@ -369,7 +369,12 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
     end
 
-    if (m.status != :Infeasible) && (m.status != :Unbounded) && (m.prim_cuts_assist || (m.status != :CutsFailure))
+    # Finish if exceeded timeout option
+    if (time() - m.logs[:total]) > m.timeout
+        m.status = :UserLimit
+    end
+
+    if (m.status != :UserLimit) && (m.status != :Infeasible) && (m.status != :Unbounded) && (m.prim_cuts_assist || (m.status != :CutsFailure))
         tic()
         if m.log_level > 2
             @printf "\nCreating conic subproblem model..."
@@ -1230,7 +1235,7 @@ function solve_iterative!(m)
         else
             # Solve is a full solve: use full MIP solver with remaining time limit
             if isfinite(m.timeout) && applicable(MathProgBase.setparameters!, m.mip_solver)
-                MathProgBase.setparameters!(m.mip_solver, TimeLimit=max(0., m.timeout - (time() - m.logs[:total])))
+                MathProgBase.setparameters!(m.mip_solver, TimeLimit=max(1., m.timeout - (time() - m.logs[:total])))
             end
             setsolver(m.model_mip, m.mip_solver)
             count_subopt = 0
@@ -1345,7 +1350,7 @@ function solve_iterative!(m)
         print_gap(m)
 
         # Finish if exceeded timeout option
-        if (time() - m.logs[:oa_alg]) > m.timeout
+        if (time() - m.logs[:total]) > m.timeout
             m.status = :UserLimit
             break
         end
@@ -2149,11 +2154,11 @@ function print_gap(m)
         @printf "\n%-4s | %-14s | %-14s | %-11s | %-11s\n" "Iter" "Best obj" "OA obj" "Rel gap" "Time (s)"
     end
     if m.gap_rel_opt < 1000
-        @printf "%4d | %+14.6e | %+14.6e | %11.3e | %11.3e\n" m.logs[:n_mip] m.best_obj m.mip_obj m.gap_rel_opt (time() - m.logs[:oa_alg])
+        @printf "%4d | %+14.6e | %+14.6e | %11.3e | %11.3e\n" m.logs[:n_mip] m.best_obj m.mip_obj m.gap_rel_opt (time() - m.logs[:total])
     elseif isnan(m.gap_rel_opt)
-        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" m.logs[:n_mip] m.best_obj m.mip_obj "Inf" (time() - m.logs[:oa_alg])
+        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" m.logs[:n_mip] m.best_obj m.mip_obj "Inf" (time() - m.logs[:total])
     else
-        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" m.logs[:n_mip] m.best_obj m.mip_obj ">1000" (time() - m.logs[:oa_alg])
+        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" m.logs[:n_mip] m.best_obj m.mip_obj ">1000" (time() - m.logs[:total])
     end
     flush(STDOUT)
 end
