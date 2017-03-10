@@ -1708,4 +1708,62 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(Convex.evaluate(Convex.logdet(V * diagm(np./n) * V')), dOpt.optval, atol=TOL)
         @test isapprox(np.value, [2.0,2.0,2.0,1.0], atol=TOL)
     end
+
+    @testset "3s time limit" begin
+        (q, p, n, nmax) = (7, 10, 50, 15)
+
+        srand(100)
+        V = Array{Float64}(q, p)
+        for i in 1:q, j in 1:p
+            v = randn()
+            if abs(v) < 1e-2
+                v = 0.
+            end
+            V[i, j] = v
+        end
+
+        np = Convex.Variable(p, :Int)
+        Q = Convex.Variable(q, q)
+
+        dOpt = Convex.maximize(
+            Convex.logdet(Q),
+            Q == V * diagm(np./n) * V',
+            sum(np) <= n,
+            np >= 0,
+            np <= nmax
+        )
+
+        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=3., init_sdp_soc=true, sdp_soc=true))
+
+        @test dOpt.status == :UserLimit
+    end
+
+    @testset "10s time limit" begin
+    (q, p, n, nmax) = (7, 10, 50, 15)
+
+        srand(100)
+        V = Array{Float64}(q, p)
+        for i in 1:q, j in 1:p
+            v = randn()
+            if abs(v) < 1e-2
+                v = 0.
+            end
+            V[i, j] = v
+        end
+
+        np = Convex.Variable(p, :Int)
+        Q = Convex.Variable(q, q)
+
+        dOpt = Convex.maximize(
+            Convex.logdet(Q),
+            Q == V * diagm(np./n) * V',
+            sum(np) <= n,
+            np >= 0,
+            np <= nmax
+        )
+
+        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=10., init_sdp_soc=true, sdp_soc=true))
+
+        @test dOpt.status == :UserLimit
+    end
 end
