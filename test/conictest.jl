@@ -387,8 +387,11 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         m = MathProgBase.ConicModel(solver)
         MathProgBase.loadproblem!(m, c, A, b, con_cones, var_cones)
         MathProgBase.setvartype!(m, vartypes)
+        tic()
         MathProgBase.optimize!(m)
         @test MathProgBase.status(m) == :UserLimit
+        t = toq()
+        @test t < 60
     end
 end
 
