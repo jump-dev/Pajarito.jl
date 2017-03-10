@@ -378,6 +378,21 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test solve(m, suppress_warnings=true) == :Infeasible
         # @test internalmodel(m).logs[:n_inf] == 1
     end
+
+    @testset "Timeout in first MIP solve" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, timeout=15.)
+        dat = ConicBenchmarkUtilities.readcbfdata("cbf/classical_200_1.cbf.gz")
+
+        c, A, b, con_cones, var_cones, vartypes, sense, objoffset = ConicBenchmarkUtilities.cbftompb(dat)
+        m = MathProgBase.ConicModel(solver)
+        MathProgBase.loadproblem!(m, c, A, b, con_cones, var_cones)
+        MathProgBase.setvartype!(m, vartypes)
+        tic()
+        MathProgBase.optimize!(m)
+        @test MathProgBase.status(m) == :UserLimit
+        t = toq()
+        @test t < 60
+    end
 end
 
 # Exp+SOC problems for NLP and conic algorithms
@@ -1038,63 +1053,6 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(np.value, [2.0,2.0,2.0,1.0], atol=TOL)
     end
 
-    @testset "3s time limit" begin
-        (q, p, n, nmax) = (7, 30, 50, 30)
-
-        srand(100)
-        V = Array{Float64}(q, p)
-        for i in 1:q, j in 1:p
-            v = randn()
-            if abs(v) < 1e-2
-                v = 0.
-            end
-            V[i, j] = v
-        end
-
-        np = Convex.Variable(p, :Int)
-        Q = Convex.Variable(q, q)
-
-        dOpt = Convex.maximize(
-            Convex.logdet(Q),
-            Q == V * diagm(np./n) * V',
-            sum(np) <= n,
-            np >= 0,
-            np <= nmax
-        )
-
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=3.))
-
-        @test dOpt.status == :UserLimit
-    end
-
-    @testset "10s time limit" begin
-    (q, p, n, nmax) = (7, 30, 50, 30)
-
-        srand(100)
-        V = Array{Float64}(q, p)
-        for i in 1:q, j in 1:p
-            v = randn()
-            if abs(v) < 1e-2
-                v = 0.
-            end
-            V[i, j] = v
-        end
-
-        np = Convex.Variable(p, :Int)
-        Q = Convex.Variable(q, q)
-
-        dOpt = Convex.maximize(
-            Convex.logdet(Q),
-            Q == V * diagm(np./n) * V',
-            sum(np) <= n,
-            np >= 0,
-            np <= nmax
-        )
-
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=10.))
-
-        @test dOpt.status == :UserLimit
-    end
 end
 
 # Exp+SOC problems for conic algorithm with MISOCP
@@ -1709,61 +1667,5 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(np.value, [2.0,2.0,2.0,1.0], atol=TOL)
     end
 
-    @testset "6s time limit" begin
-        (q, p, n, nmax) = (7, 30, 50, 30)
 
-        srand(100)
-        V = Array{Float64}(q, p)
-        for i in 1:q, j in 1:p
-            v = randn()
-            if abs(v) < 1e-2
-                v = 0.
-            end
-            V[i, j] = v
-        end
-
-        np = Convex.Variable(p, :Int)
-        Q = Convex.Variable(q, q)
-
-        dOpt = Convex.maximize(
-            Convex.logdet(Q),
-            Q == V * diagm(np./n) * V',
-            sum(np) <= n,
-            np >= 0,
-            np <= nmax
-        )
-
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=6., init_sdp_soc=true, sdp_soc=true))
-
-        @test dOpt.status == :UserLimit
-    end
-
-    @testset "12s time limit" begin
-    (q, p, n, nmax) = (7, 30, 50, 30)
-
-        srand(100)
-        V = Array{Float64}(q, p)
-        for i in 1:q, j in 1:p
-            v = randn()
-            if abs(v) < 1e-2
-                v = 0.
-            end
-            V[i, j] = v
-        end
-
-        np = Convex.Variable(p, :Int)
-        Q = Convex.Variable(q, q)
-
-        dOpt = Convex.maximize(
-            Convex.logdet(Q),
-            Q == V * diagm(np./n) * V',
-            sum(np) <= n,
-            np >= 0,
-            np <= nmax
-        )
-
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=12., init_sdp_soc=true, sdp_soc=true))
-
-        @test dOpt.status == :UserLimit
-    end
 end
