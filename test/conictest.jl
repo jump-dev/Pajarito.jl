@@ -1062,7 +1062,7 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
             np <= nmax
         )
 
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=3))
+        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=3.))
 
         @test dOpt.status == :UserLimit
     end
@@ -1091,7 +1091,7 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
             np <= nmax
         )
 
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=10))
+        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, timeout=10.))
 
         @test dOpt.status == :UserLimit
     end
