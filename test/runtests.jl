@@ -5,6 +5,7 @@
 
 using JuMP
 import Convex
+import ConicBenchmarkUtilities
 using Pajarito
 using Base.Test
 
