@@ -1815,17 +1815,35 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
     return (is_infeas, is_viol_prim)
 end
 
-# Remove near-zeros from a vector, return false if all values are near-zeros
+# Remove near-zeros from data, return false if all values are near-zeros, warn if bad conditioning on vector
 function clean_zeros!{N}(m, data::Array{Float64,N})
-    keep = false
+    min_nz = Inf
+    max_nz = 0
+
     for j in 1:length(data)
-        if abs(data[j]) < m.tol_zero
+        absj = abs(data[j])
+
+        if absj < m.tol_zero
             data[j] = 0.
-        else
-            keep = true
+            continue
+        end
+
+        if absj < min_nz
+            min_nz = absj
+        end
+        if absj > max_nz
+            max_nz = absj
         end
     end
-    return keep
+
+    if max_nz > m.tol_zero
+        if max_nz/min_nz > 1e7
+            warn("Numerically unstable dual vector encountered\n")
+        end
+        return true
+    else
+        return false
+    end
 end
 
 # Add K* cuts for a SOC, where (t,v) is the vector of slacks, return true if a cut is violated by current solution
