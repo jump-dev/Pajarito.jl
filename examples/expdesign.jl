@@ -220,9 +220,9 @@ while true
         error("Could not generate random V matrix with rank equal to q in 100 tries\n")
     end
 end
+# @show tries
+# @show V
 
-@show tries
-@show V
 
 #=========================================================
 Solve Convex.jl models
