@@ -1897,7 +1897,7 @@ function add_cut_soc!(m, t, v, d, a, v_dual)
             # Using SOC absvalue lifting, so add many-sided cut
             # norm(v')*t - dot(|v'|,a) >= 0
             # Scale by 2
-            @expression(m.model_mip, cut_expr, 2*(t_dual*t - vecdot(abs(v_dual), a)))
+            @expression(m.model_mip, cut_expr, 2*(t_dual*t - vecdot(abs.(v_dual), a)))
         else
             # Not using SOC absvalue lifting, so add a single one-sided cut
             # norm(v')*t + dot(v',v) >= 0
@@ -2233,7 +2233,7 @@ function print_finish(m::PajaritoConicModel)
         if cone == :Free
             nothing
         elseif cone == :Zero
-            viol_lin = max(viol_lin, maxabs(vals[idx]))
+            viol_lin = max(viol_lin, maximum(abs, vals[idx]))
         elseif cone == :NonNeg
             viol_lin = max(viol_lin, -minimum(vals[idx]))
         elseif cone == :NonPos
@@ -2274,7 +2274,7 @@ function print_finish(m::PajaritoConicModel)
         if cone == :Free
             nothing
         elseif cone == :Zero
-            viol_lin = max(viol_lin, maxabs(vals[idx]))
+            viol_lin = max(viol_lin, maximum(abs, vals[idx]))
         elseif cone == :NonNeg
             viol_lin = max(viol_lin, -minimum(vals[idx]))
         elseif cone == :NonPos

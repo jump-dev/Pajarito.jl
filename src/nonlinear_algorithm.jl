@@ -442,7 +442,7 @@ end
 
 function compareIntegerSolutions(m::PajaritoNonlinearModel, sol1, sol2)
     int_ind = filter(i->m.vartype[i] == :Int || m.vartype[i] == :Bin, 1:m.numVar)
-    return round(sol1[int_ind]) == round(sol2[int_ind])
+    return round.(sol1[int_ind]) == round.(sol2[int_ind])
 end
 
 function MathProgBase.optimize!(m::PajaritoNonlinearModel)
