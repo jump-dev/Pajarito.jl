@@ -397,7 +397,6 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
 
         # Initialize and begin iterative or MIP-solver-driven algorithm
-        m.logs[:oa_alg] = time()
         m.oa_started = true
         m.new_incumb = false
         m.cache_dual = Dict{Vector{Float64},Vector{Float64}}()
@@ -413,7 +412,6 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             end
             solve_iterative!(m)
         end
-        m.logs[:oa_alg] = time() - m.logs[:oa_alg]
 
         if m.best_obj < Inf
             # Have a best feasible solution, update final solution on original variables
@@ -576,8 +574,6 @@ function verify_data(m, c, A, b, cone_con, cone_var)
     if m.log_level <= 1
         return
     end
-
-
 
     @printf "\nCone dimensions summary:"
     @printf "\n%-16s | %-9s | %-9s | %-9s\n" "Cone" "Count" "Min dim." "Max dim."
@@ -2046,7 +2042,6 @@ function create_logs!(m)
     logs[:data_conic] = 0.  # Generating conic data
     logs[:data_mip] = 0.    # Generating MIP data
     logs[:relax_solve] = 0. # Solving initial conic relaxation model
-    logs[:oa_alg] = 0.      # Performing outer approximation algorithm
     logs[:mip_solve] = 0.   # Solving the MIP model
     logs[:conic_solve] = 0. # Solving conic subproblem model
 
@@ -2067,7 +2062,7 @@ function create_logs!(m)
     logs[:n_add] = 0        # Number of times add new solution to MIP solver
 
     # Cuts counters
-    for cone in [:SOC, :ExpPrimal, :SDP]
+    for cone in (:SOC, :ExpPrimal, :SDP)
         logs[cone] = Dict{Symbol,Any}()
         logs[cone][:n_relax] = 0
         logs[cone][:n_viol_total] = 0
@@ -2084,14 +2079,12 @@ function print_gap(m)
     end
 
     if (m.logs[:n_iter] == 1) || (m.log_level > 2)
-        @printf "\n%-4s | %-14s | %-14s | %-11s | %-11s\n" "Iter" "Best obj" "OA obj" "Rel gap" "Time (s)"
+        @printf "\n%-4s | %-14s | %-14s | %-11s | %-11s\n" "Iter" "Best feasible" "Best bound" "Rel gap" "Time (s)"
     end
     if m.gap_rel_opt < 1000
         @printf "%4d | %+14.6e | %+14.6e | %11.3e | %11.3e\n" m.logs[:n_iter] m.best_obj m.mip_obj m.gap_rel_opt (time() - m.logs[:total])
-    elseif isnan(m.gap_rel_opt)
-        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" m.logs[:n_iter] m.best_obj m.mip_obj "Inf" (time() - m.logs[:total])
     else
-        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" m.logs[:n_iter] m.best_obj m.mip_obj ">1000" (time() - m.logs[:total])
+        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" m.logs[:n_iter] m.best_obj m.mip_obj (isnan(m.gap_rel_opt) ? "Inf" : ">1000") (time() - m.logs[:total])
     end
     flush(STDOUT)
 end
@@ -2106,27 +2099,32 @@ function print_finish(m::PajaritoConicModel)
         else
             @printf "\nIterative algorithm summary:\n"
         end
-        @printf " - Total time (s)       = %14.2e\n" m.logs[:total]
         @printf " - Status               = %14s\n" m.status
-        @printf " - Best feasible obj.   = %+14.6e\n" m.best_obj
-        @printf " - OA obj. bound        = %+14.6e\n" m.mip_obj
+        @printf " - Best feasible        = %+14.6e\n" m.best_obj
+        @printf " - Best bound           = %+14.6e\n" m.mip_obj
         @printf " - Relative opt. gap    = %14.3e\n" m.gap_rel_opt
+        @printf " - Total time (s)       = %14.2e\n" m.logs[:total]
+    end
+
+    if m.gap_rel_opt < -10*m.rel_gap
+        warn("Best feasible value is smaller than best bound: this may indicate the final solution was constructed from a conic solver solution with significant infeasibilities\n")
+        m.status = :Error
     end
 
     if m.log_level >= 3
         @printf "\nTimers (s):\n"
-        @printf " - Setup                = %10.2e\n" (m.logs[:total] - m.logs[:oa_alg])
+        @printf " - Setup                = %10.2e\n" (m.logs[:data_trans] + m.logs[:data_conic] + m.logs[:data_mip])
         @printf " -- Transform data      = %10.2e\n" m.logs[:data_trans]
         @printf " -- Create conic data   = %10.2e\n" m.logs[:data_conic]
         @printf " -- Create MIP data     = %10.2e\n" m.logs[:data_mip]
-        @printf " -- Load/solve relax.   = %10.2e\n" m.logs[:relax_solve]
+        @printf " - Algorithm            = %10.2e\n" (m.logs[:total] - (m.logs[:data_trans] + m.logs[:data_conic] + m.logs[:data_mip]))
+        @printf " -- Solve relaxation    = %10.2e\n" m.logs[:relax_solve]
+        @printf " -- Solve subproblems   = %10.2e\n" m.logs[:conic_solve]
         if m.mip_solver_drives
-            @printf " - MSD algorithm        = %10.2e\n" m.logs[:oa_alg]
+            @printf " -- MIP solver driving  = %10.2e\n" m.logs[:mip_solve]
         else
-            @printf " - Iterative algorithm  = %10.2e\n" m.logs[:oa_alg]
             @printf " -- Solve MIP models    = %10.2e\n" m.logs[:mip_solve]
         end
-        @printf " -- Solve conic models  = %10.2e\n" m.logs[:conic_solve]
 
         @printf "\nCounters:\n"
         if m.mip_solver_drives
@@ -2135,7 +2133,7 @@ function print_finish(m::PajaritoConicModel)
             @printf " - Iterations           = %5d\n" m.logs[:n_iter]
         end
         @printf " -- Integer repeats     = %5d\n" m.logs[:n_repeat]
-        @printf " -- Conic statuses      = %5d\n" m.logs[:n_conic]
+        @printf " -- Conic subproblems   = %5d\n" m.logs[:n_conic]
         @printf " --- Infeasible         = %5d\n" m.logs[:n_inf]
         @printf " --- Optimal            = %5d\n" m.logs[:n_opt]
         @printf " --- Suboptimal         = %5d\n" m.logs[:n_sub]
@@ -2152,38 +2150,29 @@ function print_finish(m::PajaritoConicModel)
     end
 
     if m.log_level >= 2
-        @printf "\nK* outer-approximation cuts:"
-        @printf "\n%-16s | %-9s | %-9s | %-9s\n" "Cone" "Relax." "Viol." "Nonviol."
-        if m.num_soc > 0
-            @printf "%16s | %9d | %9d | %9d\n" "Second order" m.logs[:SOC][:n_relax] m.logs[:SOC][:n_viol_total] m.logs[:SOC][:n_nonviol_total]
-        end
-        if m.num_exp > 0
-            @printf "%16s | %9d | %9d | %9d\n" "Primal expon." m.logs[:ExpPrimal][:n_relax] m.logs[:ExpPrimal][:n_viol_total] m.logs[:ExpPrimal][:n_nonviol_total]
-        end
-        if m.num_sdp > 0
-            @printf "%16s | %9d | %9d | %9d\n" "Pos. semidef." m.logs[:SDP][:n_relax] m.logs[:SDP][:n_viol_total] m.logs[:SDP][:n_nonviol_total]
+        @printf "\nOuter-approximation cuts added:"
+        @printf "\n%-16s | %-9s | %-9s | %-9s\n" "Cone" "Relax." "Violated" "Nonviol."
+        for (cone, name) in zip((:SOC, :ExpPrimal, :SDP), ("Second order", "Primal expon.", "Pos. semidef."))
+            log = m.logs[cone]
+            if (log[:n_relax] + log[:n_viol_total] + log[:n_nonviol_total]) > 0
+                @printf "%16s | %9d | %9d | %9d\n" name log[:n_relax] log[:n_viol_total] log[:n_nonviol_total]
+            end
         end
 
         if isfinite(m.best_obj) && !any(isnan, m.final_soln)
-            (var_lin, var_soc, var_rot, var_exp, var_sdp) = calc_infeas(m.cone_var_orig, m.final_soln)
-            (con_lin, con_soc, con_rot, con_exp, con_sdp) = calc_infeas(m.cone_con_orig, m.b_orig-m.A_orig*m.final_soln)
+            var_inf = calc_infeas(m.cone_var_orig, m.final_soln)
+            con_inf = calc_infeas(m.cone_con_orig, m.b_orig-m.A_orig*m.final_soln)
 
-            @printf "\nWorst primal absolute infeasibilities:"
+            @printf "\nWorst absolute infeasibilities of solution:"
             @printf "\n%-16s | %-9s | %-10s\n" "Cone" "Variable" "Constraint"
-            if isfinite(var_lin) || isfinite(con_lin)
-                @printf "%16s | %9.2e | %9.2e\n" "Linear" var_lin con_lin
-            end
-            if isfinite(var_soc) || isfinite(con_soc)
-                @printf "%16s | %9.2e | %9.2e\n" "Second order" var_soc con_soc
-            end
-            if isfinite(var_rot) || isfinite(con_rot)
-                @printf "%16s | %9.2e | %9.2e\n" "Rotated S.O." var_rot con_rot
-            end
-            if isfinite(var_exp) || isfinite(con_exp)
-                @printf "%16s | %9.2e | %9.2e\n" "Primal expon." var_exp con_exp
-            end
-            if isfinite(var_sdp) || isfinite(con_sdp)
-                @printf "%16s | %9.2e | %9.2e\n" "Pos. semidef." var_sdp con_sdp
+            for (v, c, name) in zip(var_inf, con_inf, ("Linear", "Second order", "Rotated S.O.", "Primal expon.", "Pos. semidef."))
+                if isfinite(v) && isfinite(c)
+                    @printf "%16s | %9.2e | %9.2e\n" name v c
+                elseif isfinite(v)
+                    @printf "%16s | %9.2e | %9s\n" name v "-"
+                elseif isfinite(c)
+                    @printf "%16s | %9s | %9.2e\n" name "-" c
+                end
             end
         end
     end
