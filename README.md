@@ -93,6 +93,7 @@ The following options can be passed to `PajaritoSolver()` to modify its behavior
   * `init_sdp_lin::Bool` **C** Use SDP initial linear cuts
   * `init_sdp_soc::Bool` **C** Use SDP initial SOC cuts (if MIP solver supports MISOCP)
   * `scale_subp_cuts::Bool` **C** Use scaling for subproblem cuts based on subproblem status
+  * `scale_factor::Float64` **C** Multiplicative factor for scaled subproblem cuts (cuts are scaled by scale_factor*tol_prim_infeas/rel_gap)
   * `viol_cuts_only::Bool` **C** Only add cuts that are violated by the current MIP solution (may be useful for MSD algorithm where many cuts are added)
   * `prim_cuts_only::Bool` **C** Do not add subproblem cuts (if `prim_cuts_always` and `prim_cuts_assist`)
   * `prim_cuts_always::Bool` **C** Add primal cuts at each iteration or in each lazy callback (if `prim_cuts_assist`)
@@ -105,7 +106,7 @@ The following options can be passed to `PajaritoSolver()` to modify its behavior
 Note:
   * For the conic algorithm, Pajarito usually returns a solution constructed from one of the conic solver's feasible solutions. Since the conic solver is not subject to the same feasibility tolerances as the MIP solver (which should match the absolute feasibility tolerance `tol_prim_infeas`), Pajarito's solution will not necessarily satisfy `tol_prim_infeas`.
   * MIP solver integrality tolerance should typically be tightened, for example to 1e-8, for improved Pajarito performance.
-  * `viol_cuts_only` defaults to `true` on the MIP-solver-driven algorithm and `false` on the iterative algorithm. 
+  * `viol_cuts_only` defaults to `true` on the MIP-solver-driven algorithm and `false` on the iterative algorithm.
 
 ## Bug reports and support
 
