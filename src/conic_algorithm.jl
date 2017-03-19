@@ -36,8 +36,9 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
     cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver (conic or nonlinear)
     solve_relax::Bool           # (Conic only) Solve the continuous conic relaxation to add initial subproblem cuts
+    solve_subp::Bool            # (Conic only) Solve the continuous conic subproblems to add subproblem cuts
     dualize_relax::Bool         # (Conic only) Solve the conic dual of the continuous conic relaxation
-    dualize_sub::Bool           # (Conic only) Solve the conic duals of the continuous conic subproblems
+    dualize_subp::Bool          # (Conic only) Solve the conic duals of the continuous conic subproblems
 
     soc_disagg::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
     soc_abslift::Bool           # (Conic only) Use SOC absolute value lifting in the MIP only
@@ -130,14 +131,15 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     status::Symbol              # Current Pajarito status
 
     # Model constructor
-    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
+    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
         m = new()
 
         m.log_level = log_level
         m.mip_solver_drives = mip_solver_drives
         m.solve_relax = solve_relax
+        m.solve_subp = solve_subp
         m.dualize_relax = dualize_relax
-        m.dualize_sub = dualize_sub
+        m.dualize_subp = dualize_subp
         m.pass_mip_sols = pass_mip_sols
         m.round_mip_sols = round_mip_sols
         m.mip_subopt_count = mip_subopt_count
@@ -194,18 +196,20 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     # Verify consistency of conic data
     verify_data(m, c, A, b, cone_con, cone_var)
 
-    # Verify cone compatibility with conic solver
-    conic_spec = MathProgBase.supportedcones(m.cont_solver)
+    if m.solve_relax || m.solve_subp
+        # Verify cone compatibility with conic solver
+        conic_spec = MathProgBase.supportedcones(m.cont_solver)
 
-    # Pajarito converts rotated SOCs to standard SOCs
-    if :SOC in conic_spec
-        push!(conic_spec, :SOCRotated)
-    end
+        # Pajarito converts rotated SOCs to standard SOCs
+        if :SOC in conic_spec
+            push!(conic_spec, :SOCRotated)
+        end
 
-    # Error if a cone in data is not supported
-    for (spec, _) in vcat(cone_con, cone_var)
-        if !(spec in conic_spec)
-            error("Cones $spec are not supported by the specified conic solver\n")
+        # Error if a cone in data is not supported
+        for (spec, _) in vcat(cone_con, cone_var)
+            if !(spec in conic_spec)
+                error("Cones $spec are not supported by the specified conic solver\n")
+            end
         end
     end
 
@@ -270,21 +274,27 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         @printf "\nTransforming original data..."
     end
     tic()
-    (c_new, A_new, b_new, cone_con_new, cone_var_new, keep_cols, var_types_new) = transform_data(copy(m.c_orig), copy(m.A_orig), copy(m.b_orig), deepcopy(m.cone_con_orig), deepcopy(m.cone_var_orig), m.var_types, m.solve_relax)
+    (c_new, A_new, b_new, cone_con_new, cone_var_new, keep_cols, var_types_new, cols_cont, cols_int) = transform_data(copy(m.c_orig), copy(m.A_orig), copy(m.b_orig), deepcopy(m.cone_con_orig), deepcopy(m.cone_var_orig), m.var_types, m.solve_relax)
     m.logs[:data_trans] += toq()
     if m.log_level > 1
         @printf "%.2fs\n" m.logs[:data_trans]
     end
 
-    # Create conic subproblem data
-    if m.log_level > 1
-        @printf "\nCreating conic model data..."
-    end
-    tic()
-    (map_rows_sub, cols_cont, cols_int) = create_conicsub_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new)
-    m.logs[:data_conic] += toq()
-    if m.log_level > 1
-        @printf "%.2fs\n" m.logs[:data_conic]
+    if m.solve_subp
+        # Create conic subproblem data
+        if m.log_level > 1
+            @printf "\nCreating conic model data..."
+        end
+        tic()
+        map_rows_subp = create_conicsub_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new, cols_cont, cols_int)
+        m.logs[:data_conic] += toq()
+        if m.log_level > 1
+            @printf "%.2fs\n" m.logs[:data_conic]
+        end
+    else
+        map_rows_subp = zeros(Int, length(b_new))
+        m.c_sub_cont = c_new[cols_cont]
+        m.c_sub_int = c_new[cols_int]
     end
 
     # Create MIP model
@@ -292,7 +302,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         @printf "\nCreating MIP model..."
     end
     tic()
-    (v_idxs_soc_relx, r_idx_exp_relx, s_idx_exp_relx, v_idxs_sdp_relx) = create_mip_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new, map_rows_sub, cols_cont, cols_int)
+    (v_idxs_soc_relx, r_idx_exp_relx, s_idx_exp_relx, v_idxs_sdp_relx) = create_mip_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new, map_rows_subp, cols_cont, cols_int)
     m.logs[:data_mip] += toq()
     if m.log_level > 1
         @printf "%.2fs\n" m.logs[:data_mip]
@@ -375,25 +385,27 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     end
 
     if (m.status != :UserLimit) && (m.status != :Infeasible) && (m.status != :Unbounded) && (m.prim_cuts_assist || (m.status != :CutsFailure))
-        tic()
-        if m.log_level > 2
-            @printf "\nCreating conic subproblem model..."
-        end
-        if m.dualize_sub
-            solver_conicsub = ConicDualWrapper(conicsolver=m.cont_solver)
-        else
-            solver_conicsub = m.cont_solver
-        end
-        m.model_conic = MathProgBase.ConicModel(solver_conicsub)
-        if method_exists(MathProgBase.setbvec!, (typeof(m.model_conic), Vector{Float64}))
-            # Can use setbvec! on the conic subproblem model: load it
-            m.update_conicsub = true
-            MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, m.b_sub, m.cone_con_sub, m.cone_var_sub)
-        else
-            m.update_conicsub = false
-        end
-        if m.log_level > 2
-            @printf "%.2fs\n" toq()
+        if m.solve_subp
+            if m.log_level > 2
+                @printf "\nCreating conic subproblem model..."
+            end
+            tic()
+            if m.dualize_subp
+                solver_conicsub = ConicDualWrapper(conicsolver=m.cont_solver)
+            else
+                solver_conicsub = m.cont_solver
+            end
+            m.model_conic = MathProgBase.ConicModel(solver_conicsub)
+            if method_exists(MathProgBase.setbvec!, (typeof(m.model_conic), Vector{Float64}))
+                # Can use setbvec! on the conic subproblem model: load it
+                m.update_conicsub = true
+                MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, m.b_sub, m.cone_con_sub, m.cone_var_sub)
+            else
+                m.update_conicsub = false
+            end
+            if m.log_level > 2
+                @printf "%.2fs\n" toq()
+            end
         end
 
         # Initialize and begin iterative or MIP-solver-driven algorithm
@@ -831,14 +843,16 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
     A_new = sparse(A_I, A_J, A_V, num_con_new, num_var_new)
     dropzeros!(A_new)
 
-    return (c_new, A_new, b_new, cone_con_new, cone_var_new, keep_cols, var_types_new)
+    # Collect indices of continuous and integer variables
+    cols_cont = find(vt -> (vt == :Cont), var_types_new)
+    cols_int = find(vt -> (vt != :Cont), var_types_new)
+
+    return (c_new, A_new, b_new, cone_con_new, cone_var_new, keep_cols, var_types_new, cols_cont, cols_int)
 end
 
 # Create conic subproblem data
-function create_conicsub_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Float64,Int}, b_new::Vector{Float64}, cone_con_new::Vector{Tuple{Symbol,Vector{Int}}}, cone_var_new::Vector{Tuple{Symbol,Vector{Int}}}, var_types_new::Vector{Symbol})
+function create_conicsub_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Float64,Int}, b_new::Vector{Float64}, cone_con_new::Vector{Tuple{Symbol,Vector{Int}}}, cone_var_new::Vector{Tuple{Symbol,Vector{Int}}}, var_types_new::Vector{Symbol}, cols_cont::Vector{Int}, cols_int::Vector{Int})
     # Build new subproblem variable cones by removing integer variables
-    cols_cont = Int[]
-    cols_int = Int[]
     num_cont = 0
     cone_var_sub = Tuple{Symbol,Vector{Int}}[]
 
@@ -846,11 +860,8 @@ function create_conicsub_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC
         cols_cont_new = Int[]
         for j in cols
             if var_types_new[j] == :Cont
-                push!(cols_cont, j)
                 num_cont += 1
                 push!(cols_cont_new, num_cont)
-            else
-                push!(cols_int, j)
             end
         end
         if !isempty(cols_cont_new)
@@ -872,7 +883,7 @@ function create_conicsub_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC
     num_full = 0
     rows_full = Int[]
     cone_con_sub = Tuple{Symbol,Vector{Int}}[]
-    map_rows_sub = Vector{Int}(num_con_new)
+    map_rows_subp = Vector{Int}(num_con_new)
 
     for (spec, rows) in cone_con_new
         if (spec == :Zero) || (spec == :NonNeg) || (spec == :NonPos)
@@ -888,7 +899,7 @@ function create_conicsub_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC
                 push!(cone_con_sub, (spec, rows_full_new))
             end
         else
-            map_rows_sub[rows] = collect((num_full + 1):(num_full + length(rows)))
+            map_rows_subp[rows] = collect((num_full + 1):(num_full + length(rows)))
             push!(cone_con_sub, (spec, collect((num_full + 1):(num_full + length(rows)))))
             append!(rows_full, rows)
             num_full += length(rows)
@@ -906,11 +917,11 @@ function create_conicsub_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC
     m.c_sub_cont = c_new[cols_cont]
     m.c_sub_int = c_new[cols_int]
 
-    return (map_rows_sub, cols_cont, cols_int)
+    return map_rows_subp
 end
 
 # Generate MIP model and maps relating conic model and MIP model variables
-function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Float64,Int64}, b_new::Vector{Float64}, cone_con_new::Vector{Tuple{Symbol,Vector{Int}}}, cone_var_new::Vector{Tuple{Symbol,Vector{Int}}}, var_types_new::Vector{Symbol}, map_rows_sub::Vector{Int}, cols_cont::Vector{Int}, cols_int::Vector{Int})
+function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Float64,Int64}, b_new::Vector{Float64}, cone_con_new::Vector{Tuple{Symbol,Vector{Int}}}, cone_var_new::Vector{Tuple{Symbol,Vector{Int}}}, var_types_new::Vector{Symbol}, map_rows_subp::Vector{Int}, cols_cont::Vector{Int}, cols_int::Vector{Int})
     # Initialize JuMP model for MIP outer approximation problem
     model_mip = JuMP.Model(solver=m.mip_solver)
 
@@ -1002,8 +1013,8 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             v_idxs = rows[2:end]
             dim = length(v_idxs)
             v_idxs_soc_relx[n_soc] = v_idxs
-            t_idx_soc_subp[n_soc] = map_rows_sub[rows[1]]
-            v_idxs_soc_subp[n_soc] = map_rows_sub[v_idxs]
+            t_idx_soc_subp[n_soc] = map_rows_subp[rows[1]]
+            v_idxs_soc_subp[n_soc] = map_rows_subp[v_idxs]
 
             t_soc[n_soc] = t = lhs_expr[rows[1]]
             v_soc[n_soc] = v = lhs_expr[v_idxs]
@@ -1118,9 +1129,9 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             n_exp += 1
             r_idx_exp_relx[n_exp] = rows[1]
             s_idx_exp_relx[n_exp] = rows[2]
-            r_idx_exp_subp[n_exp] = map_rows_sub[rows[1]]
-            s_idx_exp_subp[n_exp] = map_rows_sub[rows[2]]
-            t_idx_exp_subp[n_exp] = map_rows_sub[rows[3]]
+            r_idx_exp_subp[n_exp] = map_rows_subp[rows[1]]
+            s_idx_exp_subp[n_exp] = map_rows_subp[rows[2]]
+            t_idx_exp_subp[n_exp] = map_rows_subp[rows[3]]
 
             r_exp[n_exp] = r = lhs_expr[rows[1]]
             s_exp[n_exp] = s = lhs_expr[rows[2]]
@@ -1145,7 +1156,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             dim = round(Int, sqrt(1/4+2*length(rows))-1/2) # smat space side dimension
 
             v_idxs_sdp_relx[n_sdp] = rows
-            v_idxs_sdp_subp[n_sdp] = map_rows_sub[rows]
+            v_idxs_sdp_subp[n_sdp] = map_rows_subp[rows]
 
             smat_sdp[n_sdp] = Symmetric(zeros(dim, dim))
 
@@ -1572,7 +1583,7 @@ function solve_subp_add_subp_cuts!(m)
         # Integer solution has been seen before, cannot get new subproblem cuts
         m.logs[:n_repeat] += 1
 
-        if !m.mip_solver_drives || m.prim_cuts_only
+        if !m.mip_solver_drives || m.prim_cuts_only || !m.solve_subp
             # Nothing to do if using iterative, or if not using subproblem cuts
             return (true, false)
         else
@@ -1583,6 +1594,8 @@ function solve_subp_add_subp_cuts!(m)
                 return (true, false)
             end
         end
+    elseif !m.solve_subp
+        return (false, false)
     else
         # Integer solution is new, save it
         m.cache_dual[soln_int] = Float64[]
@@ -1660,7 +1673,7 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
         MathProgBase.setbvec!(m.model_conic, b_sub_int)
     else
         # Load new model
-        if m.dualize_sub
+        if m.dualize_subp
             solver_conicsub = ConicDualWrapper(conicsolver=m.cont_solver)
         else
             solver_conicsub = m.cont_solver
@@ -2134,12 +2147,14 @@ function print_finish(m::PajaritoConicModel)
         end
         @printf " -- Integer repeats     = %5d\n" m.logs[:n_repeat]
         @printf " -- Conic subproblems   = %5d\n" m.logs[:n_conic]
-        @printf " --- Infeasible         = %5d\n" m.logs[:n_inf]
-        @printf " --- Optimal            = %5d\n" m.logs[:n_opt]
-        @printf " --- Suboptimal         = %5d\n" m.logs[:n_sub]
-        @printf " --- UserLimit          = %5d\n" m.logs[:n_lim]
-        @printf " --- ConicFailure       = %5d\n" m.logs[:n_fail]
-        @printf " --- Other status       = %5d\n" m.logs[:n_other]
+        if m.solve_subp
+            @printf " --- Infeasible         = %5d\n" m.logs[:n_inf]
+            @printf " --- Optimal            = %5d\n" m.logs[:n_opt]
+            @printf " --- Suboptimal         = %5d\n" m.logs[:n_sub]
+            @printf " --- UserLimit          = %5d\n" m.logs[:n_lim]
+            @printf " --- ConicFailure       = %5d\n" m.logs[:n_fail]
+            @printf " --- Other status       = %5d\n" m.logs[:n_other]
+        end
         @printf " -- Feasible solutions  = %5d\n" (m.logs[:n_feas_conic] + m.logs[:n_feas_mip])
         @printf " --- From conic solver  = %5d\n" m.logs[:n_feas_conic]
         @printf " --- From MIP solver    = %5d\n" m.logs[:n_feas_mip]

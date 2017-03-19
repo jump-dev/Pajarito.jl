@@ -140,7 +140,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
                             x <= 10,
                             x^2 <= 9)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, dualize_sub=true, dualize_relax=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, dualize_subp=true, dualize_relax=true))
 
         @test isapprox(problem.optval, 9.0, atol=TOL)
         @test isapprox(x.value, 3.0, atol=TOL)
@@ -154,7 +154,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
                             x <= 10,
                             x^2 <= 9)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, mip_subopt_count=3, mip_subopt_solver=mip_solver, cont_solver=cont_solver, log_level=3, dualize_sub=true, dualize_relax=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, mip_subopt_count=3, mip_subopt_solver=mip_solver, cont_solver=cont_solver, log_level=3, dualize_subp=true, dualize_relax=true))
 
         @test isapprox(problem.optval, 9.0, atol=TOL)
         @test isapprox(x.value, 3.0, atol=TOL)
@@ -162,7 +162,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
     end
 
     @testset "Dualize rotated SOC" begin
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, dualize_sub=true, dualize_relax=true))
+        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, dualize_subp=true, dualize_relax=true))
 
         c = [-3.0, 0.0, 0.0, 0.0]
         A = zeros(4,4)
@@ -799,7 +799,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
                             z[1,2] >= 1,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, dualize_sub=true, dualize_relax=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, dualize_subp=true, dualize_relax=true))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, 7.5, atol=TOL)
@@ -913,7 +913,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
     end
 
-    @testset "Convex.jl A-opt design" begin
+    @testset "Convex.jl A-opt" begin
         # A-optimal design
         #   minimize    Trace (sum_i lambdai*vi*vi')^{-1}
         #   subject to  lambda >= 0, 1'*lambda = 1
@@ -944,7 +944,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(np.value, [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
     end
 
-    @testset "JuMP.jl A-opt design" begin
+    @testset "JuMP.jl A-opt" begin
         aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         (q, p, n, nmax) = (4, 8, 12, 3)
@@ -966,7 +966,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
     end
 
-    @testset "Convex.jl E-opt design" begin
+    @testset "Convex.jl E-opt" begin
         # E-optimal design
         #   maximize    w
         #   subject to  sum_i lambda_i*vi*vi' >= w*I
@@ -995,7 +995,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(np.value, [0.0; 3.0; 2.0; 3.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
     end
 
-    @testset "JuMP.jl E-opt design" begin
+    @testset "JuMP.jl E-opt" begin
         eOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
 
         (q, p, n, nmax) = (4, 8, 12, 3)
@@ -1013,11 +1013,78 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(getvalue(t), getobjectivevalue(eOpt), atol=TOL)
         @test isapprox(getvalue(np), [0.0; 3.0; 2.0; 3.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
     end
+
+    @testset "No relax solve: A-opt" begin
+        aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, solve_relax=false))
+
+        (q, p, n, nmax) = (4, 8, 12, 3)
+        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
+
+        np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
+        @constraint(aOpt, sum(np) <= n)
+        u = @variable(aOpt, [i=1:q], lowerbound=0)
+        @objective(aOpt, Min, sum(u))
+        E = eye(q)
+        for i=1:q
+            @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
+        end
+
+        @test solve(aOpt, suppress_warnings=true) == :Optimal
+
+        @test isapprox(getobjectivevalue(aOpt), 8.955043, atol=TOL)
+        @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
+        @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
+    end
+
+    @testset "No subp solve: A-opt" begin
+        aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, solve_subp=false))
+
+        (q, p, n, nmax) = (4, 8, 12, 3)
+        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
+
+        np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
+        @constraint(aOpt, sum(np) <= n)
+        u = @variable(aOpt, [i=1:q], lowerbound=0)
+        @objective(aOpt, Min, sum(u))
+        E = eye(q)
+        for i=1:q
+            @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
+        end
+
+        @test solve(aOpt, suppress_warnings=true) == :Optimal
+
+        @test isapprox(getobjectivevalue(aOpt), 8.955043, atol=TOL)
+        @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
+        @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
+    end
+
+    @testset "No conic solver: A-opt" begin
+        aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level, solve_relax=false, solve_subp=false))
+
+        (q, p, n, nmax) = (4, 8, 12, 3)
+        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
+
+        np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
+        @constraint(aOpt, sum(np) <= n)
+        u = @variable(aOpt, [i=1:q], lowerbound=0)
+        @objective(aOpt, Min, sum(u))
+        E = eye(q)
+        for i=1:q
+            @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
+        end
+
+        @test solve(aOpt, suppress_warnings=true) == :Optimal
+
+        @test isapprox(getobjectivevalue(aOpt), 8.955043, atol=TOL)
+        @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
+        @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
+    end
+
 end
 
 # SDP+Exp problems for conic algorithm
 function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "Convex.jl D-opt design" begin
+    @testset "Convex.jl D-opt" begin
         # D-optimal design
         #   maximize    nthroot det V*diag(lambda)*V'
         #   subject to  sum(lambda)=1,  lambda >=0
@@ -1042,7 +1109,6 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(Convex.evaluate(Convex.logdet(V * diagm(np./n) * V')), dOpt.optval, atol=TOL)
         @test isapprox(np.value, [0.0; 3.0; 3.0; 2.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
     end
-
 end
 
 # Exp+SOC problems for conic algorithm with MISOCP
@@ -1172,7 +1238,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
                             z[1,2] >= 1,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true, dualize_sub=true, dualize_relax=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true, dualize_subp=true, dualize_relax=true))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, 7.5, atol=TOL)
@@ -1311,7 +1377,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
                             z[1,2] >= 1,
                             y >= z[2,2])
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true, dualize_sub=true, dualize_relax=true))
+        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true, dualize_subp=true, dualize_relax=true))
 
         @test problem.status == :Optimal
         @test isapprox(problem.optval, 7.5, atol=TOL)
@@ -1362,7 +1428,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
     end
 
-    @testset "SOC eig cuts: JuMP.jl A-opt design" begin
+    @testset "SOC eig cuts: A-opt" begin
         aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_soc=true))
 
         (q, p, n, nmax) = (4, 8, 12, 3)
@@ -1384,7 +1450,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
     end
 
-    @testset "SOC eig cuts: JuMP.jl E-opt design" begin
+    @testset "SOC eig cuts: E-opt" begin
         eOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_soc=true))
 
         (q, p, n, nmax) = (4, 8, 12, 3)
@@ -1403,7 +1469,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(getvalue(np), [0.0; 3.0; 2.0; 3.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
     end
 
-    @testset "SOC full cuts: JuMP.jl A-opt design" begin
+    @testset "SOC full cuts: A-opt" begin
         aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_soc=true, sdp_eig=false))
 
         (q, p, n, nmax) = (4, 8, 12, 3)
@@ -1425,7 +1491,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
     end
 
-    @testset "Init SOC cuts: JuMP.jl E-opt design" begin
+    @testset "Init SOC cuts: E-opt" begin
         eOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_soc=true, sdp_eig=false))
 
         (q, p, n, nmax) = (4, 8, 12, 3)
@@ -1444,7 +1510,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(getvalue(np), [0.0; 3.0; 2.0; 3.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
     end
 
-    @testset "Init SOC cuts: JuMP.jl A-opt design" begin
+    @testset "Init SOC cuts: A-opt" begin
         aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true))
 
         (q, p, n, nmax) = (4, 8, 12, 3)
@@ -1466,7 +1532,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
     end
 
-    @testset "SOC full cuts: JuMP.jl E-opt design" begin
+    @testset "SOC full cuts: E-opt" begin
         eOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true))
 
         (q, p, n, nmax) = (4, 8, 12, 3)
@@ -1485,7 +1551,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(getvalue(np), [0.0; 3.0; 2.0; 3.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
     end
 
-    @testset "Init and eig SOC cuts: JuMP.jl A-opt design" begin
+    @testset "Init and eig SOC cuts: A-opt" begin
         aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true))
 
         (q, p, n, nmax) = (4, 8, 12, 3)
@@ -1507,7 +1573,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
     end
 
-    @testset "Init and eig SOC cuts: JuMP.jl E-opt design" begin
+    @testset "Init and eig SOC cuts: E-opt" begin
         eOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true))
 
         (q, p, n, nmax) = (4, 8, 12, 3)
@@ -1529,7 +1595,7 @@ end
 
 # SDP+Exp problems for conic algorithm with MISOCP
 function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "SOC eig cuts: Convex.jl D-opt design" begin
+    @testset "SOC eig cuts: Convex.jl D-opt" begin
         (q, p, n, nmax) = (4, 8, 12, 3)
         V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
 
@@ -1552,7 +1618,7 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(np.value, [0.0; 3.0; 3.0; 2.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
     end
 
-    @testset "SOC full cuts: Convex.jl D-opt design" begin
+    @testset "SOC full cuts: Convex.jl D-opt" begin
         (q, p, n, nmax) = (4, 8, 12, 3)
         V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
 
@@ -1575,7 +1641,7 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(np.value, [0.0; 3.0; 3.0; 2.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
     end
 
-    @testset "Init SOC cuts: Convex.jl D-opt design" begin
+    @testset "Init SOC cuts: Convex.jl D-opt" begin
         (q, p, n, nmax) = (4, 8, 12, 3)
         V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
 
@@ -1598,7 +1664,7 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(np.value, [0.0; 3.0; 3.0; 2.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
     end
 
-    @testset "Init and eig SOC cuts: Convex.jl D-opt design" begin
+    @testset "Init and eig SOC cuts: Convex.jl D-opt" begin
         (q, p, n, nmax) = (4, 8, 12, 3)
         V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
 

@@ -30,8 +30,9 @@ immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
 
     cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver (conic or nonlinear)
     solve_relax::Bool           # (Conic only) Solve the continuous conic relaxation to add initial subproblem cuts
+    solve_subp::Bool            # (Conic only) Solve the continuous conic subproblems to add subproblem cuts
     dualize_relax::Bool         # (Conic only) Solve the conic dual of the continuous conic relaxation
-    dualize_sub::Bool           # (Conic only) Solve the conic duals of the continuous conic subproblems
+    dualize_subp::Bool           # (Conic only) Solve the conic duals of the continuous conic subproblems
 
     soc_disagg::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
     soc_abslift::Bool           # (Conic only) Use SOC absolute value lifting in the MIP only
@@ -69,8 +70,9 @@ function PajaritoSolver(;
 
     cont_solver = UnsetSolver(),
     solve_relax = true,
+    solve_subp = true,
     dualize_relax = false,
-    dualize_sub = false,
+    dualize_subp = false,
 
     soc_disagg = true,
     soc_abslift = false,
@@ -100,8 +102,8 @@ function PajaritoSolver(;
     if (mip_subopt_count > 0) && (mip_subopt_solver == UnsetSolver())
         error("Using suboptimal solves (mip_subopt_count > 0), but no suboptimal MIP solver specified (set mip_subopt_solver)\n")
     end
-    if cont_solver == UnsetSolver()
-        error("No continuous solver specified (set cont_solver)\n")
+    if (solve_relax || solve_subp) && (cont_solver == UnsetSolver())
+        error("No continuous solver specified (set cont_solver, or for a conic model, set solve_relax = solve_subp = false)\n")
     end
 
     if soc_in_mip || init_sdp_soc || sdp_soc
@@ -123,14 +125,14 @@ function PajaritoSolver(;
         prim_cuts_assist = true
     end
 
-    PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, dualize_relax, dualize_sub, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
+    PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
 end
 
 
 # Create Pajarito conic model: can solve with either conic algorithm or nonlinear algorithm wrapped with ConicNonlinearBridge
 function MathProgBase.ConicModel(s::PajaritoSolver)
-    if applicable(MathProgBase.ConicModel, s.cont_solver)
-        return PajaritoConicModel(s.log_level, s.timeout, s.rel_gap, s.mip_solver_drives, s.mip_solver, s.mip_subopt_solver, s.mip_subopt_count, s.round_mip_sols, s.pass_mip_sols, s.cont_solver, s.solve_relax, s.dualize_relax, s.dualize_sub, s.soc_disagg, s.soc_abslift, s.soc_in_mip, s.sdp_eig, s.sdp_soc, s.init_soc_one, s.init_soc_inf, s.init_exp, s.init_sdp_lin, s.init_sdp_soc, s.scale_subp_cuts, s.viol_cuts_only, s.prim_cuts_only, s.prim_cuts_always, s.prim_cuts_assist, s.tol_zero, s.tol_prim_infeas)
+    if applicable(MathProgBase.ConicModel, s.cont_solver) || (s.cont_solver == UnsetSolver())
+        return PajaritoConicModel(s.log_level, s.timeout, s.rel_gap, s.mip_solver_drives, s.mip_solver, s.mip_subopt_solver, s.mip_subopt_count, s.round_mip_sols, s.pass_mip_sols, s.cont_solver, s.solve_relax, s.solve_subp, s.dualize_relax, s.dualize_subp, s.soc_disagg, s.soc_abslift, s.soc_in_mip, s.sdp_eig, s.sdp_soc, s.init_soc_one, s.init_soc_inf, s.init_exp, s.init_sdp_lin, s.init_sdp_soc, s.scale_subp_cuts, s.viol_cuts_only, s.prim_cuts_only, s.prim_cuts_always, s.prim_cuts_assist, s.tol_zero, s.tol_prim_infeas)
     elseif applicable(MathProgBase.NonlinearModel, s.cont_solver)
         return MathProgBase.ConicModel(ConicNonlinearBridge.ConicNLPWrapper(nlp_solver=s))
     else

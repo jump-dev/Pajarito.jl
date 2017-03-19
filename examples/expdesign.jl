@@ -178,11 +178,13 @@ solver = PajaritoSolver(
     log_level=log_level,
     rel_gap=rel_gap,
 	mip_solver=mip_solver,
-	cont_solver=cont_solver,
+	# cont_solver=cont_solver,
+    solve_subp=false,
+    solve_relax=false,
 	init_sdp_soc=false,
     sdp_soc=false,
     sdp_eig=true,
-    # prim_cuts_only=true,
+    prim_cuts_only=true,
     prim_cuts_always=true,
     # prim_cuts_assist=true
 )
