@@ -2117,6 +2117,10 @@ end
 function print_finish(m::PajaritoConicModel)
     flush(STDOUT)
 
+    if !in(m.status, [:Optimal, :Suboptimal, :UserLimit, :Unbounded, :Infeasible])
+        m.log_level = 3
+    end
+
     if m.log_level >= 1
         if m.mip_solver_drives
             @printf "\nMIP-solver-driven algorithm summary:\n"
@@ -2131,14 +2135,17 @@ function print_finish(m::PajaritoConicModel)
     end
 
     if m.log_level >= 2
-        if m.is_best_conic
-            @printf "Solution constructed by %s solver\n" (m.is_best_conic ? "conic" : "MIP")
-        end
+        @printf "Solution constructed by %s solver\n" (m.is_best_conic ? "conic" : "MIP")
     end
 
     if m.gap_rel_opt < -10*m.rel_gap
-        warn("Best feasible value is smaller than best bound: this may indicate the final solution was constructed from a conic solver solution with significant infeasibilities\n")
+        if m.is_best_conic
+            warn("Best feasible value is smaller than best bound: conic solver's solution may have significant infeasibilities (try tightening primal feasibility tolerance of conic solver)\n")
+        else
+            warn("Best feasible value is smaller than best bound: check solution feasibility and bounds returned by MIP solver (please submit an issue)\n")
+        end
         m.status = :Error
+        m.log_level = 3
     end
 
     if m.log_level >= 3
