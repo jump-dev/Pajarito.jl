@@ -52,6 +52,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     init_sdp_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
 
     scale_subp_cuts::Bool       # (Conic only) Use scaling for subproblem cuts based on subproblem status
+    scale_factor::Float64       # (Conic only) Multiplicative factor for scaled subproblem cuts (cuts are scaled by scale_factor*tol_prim_infeas/rel_gap)
     viol_cuts_only::Bool        # (Conic only) Only add cuts that are violated by the current MIP solution (may be useful for MSD algorithm where many cuts are added)
     prim_cuts_only::Bool        # (Conic only) Do not add subproblem cuts
     prim_cuts_always::Bool      # (Conic only) Add primal cuts at each iteration or in each lazy callback
@@ -110,6 +111,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     V_sdp::Vector{Array{JuMP.AffExpr,2}} # smat V variables in SDPs
 
     # Miscellaneous for algorithms
+    new_scale_factor::Float64   # Calculated value for subproblem cuts scaling
     update_conicsub::Bool       # Indicates whether to use setbvec! to update an existing conic subproblem model
     model_conic::MathProgBase.AbstractConicModel # Conic subproblem model: persists when the conic solver implements MathProgBase.setbvec!
     oa_started::Bool            # Indicator for Iterative or MIP-solver-driven algorithms started
@@ -132,7 +134,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     status::Symbol              # Current Pajarito status
 
     # Model constructor
-    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
+    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_factor, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
         m = new()
 
         m.log_level = log_level
@@ -152,6 +154,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.init_soc_inf = init_soc_inf
         m.init_exp = init_exp
         m.scale_subp_cuts = scale_subp_cuts
+        m.scale_factor = scale_factor
         m.viol_cuts_only = viol_cuts_only
         m.mip_solver = mip_solver
         m.cont_solver = cont_solver
@@ -309,6 +312,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         @printf "%.2fs\n" m.logs[:data_mip]
     end
 
+    # Calculate subproblem cuts scaling factor
+    m.new_scale_factor = m.scale_factor*m.tol_prim_infeas/m.rel_gap*(m.num_soc + m.num_exp + m.num_sdp)
+
     if m.solve_relax
         # Solve relaxed conic problem, proceed with algorithm if optimal or suboptimal, else finish
         if m.log_level > 1
@@ -366,7 +372,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 # Optionally scale dual
                 if m.scale_subp_cuts
                     # Rescale by number of cones / absval of full conic objective
-                    scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / (abs(obj_relax) + 1e-5))
+                    scale!(dual_conic, m.new_scale_factor/(abs(obj_relax) + 1e-5))
                 end
 
                 # Add relaxation cuts
@@ -586,27 +592,25 @@ function verify_data(m, c, A, b, cone_con, cone_var)
     m.num_sdp = num_sdp
 
     # Print cone info
-    if m.log_level <= 1
-        return
+    if m.log_level > 1
+        @printf "\nCone dimensions summary:"
+        @printf "\n%-16s | %-9s | %-9s | %-9s\n" "Cone" "Count" "Min dim." "Max dim."
+        if num_soc > 0
+            @printf "%16s | %9d | %9d | %9d\n" "Second order" num_soc min_soc max_soc
+        end
+        if num_rot > 0
+            @printf "%16s | %9d | %9d | %9d\n" "Rotated S.O." num_rot min_rot max_rot
+        end
+        if num_exp > 0
+            @printf "%16s | %9d | %9d | %9d\n" "Primal expon." num_exp 3 3
+        end
+        if num_sdp > 0
+            min_side = round(Int, sqrt(1/4+2*min_sdp)-1/2)
+            max_side = round(Int, sqrt(1/4+2*max_sdp)-1/2)
+            @printf "%16s | %9d | %7s^2 | %7s^2\n" "Pos. semidef." num_sdp min_side max_side
+        end
+        flush(STDOUT)
     end
-
-    @printf "\nCone dimensions summary:"
-    @printf "\n%-16s | %-9s | %-9s | %-9s\n" "Cone" "Count" "Min dim." "Max dim."
-    if num_soc > 0
-        @printf "%16s | %9d | %9d | %9d\n" "Second order" num_soc min_soc max_soc
-    end
-    if num_rot > 0
-        @printf "%16s | %9d | %9d | %9d\n" "Rotated S.O." num_rot min_rot max_rot
-    end
-    if num_exp > 0
-        @printf "%16s | %9d | %9d | %9d\n" "Primal expon." num_exp 3 3
-    end
-    if num_sdp > 0
-        min_side = round(Int, sqrt(1/4+2*min_sdp)-1/2)
-        max_side = round(Int, sqrt(1/4+2*max_sdp)-1/2)
-        @printf "%16s | %9d | %7s^2 | %7s^2\n" "Pos. semidef." num_sdp min_side max_side
-    end
-    flush(STDOUT)
 end
 
 # Transform/preprocess data
@@ -1616,7 +1620,7 @@ function solve_subp_add_subp_cuts!(m)
             if ray_value < -m.tol_zero
                 if m.scale_subp_cuts
                     # Rescale by number of cones / value of ray
-                    scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / ray_value)
+                    scale!(dual_conic, m.new_scale_factor/ray_value)
                 end
             else
                 warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (this should not happen: please submit an issue)\n")
@@ -1628,7 +1632,7 @@ function solve_subp_add_subp_cuts!(m)
 
             if m.scale_subp_cuts
                 # Rescale by number of cones / abs(objective + 1e-5)
-                scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp) / (abs(obj_full) + 1e-5))
+                scale!(dual_conic, m.new_scale_factor/(abs(obj_full) + 1e-5))
             end
 
             m.logs[:n_feas_conic] += 1
@@ -1644,7 +1648,7 @@ function solve_subp_add_subp_cuts!(m)
             # We have a dual but don't know the status, so we can't use subproblem scaling
             if m.scale_subp_cuts
                 # Rescale by number of cones
-                scale!(dual_conic, (m.num_soc + m.num_exp + m.num_sdp))
+                scale!(dual_conic, m.new_scale_factor)
             end
         else
             # Status not handled, cannot add subproblem cuts
@@ -2117,7 +2121,16 @@ end
 function print_finish(m::PajaritoConicModel)
     flush(STDOUT)
 
-    if !in(m.status, [:Optimal, :Suboptimal, :UserLimit, :Unbounded, :Infeasible])
+    if m.gap_rel_opt < -10*m.rel_gap
+        if m.is_best_conic
+            warn("Best feasible value is smaller than best bound: conic solver's solution may have significant infeasibilities (try tightening primal feasibility tolerance of conic solver)\n")
+        else
+            warn("Best feasible value is smaller than best bound: check solution feasibility and bounds returned by MIP solver (please submit an issue)\n")
+        end
+        # m.status = :Error
+    end
+
+    if (m.log_level > 0) && !in(m.status, [:Optimal, :Suboptimal, :UserLimit, :Unbounded, :Infeasible])
         m.log_level = 3
     end
 
@@ -2130,22 +2143,16 @@ function print_finish(m::PajaritoConicModel)
         @printf " - Status               = %14s\n" m.status
         @printf " - Best feasible        = %+14.6e\n" m.best_obj
         @printf " - Best bound           = %+14.6e\n" m.mip_obj
-        @printf " - Relative opt. gap    = %14.3e\n" m.gap_rel_opt
+        if m.gap_rel_opt < -10*m.rel_gap
+            @printf " - Relative opt. gap    =*%14.3e*\n" m.gap_rel_opt
+        else
+            @printf " - Relative opt. gap    = %14.3e\n" m.gap_rel_opt
+        end
         @printf " - Total time (s)       = %14.2e\n" m.logs[:total]
     end
 
     if m.log_level >= 2
         @printf "Solution constructed by %s solver\n" (m.is_best_conic ? "conic" : "MIP")
-    end
-
-    if m.gap_rel_opt < -10*m.rel_gap
-        if m.is_best_conic
-            warn("Best feasible value is smaller than best bound: conic solver's solution may have significant infeasibilities (try tightening primal feasibility tolerance of conic solver)\n")
-        else
-            warn("Best feasible value is smaller than best bound: check solution feasibility and bounds returned by MIP solver (please submit an issue)\n")
-        end
-        m.status = :Error
-        m.log_level = 3
     end
 
     if m.log_level >= 3

@@ -178,13 +178,13 @@ solver = PajaritoSolver(
     log_level=log_level,
     rel_gap=rel_gap,
 	mip_solver=mip_solver,
-	# cont_solver=cont_solver,
+	cont_solver=cont_solver,
     solve_subp=true,
     solve_relax=true,
 	init_sdp_soc=false,
     sdp_soc=false,
     sdp_eig=true,
-    prim_cuts_only=true,
+    # prim_cuts_only=true,
     prim_cuts_always=true,
     # prim_cuts_assist=true
 )
@@ -198,8 +198,8 @@ Specify data dimensions
     # 100, 250, 500, 5   # Huge
     # 25, 75, 125, 5     # Large
     # 10, 30, 50, 5      # Medium
-    # 5, 15, 25, 5       # Small
-    4, 8, 12, 3       # Tiny
+    5, 15, 25, 5       # Small
+    # 4, 8, 12, 3        # Tiny
 )
 @assert (p > q) && (n > q)
 
