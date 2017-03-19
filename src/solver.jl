@@ -32,7 +32,7 @@ immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     solve_relax::Bool           # (Conic only) Solve the continuous conic relaxation to add initial subproblem cuts
     solve_subp::Bool            # (Conic only) Solve the continuous conic subproblems to add subproblem cuts
     dualize_relax::Bool         # (Conic only) Solve the conic dual of the continuous conic relaxation
-    dualize_subp::Bool           # (Conic only) Solve the conic duals of the continuous conic subproblems
+    dualize_subp::Bool          # (Conic only) Solve the conic duals of the continuous conic subproblems
 
     soc_disagg::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
     soc_abslift::Bool           # (Conic only) Use SOC absolute value lifting in the MIP only
