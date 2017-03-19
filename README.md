@@ -79,8 +79,9 @@ The following options can be passed to `PajaritoSolver()` to modify its behavior
   * `pass_mip_sols::Bool` **C** Give best feasible solutions constructed from conic subproblem solution to MIP
   * `cont_solver::MathProgBase.AbstractMathProgSolver` Continuous solver (conic or nonlinear)
   * `solve_relax::Bool` **C** Solve the continuous conic relaxation to add initial subproblem cuts
+  * `solve_subp::Bool` **C** Solve the continuous conic subproblems to add subproblem cuts
   * `dualize_relax::Bool` **C** Solve the conic dual of the continuous conic relaxation
-  * `dualize_sub::Bool` **C** Solve the conic duals of the continuous conic subproblems
+  * `dualize_subp::Bool` **C** Solve the conic duals of the continuous conic subproblems
   * `soc_disagg::Bool` **C** Disaggregate SOC cones in the MIP only
   * `soc_abslift::Bool` **C** Use SOC absolute value lifting in the MIP only
   * `soc_in_mip::Bool` **C** Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
