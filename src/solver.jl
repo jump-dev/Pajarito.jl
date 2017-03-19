@@ -118,6 +118,9 @@ function PajaritoSolver(;
         viol_cuts_only = mip_solver_drives
     end
 
+    if !solve_subp
+        pass_mip_sols = false
+    end
     if prim_cuts_only
         prim_cuts_always = true
     end
