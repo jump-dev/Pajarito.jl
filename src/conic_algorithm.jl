@@ -2121,7 +2121,16 @@ end
 function print_finish(m::PajaritoConicModel)
     flush(STDOUT)
 
-    if !in(m.status, [:Optimal, :Suboptimal, :UserLimit, :Unbounded, :Infeasible])
+    if m.gap_rel_opt < -10*m.rel_gap
+        if m.is_best_conic
+            warn("Best feasible value is smaller than best bound: conic solver's solution may have significant infeasibilities (try tightening primal feasibility tolerance of conic solver)\n")
+        else
+            warn("Best feasible value is smaller than best bound: check solution feasibility and bounds returned by MIP solver (please submit an issue)\n")
+        end
+        # m.status = :Error
+    end
+
+    if (m.log_level > 0) && !in(m.status, [:Optimal, :Suboptimal, :UserLimit, :Unbounded, :Infeasible])
         m.log_level = 3
     end
 
@@ -2134,22 +2143,16 @@ function print_finish(m::PajaritoConicModel)
         @printf " - Status               = %14s\n" m.status
         @printf " - Best feasible        = %+14.6e\n" m.best_obj
         @printf " - Best bound           = %+14.6e\n" m.mip_obj
-        @printf " - Relative opt. gap    = %14.3e\n" m.gap_rel_opt
+        if m.gap_rel_opt < -10*m.rel_gap
+            @printf " - Relative opt. gap    =*%14.3e*\n" m.gap_rel_opt
+        else
+            @printf " - Relative opt. gap    = %14.3e\n" m.gap_rel_opt
+        end
         @printf " - Total time (s)       = %14.2e\n" m.logs[:total]
     end
 
     if m.log_level >= 2
         @printf "Solution constructed by %s solver\n" (m.is_best_conic ? "conic" : "MIP")
-    end
-
-    if m.gap_rel_opt < -10*m.rel_gap
-        if m.is_best_conic
-            warn("Best feasible value is smaller than best bound: conic solver's solution may have significant infeasibilities (try tightening primal feasibility tolerance of conic solver)\n")
-        else
-            warn("Best feasible value is smaller than best bound: check solution feasibility and bounds returned by MIP solver (please submit an issue)\n")
-        end
-        m.status = :Error
-        m.log_level = 3
     end
 
     if m.log_level >= 3
