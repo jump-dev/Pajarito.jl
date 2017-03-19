@@ -119,6 +119,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     cb_lazy                     # Lazy callback reference (MIP-driven only)
 
     # Solution and bound information
+    is_best_conic::Bool         # Indicates best feasible came from conic solver solution, otherwise MIP solver solution
     mip_obj::Float64            # Latest MIP (outer approx) objective value
     best_obj::Float64           # Best feasible objective value
     best_int::Vector{Float64}   # Best feasible integer solution
@@ -369,7 +370,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 end
 
                 # Add relaxation cuts
+                tic()
                 add_subp_cuts!(m, dual_conic, v_idxs_soc_relx, r_idx_exp_relx, s_idx_exp_relx, v_idxs_sdp_relx)
+                m.logs[:relax_cuts] += toq()
             end
         end
 
@@ -1326,6 +1329,8 @@ function solve_iterative!(m)
                     m.best_obj = obj_full
                     m.best_int = soln_int
                     m.best_cont = soln_cont
+                    m.new_incumb = true
+                    m.is_best_conic = false
 
                     # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
                     m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
@@ -1633,6 +1638,7 @@ function solve_subp_add_subp_cuts!(m)
                 m.best_int = soln_int
                 m.best_cont = soln_conic
                 m.new_incumb = true
+                m.is_best_conic = true
             end
         elseif !isempty(dual_conic)
             # We have a dual but don't know the status, so we can't use subproblem scaling
@@ -1657,11 +1663,11 @@ function solve_subp_add_subp_cuts!(m)
         end
     end
 
-    if add_subp_cuts!(m, dual_conic, m.v_idxs_soc_subp, m.r_idx_exp_subp, m.s_idx_exp_subp, m.v_idxs_sdp_subp)
-        return (false, true)
-    else
-        return (false, false)
-    end
+    tic()
+    is_viol_subp = add_subp_cuts!(m, dual_conic, m.v_idxs_soc_subp, m.r_idx_exp_subp, m.s_idx_exp_subp, m.v_idxs_sdp_subp)
+    m.logs[:subp_cuts] += toq()
+
+    return (false, is_viol_subp)
 end
 
 # Solve conic subproblem given some solution to the integer variables, update incumbent
@@ -1685,7 +1691,7 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
 
     MathProgBase.optimize!(m.model_conic)
     m.logs[:n_conic] += 1
-    m.logs[:conic_solve] += toq()
+    m.logs[:subp_solve] += toq()
 
     status_conic = MathProgBase.status(m.model_conic)
     if status_conic == :Optimal
@@ -1768,6 +1774,7 @@ end
 
 # Check cone infeasibilities of current solution, optionally add K* cuts from current solution for infeasible cones
 function check_feas_add_prim_cuts!(m, add_cuts::Bool)
+    tic()
     is_infeas = false
     is_viol_prim = false
 
@@ -1822,6 +1829,7 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
         end
     end
 
+    m.logs[:prim_cuts] += toq()
     if !is_infeas
         m.logs[:n_feas_mip] += 1
     end
@@ -2056,7 +2064,10 @@ function create_logs!(m)
     logs[:data_mip] = 0.    # Generating MIP data
     logs[:relax_solve] = 0. # Solving initial conic relaxation model
     logs[:mip_solve] = 0.   # Solving the MIP model
-    logs[:conic_solve] = 0. # Solving conic subproblem model
+    logs[:subp_solve] = 0. # Solving conic subproblem model
+    logs[:relax_cuts] = 0.  # Deriving and adding conic relaxation cuts
+    logs[:subp_cuts] = 0.   # Deriving and adding subproblem cuts
+    logs[:prim_cuts] = 0.   # Deriving and adding primal cuts
 
     # Counters
     logs[:n_lazy] = 0       # Number of times lazy is called in MSD
@@ -2106,6 +2117,10 @@ end
 function print_finish(m::PajaritoConicModel)
     flush(STDOUT)
 
+    if !in(m.status, [:Optimal, :Suboptimal, :UserLimit, :Unbounded, :Infeasible])
+        m.log_level = 3
+    end
+
     if m.log_level >= 1
         if m.mip_solver_drives
             @printf "\nMIP-solver-driven algorithm summary:\n"
@@ -2119,9 +2134,18 @@ function print_finish(m::PajaritoConicModel)
         @printf " - Total time (s)       = %14.2e\n" m.logs[:total]
     end
 
+    if m.log_level >= 2
+        @printf "Solution constructed by %s solver\n" (m.is_best_conic ? "conic" : "MIP")
+    end
+
     if m.gap_rel_opt < -10*m.rel_gap
-        warn("Best feasible value is smaller than best bound: this may indicate the final solution was constructed from a conic solver solution with significant infeasibilities\n")
+        if m.is_best_conic
+            warn("Best feasible value is smaller than best bound: conic solver's solution may have significant infeasibilities (try tightening primal feasibility tolerance of conic solver)\n")
+        else
+            warn("Best feasible value is smaller than best bound: check solution feasibility and bounds returned by MIP solver (please submit an issue)\n")
+        end
         m.status = :Error
+        m.log_level = 3
     end
 
     if m.log_level >= 3
@@ -2132,12 +2156,15 @@ function print_finish(m::PajaritoConicModel)
         @printf " -- Create MIP data     = %10.2e\n" m.logs[:data_mip]
         @printf " - Algorithm            = %10.2e\n" (m.logs[:total] - (m.logs[:data_trans] + m.logs[:data_conic] + m.logs[:data_mip]))
         @printf " -- Solve relaxation    = %10.2e\n" m.logs[:relax_solve]
-        @printf " -- Solve subproblems   = %10.2e\n" m.logs[:conic_solve]
+        @printf " -- Get relaxation cuts = %10.2e\n" m.logs[:relax_cuts]
         if m.mip_solver_drives
             @printf " -- MIP solver driving  = %10.2e\n" m.logs[:mip_solve]
         else
             @printf " -- Solve MIP models    = %10.2e\n" m.logs[:mip_solve]
         end
+        @printf " -- Solve subproblems   = %10.2e\n" m.logs[:subp_solve]
+        @printf " -- Get subproblem cuts = %10.2e\n" m.logs[:subp_cuts]
+        @printf " -- Get primal cuts     = %10.2e\n" m.logs[:prim_cuts]
 
         @printf "\nCounters:\n"
         if m.mip_solver_drives
@@ -2156,9 +2183,11 @@ function print_finish(m::PajaritoConicModel)
             @printf " --- Other status       = %5d\n" m.logs[:n_other]
         end
         @printf " -- Feasible solutions  = %5d\n" (m.logs[:n_feas_conic] + m.logs[:n_feas_mip])
-        @printf " --- From conic solver  = %5d\n" m.logs[:n_feas_conic]
-        @printf " --- From MIP solver    = %5d\n" m.logs[:n_feas_mip]
-        if m.mip_solver_drives
+        @printf " --- From subproblems   = %5d\n" m.logs[:n_feas_conic]
+        if !m.mip_solver_drives
+            @printf " --- From OA model      = %5d\n" m.logs[:n_feas_mip]
+        else
+            @printf " --- In lazy callback   = %5d\n" m.logs[:n_feas_mip]
             @printf " - Heuristic callbacks  = %5d\n" m.logs[:n_heur]
             @printf " -- Solutions passed    = %5d\n" m.logs[:n_add]
         end
