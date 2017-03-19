@@ -1014,27 +1014,27 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(getvalue(np), [0.0; 3.0; 2.0; 3.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
     end
 
-    @testset "No relax solve: A-opt" begin
-        aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, solve_relax=false))
-
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-
-        np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-        @constraint(aOpt, sum(np) <= n)
-        u = @variable(aOpt, [i=1:q], lowerbound=0)
-        @objective(aOpt, Min, sum(u))
-        E = eye(q)
-        for i=1:q
-            @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
-        end
-
-        @test solve(aOpt, suppress_warnings=true) == :Optimal
-
-        @test isapprox(getobjectivevalue(aOpt), 8.955043, atol=TOL)
-        @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
-        @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
-    end
+    # @testset "No relax solve: A-opt" begin
+    #     aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, solve_relax=false))
+    #
+    #     (q, p, n, nmax) = (4, 8, 12, 3)
+    #     V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
+    #
+    #     np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
+    #     @constraint(aOpt, sum(np) <= n)
+    #     u = @variable(aOpt, [i=1:q], lowerbound=0)
+    #     @objective(aOpt, Min, sum(u))
+    #     E = eye(q)
+    #     for i=1:q
+    #         @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
+    #     end
+    #
+    #     @test solve(aOpt, suppress_warnings=true) == :Optimal
+    #
+    #     @test isapprox(getobjectivevalue(aOpt), 8.955043, atol=TOL)
+    #     @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
+    #     @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
+    # end
 
     @testset "No subp solve: A-opt" begin
         aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, solve_subp=false))
