@@ -2223,12 +2223,12 @@ function print_finish(m::PajaritoConicModel)
             viol_bin = -Inf
             for (j, vartype) in enumerate(m.var_types)
                 if vartype == :Int
-                    viol_int = max(0., viol_int, abs(m.final_soln[j] - round(m.final_soln[j])))
+                    viol_int = max(viol_int, abs(m.final_soln[j] - round(m.final_soln[j])))
                 elseif vartype == :Bin
                     if m.final_soln[j] < 0.5
-                        viol_bin = max(0., viol_bin, abs(m.final_soln[j]))
+                        viol_bin = max(viol_bin, abs(m.final_soln[j]))
                     else
-                        viol_bin = max(0., viol_bin, abs(m.final_soln[j] - 1.))
+                        viol_bin = max(viol_bin, abs(m.final_soln[j] - 1.))
                     end
                 end
             end
