@@ -278,7 +278,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         @printf "\nTransforming original data..."
     end
     tic()
-    (c_new, A_new, b_new, cone_con_new, cone_var_new, keep_cols, var_types_new, cols_cont, cols_int) = transform_data(copy(m.c_orig), copy(m.A_orig), copy(m.b_orig), deepcopy(m.cone_con_orig), deepcopy(m.cone_var_orig), m.var_types, m.solve_relax)
+    (c_new, A_new, b_new, cone_con_new, cone_var_new, keep_cols, var_types_new, cols_cont, cols_int) = transform_data(copy(m.c_orig), copy(m.A_orig), copy(m.b_orig), deepcopy(m.cone_con_orig), deepcopy(m.cone_var_orig), copy(m.var_types), m.solve_relax)
     m.logs[:data_trans] += toq()
     if m.log_level > 1
         @printf "%.2fs\n" m.logs[:data_trans]
@@ -2217,6 +2217,28 @@ function print_finish(m::PajaritoConicModel)
                 elseif isfinite(c)
                     @printf "%16s | %9s | %9.2e\n" name "-" c
                 end
+            end
+
+            viol_int = -Inf
+            viol_bin = -Inf
+            for (j, vartype) in enumerate(m.var_types)
+                if vartype == :Int
+                    viol_int = max(viol_int, abs(m.final_soln[j] - round(m.final_soln[j])))
+                elseif vartype == :Bin
+                    if m.final_soln[j] < 0.5
+                        viol_bin = max(viol_bin, abs(m.final_soln[j]))
+                    else
+                        viol_bin = max(viol_bin, abs(m.final_soln[j] - 1.))
+                    end
+                end
+            end
+
+            @printf "\nWorst integrality violations of solution:\n"
+            if isfinite(viol_int)
+                @printf "%16s | %9.2e\n" "integer" viol_int
+            end
+            if isfinite(viol_bin)
+                @printf "%16s | %9.2e\n" "binary" viol_bin
             end
         end
     end
