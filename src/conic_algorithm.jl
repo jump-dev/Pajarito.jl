@@ -278,7 +278,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         @printf "\nTransforming original data..."
     end
     tic()
-    (c_new, A_new, b_new, cone_con_new, cone_var_new, keep_cols, var_types_new, cols_cont, cols_int) = transform_data(copy(m.c_orig), copy(m.A_orig), copy(m.b_orig), deepcopy(m.cone_con_orig), deepcopy(m.cone_var_orig), m.var_types, m.solve_relax)
+    (c_new, A_new, b_new, cone_con_new, cone_var_new, keep_cols, var_types_new, cols_cont, cols_int) = transform_data(copy(m.c_orig), copy(m.A_orig), copy(m.b_orig), deepcopy(m.cone_con_orig), deepcopy(m.cone_var_orig), copy(m.var_types), m.solve_relax)
     m.logs[:data_trans] += toq()
     if m.log_level > 1
         @printf "%.2fs\n" m.logs[:data_trans]
@@ -2207,16 +2207,38 @@ function print_finish(m::PajaritoConicModel)
             var_inf = calc_infeas(m.cone_var_orig, m.final_soln)
             con_inf = calc_infeas(m.cone_con_orig, m.b_orig-m.A_orig*m.final_soln)
 
-            @printf "\nWorst absolute infeasibilities of solution:"
+            @printf "\nDistance to feasibility (negative indicates strict feasibility):"
             @printf "\n%-16s | %-9s | %-10s\n" "Cone" "Variable" "Constraint"
             for (v, c, name) in zip(var_inf, con_inf, ("Linear", "Second order", "Rotated S.O.", "Primal expon.", "Pos. semidef."))
                 if isfinite(v) && isfinite(c)
-                    @printf "%16s | %9.2e | %9.2e\n" name v c
+                    @printf "%16s | %9.2e | %9.2e\n" name -v -c
                 elseif isfinite(v)
-                    @printf "%16s | %9.2e | %9s\n" name v "-"
+                    @printf "%16s | %9.2e | %9s\n" name -v "NA"
                 elseif isfinite(c)
-                    @printf "%16s | %9s | %9.2e\n" name "-" c
+                    @printf "%16s | %9s | %9.2e\n" name "NA" -c
                 end
+            end
+
+            viol_int = -Inf
+            viol_bin = -Inf
+            for (j, vartype) in enumerate(m.var_types)
+                if vartype == :Int
+                    viol_int = max(viol_int, abs(m.final_soln[j] - round(m.final_soln[j])))
+                elseif vartype == :Bin
+                    if m.final_soln[j] < 0.5
+                        viol_bin = max(viol_bin, abs(m.final_soln[j]))
+                    else
+                        viol_bin = max(viol_bin, abs(m.final_soln[j] - 1.))
+                    end
+                end
+            end
+
+            @printf "\nDistance to integrality of integer/binary variables:\n"
+            if isfinite(viol_int)
+                @printf "%16s | %9.2e\n" "integer" viol_int
+            end
+            if isfinite(viol_bin)
+                @printf "%16s | %9.2e\n" "binary" viol_bin
             end
         end
     end

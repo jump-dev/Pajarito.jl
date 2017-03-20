@@ -38,7 +38,7 @@ end
 if glp
     solvers["MILP"]["GLPK"] = GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, tol_obj=tol_gap)
     if eco
-        solvers["MISOCP"]["Pajarito(GLPK, ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, tol_obj=tol_gap), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=tol_gap)
+        solvers["MISOCP"]["Pajarito(GLPK, ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, tol_obj=tol_gap), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=tol_gap)
     end
 end
 if try_import(:SCIP)
@@ -82,33 +82,35 @@ println()
 
 @testset "Algorithm - $(msd ? "MSD" : "Iter")" for msd in [false, true]
     @testset "MILP solver - $mipname" for (mipname, mip) in solvers["MILP"]
-        @testset "NLP solver - $conname" for (conname, con) in solvers["NLP"]
-            runnlp(msd, mip, con, ll)
-            runsocnlpconic(msd, mip, con, ll)
-            runexpsocnlpconic(msd, mip, con, ll)
-            flush(STDOUT)
-        end
+        if !(msd && mipname == "GLPK") # GLPK MSD is broken
+            @testset "NLP solver - $conname" for (conname, con) in solvers["NLP"]
+                runnlp(msd, mip, con, ll)
+                runsocnlpconic(msd, mip, con, ll)
+                runexpsocnlpconic(msd, mip, con, ll)
+                flush(STDOUT)
+            end
 
-        @testset "SOC solver - $conname" for (conname, con) in solvers["SOC"]
-            runsocnlpconic(msd, mip, con, ll)
-            runsocconic(msd, mip, con, ll)
-            flush(STDOUT)
-        end
+            @testset "SOC solver - $conname" for (conname, con) in solvers["SOC"]
+                runsocnlpconic(msd, mip, con, ll)
+                runsocconic(msd, mip, con, ll)
+                flush(STDOUT)
+            end
 
-        @testset "Exp+SOC solver - $conname" for (conname, con) in solvers["Exp+SOC"]
-            runexpsocnlpconic(msd, mip, con, ll)
-            runexpsocconic(msd, mip, con, ll)
-            flush(STDOUT)
-        end
+            @testset "Exp+SOC solver - $conname" for (conname, con) in solvers["Exp+SOC"]
+                runexpsocnlpconic(msd, mip, con, ll)
+                runexpsocconic(msd, mip, con, ll)
+                flush(STDOUT)
+            end
 
-        @testset "PSD+SOC solver - $conname" for (conname, con) in solvers["PSD+SOC"]
-            runsdpsocconic(msd, mip, con, ll)
-            flush(STDOUT)
-        end
+            @testset "PSD+SOC solver - $conname" for (conname, con) in solvers["PSD+SOC"]
+                runsdpsocconic(msd, mip, con, ll)
+                flush(STDOUT)
+            end
 
-        @testset "PSD+Exp solver - $conname" for (conname, con) in solvers["PSD+Exp"]
-            runsdpexpconic(msd, mip, con, ll)
-            flush(STDOUT)
+            @testset "PSD+Exp solver - $conname" for (conname, con) in solvers["PSD+Exp"]
+                runsdpexpconic(msd, mip, con, ll)
+                flush(STDOUT)
+            end
         end
     end
 
