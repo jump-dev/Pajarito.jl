@@ -10,10 +10,9 @@ using Pajarito
 using Base.Test
 
 
-# Tests absolute tolerance and Pajarito printing options
+# Tests absolute tolerance and Pajarito printing level
 TOL = 1e-3
 ll = 0
-
 
 # Define dictionary of solvers, using JuMP list of available solvers
 include(Pkg.dir("JuMP", "test", "solvers.jl"))
@@ -22,21 +21,31 @@ include("conictest.jl")
 
 solvers = Dict{String,Dict{String,MathProgBase.AbstractMathProgSolver}}()
 
+# MIP solvers
 solvers["MILP"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 solvers["MISOCP"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
+
+tol_int = 1e-8
+tol_feas = 1e-7
+tol_gap = 1e-8
+
 if grb
-    solvers["MILP"]["Gurobi"] = solvers["MISOCP"]["Gurobi"] = Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=1e-8, FeasibilityTol=1e-7, MIPGap=1e-8)
+    solvers["MILP"]["Gurobi"] = solvers["MISOCP"]["Gurobi"] = Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=tol_int, FeasibilityTol=tol_feas, MIPGap=tol_gap)
 end
 if cpx
-    solvers["MILP"]["CPLEX"] = solvers["MISOCP"]["CPLEX"] = CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-7, CPX_PARAM_EPGAP=1e-8)
+    solvers["MILP"]["CPLEX"] = solvers["MISOCP"]["CPLEX"] = CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=tol_int, CPX_PARAM_EPRHS=tol_feas, CPX_PARAM_EPGAP=tol_gap)
 end
 if glp
-    solvers["MILP"]["GLPK"] = GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=1e-8, tol_bnd=1e-7, tol_obj=1e-8)
+    solvers["MILP"]["GLPK"] = GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, tol_obj=tol_gap)
     if eco
-        solvers["MISOCP"]["Pajarito(GLPK, ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=1e-8, tol_bnd=1e-7, tol_obj=1e-8), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-8)
+        solvers["MISOCP"]["Pajarito(GLPK, ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, tol_obj=tol_gap), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=tol_gap)
     end
 end
+if try_import(:SCIP)
+    solvers["MILP"]["SCIP"] = solvers["MISOCP"]["SCIP"] = SCIP.SCIPSolver("display/verblevel", 0, "limits/gap", tol_gap, "numerics/feastol", tol_feas)
+end
 
+# NLP solvers
 solvers["NLP"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 if ipt
     solvers["NLP"]["Ipopt"] = Ipopt.IpoptSolver(print_level=0)
@@ -45,6 +54,7 @@ end
 #     solvers["NLP"]["Knitro"] = KNITRO.KnitroSolver(objrange=1e16, outlev=0, maxit=100000)
 # end
 
+# Conic solvers
 solvers["SOC"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 solvers["Exp+SOC"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 solvers["PSD+SOC"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
