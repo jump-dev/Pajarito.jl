@@ -1367,10 +1367,18 @@ function solve_iterative!(m)
             break
         end
 
-        # Give the best feasible solution to the MIP as a warm-start
         if m.pass_mip_sols && isfinite(m.best_obj)
+            # Give the best feasible solution to the MIP as a warm-start
             m.logs[:n_add] += 1
             set_best_soln!(m, m.best_int, m.best_cont)
+        else
+            # For MIP solvers that accept warm starts without checking feasibility, set all variables to NaN
+            for var in m.x_int
+                setvalue(var, NaN)
+            end
+            for var in m.x_cont
+                setvalue(var, NaN)
+            end
         end
     end
 end
