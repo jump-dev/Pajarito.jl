@@ -122,6 +122,7 @@ function PajaritoSolver(;
     end
 
     if !solve_subp
+        prim_cuts_only = true
         pass_mip_sols = false
     end
     if prim_cuts_only
