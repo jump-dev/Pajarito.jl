@@ -17,7 +17,7 @@ end
 
 
 # Pajarito solver
-immutable PajaritoSolver <: MathProgBase.AbstractMathProgSolver
+type PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     log_level::Int              # Verbosity flag: 0 for minimal information, 1 for basic solve statistics, 2 for iteration information, 3 for cone information
     timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
     rel_gap::Float64            # Relative optimality gap termination condition
