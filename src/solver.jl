@@ -102,36 +102,6 @@ function PajaritoSolver(;
     if mip_solver == UnsetSolver()
         error("No MIP solver specified (set mip_solver)\n")
     end
-    if (mip_subopt_count > 0) && (mip_subopt_solver == UnsetSolver())
-        error("Using suboptimal solves (mip_subopt_count > 0), but no suboptimal MIP solver specified (set mip_subopt_solver)\n")
-    end
-    if (solve_relax || solve_subp) && (cont_solver == UnsetSolver())
-        error("No continuous solver specified (set cont_solver, or for a conic model, set solve_relax = solve_subp = false)\n")
-    end
-
-    if soc_in_mip || init_sdp_soc || sdp_soc
-        # If using MISOCP outer approximation, check MIP solver handles MISOCP
-        if !(:SOC in MathProgBase.supportedcones(mip_solver))
-            error("The MIP solver specified does not support MISOCP\n")
-        end
-    end
-
-    if viol_cuts_only == nothing
-        # If user has not set option, default is true on MSD and false on iterative
-        viol_cuts_only = mip_solver_drives
-    end
-
-    if !solve_subp
-        prim_cuts_only = true
-        pass_mip_sols = false
-        round_mip_sols = false
-    end
-    if prim_cuts_only
-        prim_cuts_always = true
-    end
-    if prim_cuts_always
-        prim_cuts_assist = true
-    end
 
     PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_factor, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
 end
@@ -140,6 +110,38 @@ end
 # Create Pajarito conic model: can solve with either conic algorithm or nonlinear algorithm wrapped with ConicNonlinearBridge
 function MathProgBase.ConicModel(s::PajaritoSolver)
     if applicable(MathProgBase.ConicModel, s.cont_solver) || (s.cont_solver == UnsetSolver())
+        if (s.solve_relax || s.solve_subp) && (s.cont_solver == UnsetSolver())
+            error("Using conic relaxation or subproblem solves (solve_relax or solve_subp), but no continuous solver specified (set cont_solver)\n")
+        end
+        
+        if s.soc_in_mip || s.init_sdp_soc || s.sdp_soc
+            # If using MISOCP outer approximation, check MIP solver handles MISOCP
+            if !(:SOC in MathProgBase.supportedcones(s.mip_solver))
+                error("Using SOCs in the MIP model (soc_in_mip or init_sdp_soc or sdp_soc), but MIP solver specified does not support MISOCP\n")
+            end
+        end
+        
+        if (s.mip_subopt_count > 0) && (s.mip_subopt_solver == UnsetSolver())
+            error("Using suboptimal solves (mip_subopt_count > 0), but no suboptimal MIP solver specified (set mip_subopt_solver)\n")
+        end
+
+        if s.viol_cuts_only == nothing
+            # If user has not set option, default is true on MSD and false on iterative
+            s.viol_cuts_only = s.mip_solver_drives
+        end
+
+        if !s.solve_subp
+            s.prim_cuts_only = true
+            s.pass_mip_sols = false
+            s.round_mip_sols = false
+        end
+        if s.prim_cuts_only
+            s.prim_cuts_always = true
+        end
+        if s.prim_cuts_always
+            s.prim_cuts_assist = true
+        end
+        
         return PajaritoConicModel(s.log_level, s.timeout, s.rel_gap, s.mip_solver_drives, s.mip_solver, s.mip_subopt_solver, s.mip_subopt_count, s.round_mip_sols, s.pass_mip_sols, s.cont_solver, s.solve_relax, s.solve_subp, s.dualize_relax, s.dualize_subp, s.soc_disagg, s.soc_abslift, s.soc_in_mip, s.sdp_eig, s.sdp_soc, s.init_soc_one, s.init_soc_inf, s.init_exp, s.init_sdp_lin, s.init_sdp_soc, s.scale_subp_cuts, s.scale_factor, s.viol_cuts_only, s.prim_cuts_only, s.prim_cuts_always, s.prim_cuts_assist, s.tol_zero, s.tol_prim_infeas)
     elseif applicable(MathProgBase.NonlinearModel, s.cont_solver)
         return MathProgBase.ConicModel(ConicNonlinearBridge.ConicNLPWrapper(nlp_solver=s))
