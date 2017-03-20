@@ -76,7 +76,7 @@ The following options can be passed to `PajaritoSolver()` to modify its behavior
   * `mip_subopt_solver::MathProgBase.AbstractMathProgSolver` **C** MIP solver for suboptimal solves (with appropriate options already passed)
   * `mip_subopt_count::Int` **C** Number of times to use `mip_subopt_solver` between `mip_solver` solves
   * `round_mip_sols::Bool` **C** Round integer variable values before solving subproblems
-  * `pass_mip_sols::Bool` **C** Use conic subproblem feasible solutions as MIP warm-starts or heuristic solutions
+  * `use_mip_starts::Bool` **C** Use conic subproblem feasible solutions as MIP warm-starts or heuristic solutions
   * `cont_solver::MathProgBase.AbstractMathProgSolver` Continuous solver (conic or nonlinear)
   * `solve_relax::Bool` **C** Solve the continuous conic relaxation to add initial subproblem cuts
   * `solve_subp::Bool` **C** Solve the continuous conic subproblems to add subproblem cuts
@@ -93,13 +93,13 @@ The following options can be passed to `PajaritoSolver()` to modify its behavior
   * `init_sdp_lin::Bool` **C** Use PSD cone initial linear cuts
   * `init_sdp_soc::Bool` **C** Use PSD cone initial SOC cuts (if `mip_solver` supports MISOCP)
   * `scale_subp_cuts::Bool` **C** Use scaling for subproblem cuts
-  * `scale_factor::Float64` **C** Fixed multiplicative factor for scaled subproblem cuts
+  * `scale_subp_factor::Float64` **C** Fixed multiplicative factor for scaled subproblem cuts
   * `viol_cuts_only::Bool` **C** Only add cuts violated by current MIP solution
   * `prim_cuts_only::Bool` **C** Add primal cuts, do not add subproblem cuts
   * `prim_cuts_always::Bool` **C** Add primal cuts and subproblem cuts
   * `prim_cuts_assist::Bool` **C** Add subproblem cuts, and add primal cuts only subproblem cuts cannot be added
-  * `tol_zero::Float64` **C** Zero tolerance for cut coefficients
-  * `tol_prim_infeas::Float64` **C** Absolute feasibility tolerance used for primal cuts (set equal to feasibility tolerance of `mip_solver`) 
+  * `cut_zero_tol::Float64` **C** Zero tolerance for cut coefficients
+  * `prim_cut_feas_tol::Float64` **C** Absolute feasibility tolerance used for primal cuts (set equal to feasibility tolerance of `mip_solver`) 
 
 **Pajarito is not yet numerically robust and may require tuning of parameters to improve convergence.** If the default parameters don't work for you, please let us know.
 
