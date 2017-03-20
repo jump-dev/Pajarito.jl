@@ -1,3 +1,4 @@
+Copyright (c) 2017: Chris Coey and Miles Lubin
 Copyright (c) 2016: Los Alamos National Laboratory, LANS LLC.
 
 The Pajarito Julia module is licensed under the **[MPL]** version 2.0:
