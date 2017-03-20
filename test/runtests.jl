@@ -33,7 +33,7 @@ end
 if glp
     solvers["MILP"]["GLPK"] = GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=1e-8, tol_bnd=1e-7, tol_obj=1e-8)
     if eco
-        solvers["MISOCP"]["Pajarito(GLPK, ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=1e-8, tol_bnd=1e-7, tol_obj=1e-8), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-8)
+        solvers["MISOCP"]["Pajarito(GLPK, ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true,msg_lev=GLPK.MSG_OFF, tol_int=1e-8, tol_bnd=1e-7, tol_obj=1e-8), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-8)
     end
 end
 
