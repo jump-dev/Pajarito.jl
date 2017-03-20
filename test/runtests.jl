@@ -101,6 +101,7 @@ println()
                 runsdpexpconic(msd, mip, con, ll)
                 flush(STDOUT)
             end
+        end
     end
 
     @testset "MISOCP solver - $mipname" for (mipname, mip) in solvers["MISOCP"]
