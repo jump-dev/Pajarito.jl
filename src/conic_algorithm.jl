@@ -2207,15 +2207,15 @@ function print_finish(m::PajaritoConicModel)
             var_inf = calc_infeas(m.cone_var_orig, m.final_soln)
             con_inf = calc_infeas(m.cone_con_orig, m.b_orig-m.A_orig*m.final_soln)
 
-            @printf "\nWorst absolute infeasibilities of solution:"
+            @printf "\nDistance to feasibility (negative indicates strict feasibility):"
             @printf "\n%-16s | %-9s | %-10s\n" "Cone" "Variable" "Constraint"
             for (v, c, name) in zip(var_inf, con_inf, ("Linear", "Second order", "Rotated S.O.", "Primal expon.", "Pos. semidef."))
                 if isfinite(v) && isfinite(c)
-                    @printf "%16s | %9.2e | %9.2e\n" name v c
+                    @printf "%16s | %9.2e | %9.2e\n" name -v -c
                 elseif isfinite(v)
-                    @printf "%16s | %9.2e | %9s\n" name v "-"
+                    @printf "%16s | %9.2e | %9s\n" name -v "NA"
                 elseif isfinite(c)
-                    @printf "%16s | %9s | %9.2e\n" name "-" c
+                    @printf "%16s | %9s | %9.2e\n" name "NA" -c
                 end
             end
 
@@ -2223,17 +2223,17 @@ function print_finish(m::PajaritoConicModel)
             viol_bin = -Inf
             for (j, vartype) in enumerate(m.var_types)
                 if vartype == :Int
-                    viol_int = max(viol_int, abs(m.final_soln[j] - round(m.final_soln[j])))
+                    viol_int = max(0., viol_int, abs(m.final_soln[j] - round(m.final_soln[j])))
                 elseif vartype == :Bin
                     if m.final_soln[j] < 0.5
-                        viol_bin = max(viol_bin, abs(m.final_soln[j]))
+                        viol_bin = max(0., viol_bin, abs(m.final_soln[j]))
                     else
-                        viol_bin = max(viol_bin, abs(m.final_soln[j] - 1.))
+                        viol_bin = max(0., viol_bin, abs(m.final_soln[j] - 1.))
                     end
                 end
             end
 
-            @printf "\nWorst integrality violations of solution:\n"
+            @printf "\nDistance to integrality of integer/binary variables:\n"
             if isfinite(viol_int)
                 @printf "%16s | %9.2e\n" "integer" viol_int
             end
