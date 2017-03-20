@@ -68,38 +68,38 @@ The possible cones are listed in the [MathProgBase](http://mathprogbasejl.readth
 
 The following options can be passed to `PajaritoSolver()` to modify its behavior (see [solver.jl](https://github.com/mlubin/Pajarito.jl/blob/master/src/solver.jl) for default values; **C** means conic algorithm only):
 
-  * `log_level::Int` Verbosity flag: 0 for minimal information, 1 for basic solve statistics, 2 for iteration information, 3 for cone information
-  * `timeout::Float64` Time limit for outer approximation algorithm not including initial load (in seconds)
+  * `log_level::Int` Verbosity flag: 0 for quiet, 1 for basic solve info, 2 for iteration info, 3 for detailed timing and cuts and solution feasibility info
+  * `timeout::Float64` Time limit for algorithm (in seconds)
   * `rel_gap::Float64` Relative optimality gap termination condition
-  * `mip_solver_drives::Bool` Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
+  * `mip_solver_drives::Bool` Let MIP solver manage convergence ("branch and cut")
   * `mip_solver::MathProgBase.AbstractMathProgSolver` MIP solver (MILP or MISOCP)
-  * `mip_subopt_solver::MathProgBase.AbstractMathProgSolver` **C** MIP solver for suboptimal solves, with appropriate options (gap or timeout) specified directly
-  * `mip_subopt_count::Int` **C** Number of times to solve MIP suboptimally with time limit between zero gap solves
-  * `round_mip_sols::Bool` **C** Round the integer variable values from the MIP solver before passing to the conic subproblems
-  * `pass_mip_sols::Bool` **C** Give best feasible solutions constructed from conic subproblem solution to MIP
+  * `mip_subopt_solver::MathProgBase.AbstractMathProgSolver` **C** MIP solver for suboptimal solves (with appropriate options already passed)
+  * `mip_subopt_count::Int` **C** Number of times to use `mip_subopt_solver` between `mip_solver` solves
+  * `round_mip_sols::Bool` **C** Round integer variable values before solving subproblems
+  * `pass_mip_sols::Bool` **C** Use conic subproblem feasible solutions as MIP warm-starts or heuristic solutions
   * `cont_solver::MathProgBase.AbstractMathProgSolver` Continuous solver (conic or nonlinear)
   * `solve_relax::Bool` **C** Solve the continuous conic relaxation to add initial subproblem cuts
   * `solve_subp::Bool` **C** Solve the continuous conic subproblems to add subproblem cuts
   * `dualize_relax::Bool` **C** Solve the conic dual of the continuous conic relaxation
   * `dualize_subp::Bool` **C** Solve the conic duals of the continuous conic subproblems
-  * `soc_disagg::Bool` **C** Disaggregate SOC cones in the MIP only
-  * `soc_abslift::Bool` **C** Use SOC absolute value lifting in the MIP only
-  * `soc_in_mip::Bool` **C** Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
-  * `sdp_eig::Bool` **C** Use SDP eigenvector-derived cuts
-  * `sdp_soc::Bool` **C** Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP)
-  * `init_soc_one::Bool` **C** Start with disaggregated L_1 outer approximation cuts for SOCs (if `soc_disagg` or `soc_abslift`)
-  * `init_soc_inf::Bool` **C** Start with disaggregated L_inf outer approximation cuts for SOCs (if `soc_disagg`)
-  * `init_exp::Bool` **C** Start with several outer approximation cuts on the exponential cones
-  * `init_sdp_lin::Bool` **C** Use SDP initial linear cuts
-  * `init_sdp_soc::Bool` **C** Use SDP initial SOC cuts (if MIP solver supports MISOCP)
-  * `scale_subp_cuts::Bool` **C** Use scaling for subproblem cuts based on subproblem status
-  * `scale_factor::Float64` **C** Multiplicative factor for scaled subproblem cuts (cuts are scaled by scale_factor*tol_prim_infeas/rel_gap)
-  * `viol_cuts_only::Bool` **C** Only add cuts that are violated by the current MIP solution (may be useful for MSD algorithm where many cuts are added)
-  * `prim_cuts_only::Bool` **C** Do not add subproblem cuts (if `prim_cuts_always` and `prim_cuts_assist`)
-  * `prim_cuts_always::Bool` **C** Add primal cuts at each iteration or in each lazy callback (if `prim_cuts_assist`)
-  * `prim_cuts_assist::Bool` **C** Add primal cuts only when integer solutions are repeating or when conic solver fails
-  * `tol_zero::Float64` **C** Tolerance for small epsilons as zeros
-  * `tol_prim_infeas::Float64` **C** Absolute tolerance level for cone outer infeasibilities, should be equal to MIP solver absolute linear constraint feasibility tolerance for best performance (does not apply to feasibility of the conic solver solutions)
+  * `soc_disagg::Bool` **C** Disaggregate SOC cones
+  * `soc_abslift::Bool` **C** Use SOC absolute value lifting
+  * `soc_in_mip::Bool` **C** Use SOC cones in the MIP model (if `mip_solver` supports MISOCP)
+  * `sdp_eig::Bool` **C** Use PSD cone eigenvector cuts
+  * `sdp_soc::Bool` **C** Use PSD cone eigenvector SOC cuts (if `mip_solver` supports MISOCP)
+  * `init_soc_one::Bool` **C** Use SOC initial L_1 cuts
+  * `init_soc_inf::Bool` **C** Use SOC initial L_inf cuts
+  * `init_exp::Bool` **C** Use Exp initial cuts
+  * `init_sdp_lin::Bool` **C** Use PSD cone initial linear cuts
+  * `init_sdp_soc::Bool` **C** Use PSD cone initial SOC cuts (if `mip_solver` supports MISOCP)
+  * `scale_subp_cuts::Bool` **C** Use scaling for subproblem cuts
+  * `scale_factor::Float64` **C** Fixed multiplicative factor for scaled subproblem cuts
+  * `viol_cuts_only::Bool` **C** Only add cuts violated by current MIP solution
+  * `prim_cuts_only::Bool` **C** Add primal cuts, do not add subproblem cuts
+  * `prim_cuts_always::Bool` **C** Add primal cuts and subproblem cuts
+  * `prim_cuts_assist::Bool` **C** Add subproblem cuts, and add primal cuts only subproblem cuts cannot be added
+  * `tol_zero::Float64` **C** Zero tolerance for cut coefficients
+  * `tol_prim_infeas::Float64` **C** Absolute feasibility tolerance used for primal cuts (set equal to feasibility tolerance of `mip_solver`) 
 
 **Pajarito is not yet numerically robust and may require tuning of parameters to improve convergence.** If the default parameters don't work for you, please let us know.
 
