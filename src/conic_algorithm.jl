@@ -359,13 +359,6 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 @printf " - Relaxation objective = %14.6f\n" obj_relax
             end
 
-            # Get solution and check for NaNs
-            soln_relax = MathProgBase.getsolution(model_relax)
-            if !isempty(soln_relax) && !any(isnan, soln_relax)
-                # Set relaxation solution as warmstart to MIP, enables picking tightest relaxation SOC cuts for PSD cones also
-                set_best_soln!(m, soln_relax[cols_int], soln_relax[cols_cont])
-            end
-
             # Get dual and check for NaNs
             dual_conic = MathProgBase.getdual(model_relax)
             if !isempty(dual_conic) && !any(isnan, dual_conic)
