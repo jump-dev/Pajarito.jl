@@ -1370,6 +1370,9 @@ function solve_iterative!(m)
         if m.pass_mip_sols && isfinite(m.best_obj)
             m.logs[:n_add] += 1
             set_best_soln!(m, m.best_int, m.best_cont)
+        else
+            # for solvers that accept warm starts without checking feasibility
+            setvalue(m.x_int[1], NaN)
         end
     end
 end
