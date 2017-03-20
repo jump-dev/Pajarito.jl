@@ -66,7 +66,7 @@ The possible cones are listed in the [MathProgBase](http://mathprogbasejl.readth
 
 ## Pajarito solver options
 
-The following options can be passed to `PajaritoSolver()` to modify its behavior (see [solver.jl](https://github.com/mlubin/Pajarito.jl/blob/master/src/solver.jl for default values); **C** means conic algorithm only):
+The following options can be passed to `PajaritoSolver()` to modify its behavior (see [solver.jl](https://github.com/mlubin/Pajarito.jl/blob/master/src/solver.jl) for default values; **C** means conic algorithm only):
 
   * `log_level::Int` Verbosity flag: 0 for minimal information, 1 for basic solve statistics, 2 for iteration information, 3 for cone information
   * `timeout::Float64` Time limit for outer approximation algorithm not including initial load (in seconds)
