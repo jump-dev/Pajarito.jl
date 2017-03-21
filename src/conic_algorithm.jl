@@ -248,16 +248,16 @@ end
 # Store variable type vector on original variables in Pajarito model
 function MathProgBase.setvartype!(m::PajaritoConicModel, var_types::Vector{Symbol})
     if m.status != :Loaded
-        error("Must specify variable types right after loading problem\n")
+        error("Must call setvartype! immediately after loadproblem!\n")
     end
     if length(var_types) != m.num_var_orig
         error("Variable types vector length ($(length(var_types))) does not match number of variables ($(m.num_var_orig))\n")
     end
     if any((var_type -> (var_type != :Bin) && (var_type != :Int) && (var_type != :Cont)), var_types)
-        error("Some variable types are not in :Bin, :Int, :Cont\n")
+        error("Some variable types are not :Bin, :Int, :Cont\n")
     end
     if !any((var_type -> (var_type == :Bin) || (var_type == :Int)), var_types)
-        error("No variables are in :Bin, :Int; use conic solver directly if problem is continuous\n")
+        error("No variable types are :Bin or :Int; use the continuous conic solver directly if your problem is continuous\n")
     end
 
     m.var_types = var_types
@@ -266,7 +266,7 @@ end
 # Solve, given the initial conic model data and the variable types vector and possibly a warm-start vector
 function MathProgBase.optimize!(m::PajaritoConicModel)
     if m.status != :Loaded
-        error("Must call optimize! function after loading conic data and setting variable types\n")
+        error("Must call optimize! after setvartype! and loadproblem!\n")
     end
     if isempty(m.var_types)
         error("Variable types were not specified; must call setvartype! function\n")
@@ -951,8 +951,6 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             for j in cols
                 setname(x_all[j], "v$(j)")
             end
-        elseif spec == :Zero
-            error("Bug: Zero cones should have been removed by transform data function (submit an issue)\n")
         end
     end
 
@@ -1263,7 +1261,11 @@ function solve_iterative!(m)
             break
         elseif status_mip == :Unbounded
             # Stop if unbounded (initial conic relax solve should detect this)
-            warn("MIP solver returned status $status_mip, which could indicate a problem with the conic relaxation solve (try setting prim_cuts_assist = false)\n")
+            if !m.solve_relax
+                warn("MIP solver returned status $status_mip but the conic relaxation problem was not solved (set solve_relax = true)\n")
+            else
+                warn("MIP solver returned status $status_mip, which could indicate a problem with the conic relaxation solve\n")
+            end
             m.status = :CutsFailure
             break
         elseif (status_mip == :UserLimit) || (status_mip == :Optimal)
@@ -1449,7 +1451,11 @@ function solve_mip_driven!(m)
         return
     elseif status_mip == :Unbounded
         # Stop if unbounded (initial conic relax solve should detect this)
-        warn("MIP solver returned status $status_mip, which could indicate a problem with the conic relaxation solve (try setting prim_cuts_assist = false)\n")
+        if !m.solve_relax
+            warn("MIP solver returned status $status_mip but the conic relaxation problem was not solved (set solve_relax = true)\n")
+        else
+            warn("MIP solver returned status $status_mip, which could indicate a problem with the conic relaxation solve\n")
+        end
         m.status = :CutsFailure
     elseif status_mip == :UserLimit
         # Either a timeout, or a cuts failure terminated the MIP solver
@@ -2284,8 +2290,6 @@ function calc_infeas(cones, vals)
             vals_smat = Symmetric(zeros(dim, dim))
             make_smat!(vals_smat, vals[idx])
             viol_sdp = max(viol_sdp, -eigmin(vals_smat))
-        else
-            error("Cone not supported: $cone\n")
         end
     end
 
