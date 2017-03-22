@@ -208,10 +208,14 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
         error("Variable or constraint cones are missing\n")
     end
 
+    A_sp = sparse(A)
+    dropzeros!(A_sp)
+
     if m.log_level > 1
         @printf "\nProblem dimensions:\n"
         @printf "%16s | %9d\n" "variables" num_var_orig
         @printf "%16s | %9d\n" "constraints" num_con_orig
+        @printf "%16s | %9d\n" "nonzeros in A" nnz(A_sp)
     end
 
     # Check constraint cones
@@ -327,7 +331,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
 
     if m.log_level > 1
         @printf "\nCones summary:"
-        @printf "\n%-16s | %-9s | %-9s | %-9s\n" "Cone" "Count" "Min dim." "Max dim."
+        @printf "\n%-16s | %-9s | %-9s | %-9s\n" "" "Count" "Min dim." "Max dim."
         if num_soc > 0
             @printf "%16s | %9d | %9d | %9d\n" "Second order" num_soc min_soc max_soc
         end
@@ -366,7 +370,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     m.num_con_orig = length(b)
     m.num_var_orig = length(c)
     m.c_orig = c
-    m.A_orig = A
+    m.A_orig = A_sp
     m.b_orig = b
     m.cone_con_orig = cone_con
     m.cone_var_orig = cone_var
@@ -418,7 +422,7 @@ function MathProgBase.setvartype!(m::PajaritoConicModel, var_types::Vector{Symbo
     end
 
     if m.log_level > 1
-        @printf "\nVariable types summary:\n"
+        @printf "\nVariable types:\n"
         if num_cont > 0
             @printf "%16s | %9d\n" "continuous" num_cont
         end
@@ -633,16 +637,9 @@ MathProgBase.getsolution(m::PajaritoConicModel) = m.final_soln
  Data functions
 =========================================================#
 
-# Verify consistency of conic data
-function verify_data(m, c, A, b, cone_con, cone_var)
-
-end
-
 # Transform/preprocess data
 function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, var_types, solve_relax)
-    A = sparse(A_orig)
-    dropzeros!(A)
-    (A_I, A_J, A_V) = findnz(A)
+    (A_I, A_J, A_V) = findnz(A_orig)
 
     num_con_new = length(b_orig)
     b_new = b_orig
