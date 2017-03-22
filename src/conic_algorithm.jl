@@ -198,8 +198,156 @@ const sqrt2inv = 1/sqrt2
 
 # Verify initial conic data and convert appropriate types and store in Pajarito model
 function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, cone_var)
-    # Verify consistency of conic data
-    verify_data(m, c, A, b, cone_con, cone_var)
+    # Check dimensions of conic problem
+    num_con_orig = length(b)
+    num_var_orig = length(c)
+    if size(A) != (num_con_orig, num_var_orig)
+        error("Dimensions of matrix A $(size(A)) do not match lengths of vector b ($(length(b))) and c ($(length(c)))\n")
+    end
+    if isempty(cone_con) || isempty(cone_var)
+        error("Variable or constraint cones are missing\n")
+    end
+
+    A_sp = sparse(A)
+    dropzeros!(A_sp)
+
+    if m.log_level > 1
+        @printf "\nProblem dimensions:\n"
+        @printf "%16s | %9d\n" "variables" num_var_orig
+        @printf "%16s | %9d\n" "constraints" num_con_orig
+        @printf "%16s | %9d\n" "nonzeros in A" nnz(A_sp)
+    end
+
+    # Check constraint cones
+    inds_con = zeros(Int, num_con_orig)
+    for (spec, inds) in cone_con
+        if spec == :Free
+            error("A cone $spec is in the constraint cones\n")
+        end
+
+        if any(inds .> num_con_orig)
+            error("Some indices in a constraint cone do not correspond to indices of vector b\n")
+        end
+
+        inds_con[inds] += 1
+    end
+    if any(inds_con .== 0)
+        error("Some indices in vector b do not correspond to indices of a constraint cone\n")
+    end
+    if any(inds_con .> 1)
+        error("Some indices in vector b appear in multiple constraint cones\n")
+    end
+
+    # Check variable cones
+    inds_var = zeros(Int, num_var_orig)
+    for (spec, inds) in cone_var
+        if any(inds .> num_var_orig)
+            error("Some indices in a variable cone do not correspond to indices of vector c\n")
+        end
+
+        inds_var[inds] += 1
+    end
+    if any(inds_var .== 0)
+        error("Some indices in vector c do not correspond to indices of a variable cone\n")
+    end
+    if any(inds_var .> 1)
+        error("Some indices in vector c appear in multiple variable cones\n")
+    end
+
+    num_soc = 0
+    min_soc = 0
+    max_soc = 0
+
+    num_rot = 0
+    min_rot = 0
+    max_rot = 0
+
+    num_exp = 0
+
+    num_sdp = 0
+    min_sdp = 0
+    max_sdp = 0
+
+    # Verify consistency of cone indices and summarize cone info
+    for (spec, inds) in vcat(cone_con, cone_var)
+        if isempty(inds)
+            error("A cone $spec has no associated indices\n")
+        end
+        if spec == :SOC
+            if length(inds) < 2
+                error("A cone $spec has fewer than 2 indices ($(length(inds)))\n")
+            end
+
+            num_soc += 1
+
+            if max_soc < length(inds)
+                max_soc = length(inds)
+            end
+            if (min_soc == 0) || (min_soc > length(inds))
+                min_soc = length(inds)
+            end
+        elseif spec == :SOCRotated
+            if length(inds) < 3
+                error("A cone $spec has fewer than 3 indices ($(length(inds)))\n")
+            end
+
+            num_rot += 1
+
+            if max_rot < length(inds)
+                max_rot = length(inds)
+            end
+            if (min_rot == 0) || (min_rot > length(inds))
+                min_rot = length(inds)
+            end
+        elseif spec == :SDP
+            if length(inds) < 3
+                error("A cone $spec has fewer than 3 indices ($(length(inds)))\n")
+            else
+                if floor(sqrt(8 * length(inds) + 1)) != sqrt(8 * length(inds) + 1)
+                    error("A cone $spec (in SD svec form) does not have a valid (triangular) number of indices ($(length(inds)))\n")
+                end
+            end
+
+            num_sdp += 1
+
+            if max_sdp < length(inds)
+                max_sdp = length(inds)
+            end
+            if (min_sdp == 0) || (min_sdp > length(inds))
+                min_sdp = length(inds)
+            end
+        elseif spec == :ExpPrimal
+            if length(inds) != 3
+                error("A cone $spec does not have exactly 3 indices ($(length(inds)))\n")
+            end
+
+            num_exp += 1
+        end
+    end
+
+    m.num_soc = num_soc + num_rot
+    m.num_exp = num_exp
+    m.num_sdp = num_sdp
+
+    if m.log_level > 1
+        @printf "\nCones summary:"
+        @printf "\n%-16s | %-9s | %-9s | %-9s\n" "Cone" "Count" "Min dim." "Max dim."
+        if num_soc > 0
+            @printf "%16s | %9d | %9d | %9d\n" "Second order" num_soc min_soc max_soc
+        end
+        if num_rot > 0
+            @printf "%16s | %9d | %9d | %9d\n" "Rotated S.O." num_rot min_rot max_rot
+        end
+        if num_exp > 0
+            @printf "%16s | %9d | %9d | %9d\n" "Primal expon." num_exp 3 3
+        end
+        if num_sdp > 0
+            min_side = round(Int, sqrt(1/4+2*min_sdp)-1/2)
+            max_side = round(Int, sqrt(1/4+2*max_sdp)-1/2)
+            @printf "%16s | %9d | %7s^2 | %7s^2\n" "Pos. semidef." num_sdp min_side max_side
+        end
+        flush(STDOUT)
+    end
 
     if m.solve_relax || m.solve_subp
         # Verify cone compatibility with conic solver
@@ -222,7 +370,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     m.num_con_orig = length(b)
     m.num_var_orig = length(c)
     m.c_orig = c
-    m.A_orig = A
+    m.A_orig = A_sp
     m.b_orig = b
     m.cone_con_orig = cone_con
     m.cone_var_orig = cone_var
@@ -253,11 +401,38 @@ function MathProgBase.setvartype!(m::PajaritoConicModel, var_types::Vector{Symbo
     if length(var_types) != m.num_var_orig
         error("Variable types vector length ($(length(var_types))) does not match number of variables ($(m.num_var_orig))\n")
     end
-    if any((var_type -> (var_type != :Bin) && (var_type != :Int) && (var_type != :Cont)), var_types)
-        error("Some variable types are not :Bin, :Int, :Cont\n")
+
+    num_cont = 0
+    num_bin = 0
+    num_int = 0
+    for vtype in var_types
+        if vtype == :Cont
+            num_cont += 1
+        elseif vtype == :Bin
+            num_bin += 1
+        elseif vtype == :Int
+            num_int += 1
+        else
+            error("A variable type ($vtype) is invalid; variable types must be :Bin, :Int, or :Cont\n")
+        end
     end
-    if !any((var_type -> (var_type == :Bin) || (var_type == :Int)), var_types)
+
+    if (num_bin + num_int) == 0
         error("No variable types are :Bin or :Int; use the continuous conic solver directly if your problem is continuous\n")
+    end
+
+    if m.log_level > 1
+        @printf "\nVariable types:\n"
+        if num_cont > 0
+            @printf "%16s | %9d\n" "continuous" num_cont
+        end
+        if num_bin > 0
+            @printf "%16s | %9d\n" "binary" num_bin
+        end
+        if num_int > 0
+            @printf "%16s | %9d\n" "integer" num_int
+        end
+        flush(STDOUT)
     end
 
     m.var_types = var_types
@@ -434,7 +609,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             soln_new[cols_int] = m.best_int
             soln_new[cols_cont] = m.best_cont
             m.final_soln = zeros(m.num_var_orig)
-            m.final_soln[keep_cols] = soln_new
+            m.final_soln[keep_cols] = soln_new[1:length(keep_cols)]
         end
     end
 
@@ -462,156 +637,9 @@ MathProgBase.getsolution(m::PajaritoConicModel) = m.final_soln
  Data functions
 =========================================================#
 
-# Verify consistency of conic data
-function verify_data(m, c, A, b, cone_con, cone_var)
-    # Check dimensions of conic problem
-    num_con_orig = length(b)
-    num_var_orig = length(c)
-    if size(A) != (num_con_orig, num_var_orig)
-        error("Dimensions of matrix A $(size(A)) do not match lengths of vector b ($(length(b))) and c ($(length(c)))\n")
-    end
-    if isempty(cone_con) || isempty(cone_var)
-        error("Variable or constraint cones are missing\n")
-    end
-
-    # Check constraint cones
-    inds_con = zeros(Int, num_con_orig)
-    for (spec, inds) in cone_con
-        if spec == :Free
-            error("A cone $spec is in the constraint cones\n")
-        end
-
-        if any(inds .> num_con_orig)
-            error("Some indices in a constraint cone do not correspond to indices of vector b\n")
-        end
-
-        inds_con[inds] += 1
-    end
-    if any(inds_con .== 0)
-        error("Some indices in vector b do not correspond to indices of a constraint cone\n")
-    end
-    if any(inds_con .> 1)
-        error("Some indices in vector b appear in multiple constraint cones\n")
-    end
-
-    # Check variable cones
-    inds_var = zeros(Int, num_var_orig)
-    for (spec, inds) in cone_var
-        if any(inds .> num_var_orig)
-            error("Some indices in a variable cone do not correspond to indices of vector c\n")
-        end
-
-        inds_var[inds] += 1
-    end
-    if any(inds_var .== 0)
-        error("Some indices in vector c do not correspond to indices of a variable cone\n")
-    end
-    if any(inds_var .> 1)
-        error("Some indices in vector c appear in multiple variable cones\n")
-    end
-
-    num_soc = 0
-    min_soc = 0
-    max_soc = 0
-
-    num_rot = 0
-    min_rot = 0
-    max_rot = 0
-
-    num_exp = 0
-
-    num_sdp = 0
-    min_sdp = 0
-    max_sdp = 0
-
-    # Verify consistency of cone indices and summarize cone info
-    for (spec, inds) in vcat(cone_con, cone_var)
-        if isempty(inds)
-            error("A cone $spec has no associated indices\n")
-        end
-        if spec == :SOC
-            if length(inds) < 2
-                error("A cone $spec has fewer than 2 indices ($(length(inds)))\n")
-            end
-
-            num_soc += 1
-
-            if max_soc < length(inds)
-                max_soc = length(inds)
-            end
-            if (min_soc == 0) || (min_soc > length(inds))
-                min_soc = length(inds)
-            end
-        elseif spec == :SOCRotated
-            if length(inds) < 3
-                error("A cone $spec has fewer than 3 indices ($(length(inds)))\n")
-            end
-
-            num_rot += 1
-
-            if max_rot < length(inds)
-                max_rot = length(inds)
-            end
-            if (min_rot == 0) || (min_rot > length(inds))
-                min_rot = length(inds)
-            end
-        elseif spec == :SDP
-            if length(inds) < 3
-                error("A cone $spec has fewer than 3 indices ($(length(inds)))\n")
-            else
-                if floor(sqrt(8 * length(inds) + 1)) != sqrt(8 * length(inds) + 1)
-                    error("A cone $spec (in SD svec form) does not have a valid (triangular) number of indices ($(length(inds)))\n")
-                end
-            end
-
-            num_sdp += 1
-
-            if max_sdp < length(inds)
-                max_sdp = length(inds)
-            end
-            if (min_sdp == 0) || (min_sdp > length(inds))
-                min_sdp = length(inds)
-            end
-        elseif spec == :ExpPrimal
-            if length(inds) != 3
-                error("A cone $spec does not have exactly 3 indices ($(length(inds)))\n")
-            end
-
-            num_exp += 1
-        end
-    end
-
-    m.num_soc = num_soc + num_rot
-    m.num_exp = num_exp
-    m.num_sdp = num_sdp
-
-    # Print cone info
-    if m.log_level > 1
-        @printf "\nCone dimensions summary:"
-        @printf "\n%-16s | %-9s | %-9s | %-9s\n" "Cone" "Count" "Min dim." "Max dim."
-        if num_soc > 0
-            @printf "%16s | %9d | %9d | %9d\n" "Second order" num_soc min_soc max_soc
-        end
-        if num_rot > 0
-            @printf "%16s | %9d | %9d | %9d\n" "Rotated S.O." num_rot min_rot max_rot
-        end
-        if num_exp > 0
-            @printf "%16s | %9d | %9d | %9d\n" "Primal expon." num_exp 3 3
-        end
-        if num_sdp > 0
-            min_side = round(Int, sqrt(1/4+2*min_sdp)-1/2)
-            max_side = round(Int, sqrt(1/4+2*max_sdp)-1/2)
-            @printf "%16s | %9d | %7s^2 | %7s^2\n" "Pos. semidef." num_sdp min_side max_side
-        end
-        flush(STDOUT)
-    end
-end
-
 # Transform/preprocess data
 function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, var_types, solve_relax)
-    A = sparse(A_orig)
-    dropzeros!(A)
-    (A_I, A_J, A_V) = findnz(A)
+    (A_I, A_J, A_V) = findnz(A_orig)
 
     num_con_new = length(b_orig)
     b_new = b_orig
@@ -687,7 +715,7 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
     var_types_new = var_types[keep_cols]
 
     # Convert SOCRotated cones to SOC cones (MathProgBase definitions)
-    # (y,z,x) in RSOC <=> (y+z,-y+z,sqrt2*x) in SOC, y >= 0, z >= 0
+    # (y,z,x) in RSOC <=> (1/sqrt2*(y+z),1/sqrt2*w,x) in SOC, y >= 0, z >= 0, w >= -y+z, w >= -z+y
     socr_rows = Vector{Int}[]
     for n_cone in 1:length(cone_con_new)
         (spec, rows) = cone_con_new[n_cone]
@@ -722,23 +750,59 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
 
         num_con_new += 2
 
-        # Use old constraint cone SOCRotated for (y+z,-y+z,sqrt2*x) in SOC
+        # Add new variable cone for w
+        num_var_new += 1
+        push!(cone_var_new, (:NonNeg, [num_var_new]))
+        push!(c_new, 0.)
+        push!(var_types_new, :Cont)
+
+        # Add new constraint cone for w+y-z >= 0
+        num_con_new += 1
+        push!(cone_con_new, (:NonNeg, [num_con_new]))
+        append!(A_I, fill(num_con_new, (length(inds_1) + length(inds_2) + 1)))
+        push!(A_J, num_var_new)
+        append!(A_J, A_J[inds_1])
+        append!(A_J, A_J[inds_2])
+        push!(A_V, -1.)
+        append!(A_V, A_V[inds_1])
+        append!(A_V, -A_V[inds_2])
+        push!(b_new, (b_new[rows[1]] - b_new[rows[2]]))
+
+        # Add new constraint cone for w-y+z >= 0
+        num_con_new += 1
+        push!(cone_con_new, (:NonNeg, [num_con_new]))
+        append!(A_I, fill(num_con_new, (length(inds_1) + length(inds_2) + 1)))
+        push!(A_J, num_var_new)
+        append!(A_J, A_J[inds_1])
+        append!(A_J, A_J[inds_2])
+        push!(A_V, -1.)
+        append!(A_V, -A_V[inds_1])
+        append!(A_V, A_V[inds_2])
+        push!(b_new, (-b_new[rows[1]] + b_new[rows[2]]))
+
+        # Use old constraint cone SOCRotated for (y+z,w,sqrt2*x) in SOC
+        # Set up index 1: y -> y+z
         append!(A_I, fill(rows[1], length(inds_2)))
         append!(A_J, A_J[inds_2])
         append!(A_V, A_V[inds_2])
         b_new[rows[1]] += b_new[rows[2]]
 
-        append!(A_I, fill(rows[2], length(inds_1)))
-        append!(A_J, A_J[inds_1])
-        append!(A_V, -A_V[inds_1])
-        b_new[rows[2]] -= b_new[rows[1]]
+        # Set up index 2: z -> w
+        for ind in inds_2
+            A_V[ind] = 0.
+        end
+        push!(A_I, rows[2])
+        push!(A_J, num_var_new)
+        push!(A_V, -1.)
+        b_new[rows[2]] = 0.
 
+        # Multiply x by sqrt(2)
+        b_new[rows[3:end]] .*= sqrt2
         for i in rows[3:end]
             for ind in row_to_nzind[i]
                 A_V[ind] *= sqrt2
             end
         end
-        b_new[rows[2:end]] .*= sqrt2
     end
 
     if solve_relax
@@ -1303,14 +1367,12 @@ function solve_iterative!(m)
         # Solve new conic subproblem, update incumbent solution if feasible
         (is_repeat, is_viol_subp) = solve_subp_add_subp_cuts!(m)
 
-        if m.new_incumb
-            # Have a new incumbent from conic solver, calculate relative outer approximation gap, finish if satisfy optimality gap condition
-            m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-            if m.gap_rel_opt < m.rel_gap
-                print_gap(m)
-                m.status = :Optimal
-                break
-            end
+        # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
+        m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
+        if m.gap_rel_opt < m.rel_gap
+            print_gap(m)
+            m.status = :Optimal
+            break
         end
 
         if !is_viol_subp || m.prim_cuts_always
@@ -1329,7 +1391,6 @@ function solve_iterative!(m)
                     m.best_obj = obj_full
                     m.best_int = soln_int
                     m.best_cont = soln_cont
-                    m.new_incumb = true
                     m.is_best_conic = false
 
                     # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
@@ -1988,11 +2049,12 @@ function add_cut_sdp!(m, V, eig_dual)
                 # Over all diagonal entries i, exclude the largest one
                 (_, i) = findmax(abs.(eig_j))
 
-                # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
+                # yz >= ||x||^2, y,z >= 0 <==> norm2(y-z, 2x) <= y + z, y,z >= 0
                 y = V[i,i]
                 z = sum(V[k,l]*eig_j[k]*eig_j[l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
+                @constraint(m.model_mip, z >= 0)
                 x = sum(V[k,i]*eig_j[k] for k in 1:dim if k!=i)
-                @expression(m.model_mip, cut_expr, y + z - norm([2*x, (y - z)]))
+                @expression(m.model_mip, cut_expr, y + z - norm([(y - z), 2*x]))
                 if add_cut!(m, cut_expr, m.logs[:SDP])
                     is_viol = true
                 end
@@ -2008,15 +2070,14 @@ function add_cut_sdp!(m, V, eig_dual)
         # Using full PSD cut
         if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
             # Using SDP SOC full cut
-            # Over all diagonal entries i, exclude the largest one
             mat_dual = eig_dual * eig_dual'
             (_, i) = findmax(abs.(diag(mat_dual)))
 
-            # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
             y = V[i,i]
             z = sum(V[k,l]*mat_dual[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
+            @constraint(m.model_mip, z >= 0)
             @expression(m.model_mip, x[j in 1:num_eig], sum((V[k,i]*eig_dual[k,j]) for k in 1:dim if k!=i))
-            @expression(m.model_mip, cut_expr, y + z - norm([(2*x)..., (y - z)]))
+            @expression(m.model_mip, cut_expr, y + z - norm([(y - z), (2*x)...]))
             if add_cut!(m, cut_expr, m.logs[:SDP])
                 is_viol = true
             end

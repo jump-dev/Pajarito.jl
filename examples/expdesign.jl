@@ -198,8 +198,8 @@ Specify data dimensions
     # 100, 250, 500, 5   # Huge
     # 25, 75, 125, 5     # Large
     # 10, 30, 50, 5      # Medium
-    5, 15, 25, 5       # Small
-    # 4, 8, 12, 3        # Tiny
+    # 5, 15, 25, 5       # Small
+    4, 8, 12, 3        # Tiny
 )
 @assert (p > q) && (n > q)
 

@@ -1596,7 +1596,7 @@ end
 
 # SDP+Exp problems for conic algorithm with MISOCP
 function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "SOC eig cuts: Convex.jl D-opt" begin
+    @testset "SOC eig cuts: D-opt" begin
         (q, p, n, nmax) = (4, 8, 12, 3)
         V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
 
@@ -1619,7 +1619,7 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(np.value, [0.0; 3.0; 3.0; 2.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
     end
 
-    @testset "SOC full cuts: Convex.jl D-opt" begin
+    @testset "SOC full cuts: D-opt" begin
         (q, p, n, nmax) = (4, 8, 12, 3)
         V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
 
@@ -1642,7 +1642,7 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(np.value, [0.0; 3.0; 3.0; 2.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
     end
 
-    @testset "Init SOC cuts: Convex.jl D-opt" begin
+    @testset "Init SOC cuts: D-opt" begin
         (q, p, n, nmax) = (4, 8, 12, 3)
         V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
 
@@ -1665,7 +1665,7 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         @test isapprox(np.value, [0.0; 3.0; 3.0; 2.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
     end
 
-    @testset "Init and eig SOC cuts: Convex.jl D-opt" begin
+    @testset "Init and eig SOC cuts: D-opt" begin
         (q, p, n, nmax) = (4, 8, 12, 3)
         V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
 
