@@ -209,7 +209,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     end
 
     if m.log_level > 1
-        @printf "\nProblem dimensions:"
+        @printf "\nProblem dimensions:\n"
         @printf "%16s | %9d\n" "variables" num_var_orig
         @printf "%16s | %9d\n" "constraints" num_con_orig
     end
@@ -413,12 +413,12 @@ function MathProgBase.setvartype!(m::PajaritoConicModel, var_types::Vector{Symbo
         end
     end
 
-    if (num_bin + num_int) = 0
+    if (num_bin + num_int) == 0
         error("No variable types are :Bin or :Int; use the continuous conic solver directly if your problem is continuous\n")
     end
 
     if m.log_level > 1
-        @printf "\nVariable types summary:"
+        @printf "\nVariable types summary:\n"
         if num_cont > 0
             @printf "%16s | %9d\n" "continuous" num_cont
         end
