@@ -4,20 +4,48 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+function solve_cbf(solver, name)
+    dat = ConicBenchmarkUtilities.readcbfdata("cbf/$(name).cbf")
+    (c, A, b, con_cones, var_cones, vartypes, sense, objoffset) = ConicBenchmarkUtilities.cbftompb(dat)
+
+    m = MathProgBase.ConicModel(solver)
+    MathProgBase.loadproblem!(m, c, A, b, con_cones, var_cones)
+    MathProgBase.setvartype!(m, vartypes)
+
+    # @printf "\n%-16s... " name
+    # tic()
+    #TODO redirect stdout?
+    MathProgBase.optimize!(m)
+    status = MathProgBase.status(m)
+    time = MathProgBase.getsolvetime(m)
+    objval = MathProgBase.getobjval(m)
+    objbound = MathProgBase.getobjbound(m)
+    sol = MathProgBase.getsolution(m)
+    # @printf ":%-16s  %5.2f s" status toq()
+
+    return (status, time, objval, objbound, sol)
+end
+
+
 # SOC problems for NLP and conic algorithms
 function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
     @testset "Maximize" begin
-        x = Convex.Variable(1, :Int)
+        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        (status, time, objval, objbound, sol) = solve_cbf(s, "maximize")
 
-        problem = Convex.maximize(3x,
-                            x <= 10,
-                            x^2 <= 9)
+        @show (status, time, objval, objbound, sol)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3))
+        @test status == :Optimal
+        @test isapprox(sol[1], 3, atol=TOL)
+        @test isapprox(objval, 9, atol=TOL)
+    end
 
-        @test isapprox(x.value, 3.0, atol=TOL)
-        @test isapprox(problem.optval, 9.0, atol=TOL)
-        @test problem.status == :Optimal
+    @testset "Timeout in 1st MIP" begin
+        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            timeout=15.)
+        (status, time, objval, objbound, sol) = solve_cbf(s, "tls5")
+
+        @test time < 60.
     end
 
     @testset "Infeasible" begin
@@ -378,21 +406,6 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
 
         @test solve(m, suppress_warnings=true) == :Infeasible
         # @test internalmodel(m).logs[:n_inf] == 1
-    end
-
-    @testset "Timeout in first MIP solve" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, timeout=15.)
-        dat = ConicBenchmarkUtilities.readcbfdata("cbf/classical_200_1.cbf.gz")
-
-        c, A, b, con_cones, var_cones, vartypes, sense, objoffset = ConicBenchmarkUtilities.cbftompb(dat)
-        m = MathProgBase.ConicModel(solver)
-        MathProgBase.loadproblem!(m, c, A, b, con_cones, var_cones)
-        MathProgBase.setvartype!(m, vartypes)
-        tic()
-        MathProgBase.optimize!(m)
-        @test MathProgBase.status(m) == :UserLimit
-        t = toq()
-        @test t < 60
     end
 end
 
