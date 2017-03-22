@@ -28,18 +28,21 @@ solvers["MISOCP"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 
 tol_int = 1e-8
 tol_feas = 1e-7
-tol_gap = 1e-8
+tol_gap = 1e-7
 
 if grb
     solvers["MILP"]["Gurobi"] = solvers["MISOCP"]["Gurobi"] = Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=tol_int, FeasibilityTol=tol_feas, MIPGap=tol_gap)
 end
 if cpx
     solvers["MILP"]["CPLEX"] = solvers["MISOCP"]["CPLEX"] = CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=tol_int, CPX_PARAM_EPRHS=tol_feas, CPX_PARAM_EPGAP=tol_gap)
+    if mos
+        solvers["MISOCP"]["Pajarito(CPLEX, MOSEK)"] = PajaritoSolver(mip_solver=CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-8, CPX_PARAM_EPGAP=1e-10), cont_solver=Mosek.MosekSolver(LOG=0), log_level=0, rel_gap=1e-6)
+    end
 end
 if glp
     solvers["MILP"]["GLPK"] = GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, tol_obj=tol_gap)
     if eco
-        solvers["MISOCP"]["Pajarito(GLPK, ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, tol_obj=tol_gap), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=tol_gap)
+        solvers["MISOCP"]["Pajarito(GLPK, ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=1e-8, tol_bnd=1e-8, tol_obj=1e-10), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-6)
     end
 end
 # if try_import(:SCIP)

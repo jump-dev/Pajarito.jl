@@ -434,7 +434,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             soln_new[cols_int] = m.best_int
             soln_new[cols_cont] = m.best_cont
             m.final_soln = zeros(m.num_var_orig)
-            m.final_soln[keep_cols] = soln_new
+            m.final_soln[keep_cols] = soln_new[1:length(keep_cols)]
         end
     end
 
@@ -687,7 +687,7 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
     var_types_new = var_types[keep_cols]
 
     # Convert SOCRotated cones to SOC cones (MathProgBase definitions)
-    # (y,z,x) in RSOC <=> (y+z,-y+z,sqrt2*x) in SOC, y >= 0, z >= 0
+    # (y,z,x) in RSOC <=> (1/sqrt2*(y+z),1/sqrt2*w,x) in SOC, y >= 0, z >= 0, w >= -y+z, w >= -z+y
     socr_rows = Vector{Int}[]
     for n_cone in 1:length(cone_con_new)
         (spec, rows) = cone_con_new[n_cone]
@@ -722,23 +722,59 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
 
         num_con_new += 2
 
-        # Use old constraint cone SOCRotated for (y+z,-y+z,sqrt2*x) in SOC
+        # Add new variable cone for w
+        num_var_new += 1
+        push!(cone_var_new, (:NonNeg, [num_var_new]))
+        push!(c_new, 0.)
+        push!(var_types_new, :Cont)
+
+        # Add new constraint cone for w+y-z >= 0
+        num_con_new += 1
+        push!(cone_con_new, (:NonNeg, [num_con_new]))
+        append!(A_I, fill(num_con_new, (length(inds_1) + length(inds_2) + 1)))
+        push!(A_J, num_var_new)
+        append!(A_J, A_J[inds_1])
+        append!(A_J, A_J[inds_2])
+        push!(A_V, -1.)
+        append!(A_V, A_V[inds_1])
+        append!(A_V, -A_V[inds_2])
+        push!(b_new, (b_new[rows[1]] - b_new[rows[2]]))
+
+        # Add new constraint cone for w-y+z >= 0
+        num_con_new += 1
+        push!(cone_con_new, (:NonNeg, [num_con_new]))
+        append!(A_I, fill(num_con_new, (length(inds_1) + length(inds_2) + 1)))
+        push!(A_J, num_var_new)
+        append!(A_J, A_J[inds_1])
+        append!(A_J, A_J[inds_2])
+        push!(A_V, -1.)
+        append!(A_V, -A_V[inds_1])
+        append!(A_V, A_V[inds_2])
+        push!(b_new, (-b_new[rows[1]] + b_new[rows[2]]))
+
+        # Use old constraint cone SOCRotated for (y+z,w,sqrt2*x) in SOC
+        # Set up index 1: y -> y+z
         append!(A_I, fill(rows[1], length(inds_2)))
         append!(A_J, A_J[inds_2])
         append!(A_V, A_V[inds_2])
         b_new[rows[1]] += b_new[rows[2]]
 
-        append!(A_I, fill(rows[2], length(inds_1)))
-        append!(A_J, A_J[inds_1])
-        append!(A_V, -A_V[inds_1])
-        b_new[rows[2]] -= b_new[rows[1]]
+        # Set up index 2: z -> w
+        for ind in inds_2
+            A_V[ind] = 0.
+        end
+        push!(A_I, rows[2])
+        push!(A_J, num_var_new)
+        push!(A_V, -1.)
+        b_new[rows[2]] = 0.
 
+        # Multiply x by sqrt(2)
+        b_new[rows[3:end]] .*= sqrt2
         for i in rows[3:end]
             for ind in row_to_nzind[i]
                 A_V[ind] *= sqrt2
             end
         end
-        b_new[rows[2:end]] .*= sqrt2
     end
 
     if solve_relax
@@ -1303,14 +1339,12 @@ function solve_iterative!(m)
         # Solve new conic subproblem, update incumbent solution if feasible
         (is_repeat, is_viol_subp) = solve_subp_add_subp_cuts!(m)
 
-        if m.new_incumb
-            # Have a new incumbent from conic solver, calculate relative outer approximation gap, finish if satisfy optimality gap condition
-            m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
-            if m.gap_rel_opt < m.rel_gap
-                print_gap(m)
-                m.status = :Optimal
-                break
-            end
+        # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
+        m.gap_rel_opt = (m.best_obj - m.mip_obj) / (abs(m.best_obj) + 1e-5)
+        if m.gap_rel_opt < m.rel_gap
+            print_gap(m)
+            m.status = :Optimal
+            break
         end
 
         if !is_viol_subp || m.prim_cuts_always
@@ -1329,7 +1363,6 @@ function solve_iterative!(m)
                     m.best_obj = obj_full
                     m.best_int = soln_int
                     m.best_cont = soln_cont
-                    m.new_incumb = true
                     m.is_best_conic = false
 
                     # Calculate relative outer approximation gap, finish if satisfy optimality gap condition
@@ -1988,11 +2021,12 @@ function add_cut_sdp!(m, V, eig_dual)
                 # Over all diagonal entries i, exclude the largest one
                 (_, i) = findmax(abs.(eig_j))
 
-                # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
+                # yz >= ||x||^2, y,z >= 0 <==> norm2(1/sqrt2*(y-z), 1/sqrt2*(-y+z), 2x) <= y + z, y,z >= 0
                 y = V[i,i]
                 z = sum(V[k,l]*eig_j[k]*eig_j[l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
+                @constraint(m.model_mip, z >= 0)
                 x = sum(V[k,i]*eig_j[k] for k in 1:dim if k!=i)
-                @expression(m.model_mip, cut_expr, y + z - norm([2*x, (y - z)]))
+                @expression(m.model_mip, cut_expr, y + z - norm([sqrt2inv*(y - z), sqrt2inv*(-y + z), 2*x]))
                 if add_cut!(m, cut_expr, m.logs[:SDP])
                     is_viol = true
                 end
@@ -2012,11 +2046,12 @@ function add_cut_sdp!(m, V, eig_dual)
             mat_dual = eig_dual * eig_dual'
             (_, i) = findmax(abs.(diag(mat_dual)))
 
-            # yz >= ||x||^2, y,z >= 0 <==> norm2(2x, y-z) <= y + z
+            # yz >= ||x||^2, y,z >= 0 <==> norm2(1/sqrt2*(y-z), 1/sqrt2*(-y+z), 2x) <= y + z, y,z >= 0
             y = V[i,i]
             z = sum(V[k,l]*mat_dual[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
+            @constraint(m.model_mip, z >= 0)
             @expression(m.model_mip, x[j in 1:num_eig], sum((V[k,i]*eig_dual[k,j]) for k in 1:dim if k!=i))
-            @expression(m.model_mip, cut_expr, y + z - norm([(2*x)..., (y - z)]))
+            @expression(m.model_mip, cut_expr, y + z - norm([sqrt2inv*(y - z), sqrt2inv*(-y + z), (2*x)...]))
             if add_cut!(m, cut_expr, m.logs[:SDP])
                 is_viol = true
             end
