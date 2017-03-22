@@ -331,7 +331,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
 
     if m.log_level > 1
         @printf "\nCones summary:"
-        @printf "\n%-16s | %-9s | %-9s | %-9s\n" "" "Count" "Min dim." "Max dim."
+        @printf "\n%-16s | %-9s | %-9s | %-9s\n" "Cone" "Count" "Min dim." "Max dim."
         if num_soc > 0
             @printf "%16s | %9d | %9d | %9d\n" "Second order" num_soc min_soc max_soc
         end
