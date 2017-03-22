@@ -2049,12 +2049,12 @@ function add_cut_sdp!(m, V, eig_dual)
                 # Over all diagonal entries i, exclude the largest one
                 (_, i) = findmax(abs.(eig_j))
 
-                # yz >= ||x||^2, y,z >= 0 <==> norm2(1/sqrt2*(y-z), 1/sqrt2*(-y+z), 2x) <= y + z, y,z >= 0
+                # yz >= ||x||^2, y,z >= 0 <==> norm2(y-z, 2x) <= y + z, y,z >= 0
                 y = V[i,i]
                 z = sum(V[k,l]*eig_j[k]*eig_j[l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
                 @constraint(m.model_mip, z >= 0)
                 x = sum(V[k,i]*eig_j[k] for k in 1:dim if k!=i)
-                @expression(m.model_mip, cut_expr, y + z - norm([sqrt2inv*(y - z), sqrt2inv*(-y + z), 2*x]))
+                @expression(m.model_mip, cut_expr, y + z - norm([(y - z), 2*x]))
                 if add_cut!(m, cut_expr, m.logs[:SDP])
                     is_viol = true
                 end
@@ -2070,16 +2070,14 @@ function add_cut_sdp!(m, V, eig_dual)
         # Using full PSD cut
         if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
             # Using SDP SOC full cut
-            # Over all diagonal entries i, exclude the largest one
             mat_dual = eig_dual * eig_dual'
             (_, i) = findmax(abs.(diag(mat_dual)))
 
-            # yz >= ||x||^2, y,z >= 0 <==> norm2(1/sqrt2*(y-z), 1/sqrt2*(-y+z), 2x) <= y + z, y,z >= 0
             y = V[i,i]
             z = sum(V[k,l]*mat_dual[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
             @constraint(m.model_mip, z >= 0)
             @expression(m.model_mip, x[j in 1:num_eig], sum((V[k,i]*eig_dual[k,j]) for k in 1:dim if k!=i))
-            @expression(m.model_mip, cut_expr, y + z - norm([sqrt2inv*(y - z), sqrt2inv*(-y + z), (2*x)...]))
+            @expression(m.model_mip, cut_expr, y + z - norm([(y - z), (2*x)...]))
             if add_cut!(m, cut_expr, m.logs[:SDP])
                 is_viol = true
             end
