@@ -61,92 +61,51 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test status == :UserLimit
     end
 
+    @testset "Optimal SOCRot, print" begin
+        (status, time, objval, objbound, sol) = solve_cbf(s, "socrot_optimal")
 
 
+@show (status, time, objval, objbound, sol)
+        @test status == :Optimal
+        @test isapprox(objval, -9, atol=TOL)
+        @test isapprox(objbound, -9, atol=TOL)
+        @test isapprox(sol, [3, 1.5, 3, 3], atol=TOL)
+    end
+
+    s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver,
+        log_level=log_level)
+
+    @testset "Infeasible SOCRot" begin
+        (status, time, objval, objbound, sol) = solve_cbf(s, "socrot_infeasible")
+
+        @test status == :Infeasible
+    end
 
     @testset "Equality constraint" begin
-        # max  y + z
-        # st   x == 1
-        #     (x,y,z) in SOC
-        #      x in {0,1}
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_equality")
 
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
-
-        MathProgBase.loadproblem!(m,
-        [ 0.0, -1.0, -1.0],
-        [ 1.0  0.0  0.0;
-         -1.0  0.0  0.0;
-          0.0 -1.0  0.0;
-          0.0  0.0 -1.0],
-        [ 1.0, 0.0, 0.0, 0.0],
-        Any[(:Zero,1:1),(:SOC,2:4)],
-        Any[(:Free,[1,2,3])])
-        MathProgBase.setvartype!(m, [:Int,:Cont,:Cont])
-
-        MathProgBase.optimize!(m)
-
-        @test MathProgBase.status(m) == :Optimal
-        @test isapprox(MathProgBase.getobjval(m), -sqrt(2.0), atol=TOL)
-        @test isapprox(MathProgBase.getobjbound(m), -sqrt(2.0), atol=TOL)
-        @test isapprox(MathProgBase.getsolution(m), [1.0,1.0/sqrt(2.0),1.0/sqrt(2.0)], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -sqrt(2), atol=TOL)
+        @test isapprox(objbound, -sqrt(2), atol=TOL)
+        @test isapprox(sol, [1, 1/sqrt(2), 1/sqrt(2)], atol=TOL)
     end
 
     @testset "Zero cones" begin
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_zero")
 
-        MathProgBase.loadproblem!(m,
-        [ 0.0, 0.0, -1.0, 1.0, -1.0],
-        [ 1.0  1.0  0.0  0.0  0.0;
-         -1.0  0.0  0.0 -0.5  0.0;
-          0.0  2.0 -1.0  0.0  0.0;
-          0.0  0.0  0.0 0.5  -1.0],
-        [ 1.0, 0.0, 0.0, 0.0],
-        Any[(:Zero,1:1),(:SOC,2:4)],
-        Any[(:Free,[1,3,5]),(:Zero,[2,4])])
-        MathProgBase.setvartype!(m, [:Int,:Int,:Cont,:Cont,:Cont])
 
-        MathProgBase.optimize!(m)
+        @show (status, time, objval, objbound, sol)
 
-        @test MathProgBase.status(m) == :Optimal
-        @test isapprox(MathProgBase.getobjval(m), -sqrt(2.0), atol=TOL)
-        @test isapprox(MathProgBase.getobjbound(m), -sqrt(2.0), atol=TOL)
-        @test isapprox(MathProgBase.getsolution(m), [1.0,0.0,1.0/sqrt(2.0),0.0,1.0/sqrt(2.0)], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -sqrt(2), atol=TOL)
+        @test isapprox(objbound, -sqrt(2), atol=TOL)
+        @test isapprox(sol, [1, 0, 1/sqrt(2), 0, 1/sqrt(2)], atol=TOL)
     end
 
-    @testset "Rotated SOC" begin
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+    @testset "Infeasible all binary" begin
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
 
-        c = [-3.0, 0.0, 0.0, 0.0]
-        A = zeros(4,4)
-        A[1,1] = 1.0
-        A[2,2] = 1.0
-        A[3,3] = 1.0
-        A[4,1] = 1.0
-        A[4,4] = -1.0
-        b = [10.0, 1.5, 3.0, 0.0]
-        constr_cones = Any[(:NonNeg,[1,2,3]),(:Zero,[4])]
-        var_cones = Any[(:SOCRotated,[2,3,1]),(:Free,[4])]
-        vartypes = [:Cont, :Cont, :Cont, :Int]
-        MathProgBase.loadproblem!(m, c, A, b, constr_cones, var_cones)
-        MathProgBase.setvartype!(m, vartypes)
-
-        MathProgBase.optimize!(m)
-
-        @test MathProgBase.status(m) == :Optimal
-        @test isapprox(MathProgBase.getobjval(m), -9.0, atol=TOL)
-        @test isapprox(MathProgBase.getobjbound(m), -9.0, atol=TOL)
-        @test isapprox(MathProgBase.getsolution(m), [3.0,1.5,3.0,3.0], atol=TOL)
-    end
-
-    @testset "No continuous variables, infeasible" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
-
-        dim = 5
-        @variable(m, x[1:dim], Bin)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
-        @objective(m, Min, 0)
-
-        @test solve(m, suppress_warnings=true) == :Infeasible
+        @test status == :Infeasible
     end
 end
 
