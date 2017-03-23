@@ -29,16 +29,16 @@ end
 
 # SOC problems for NLP and conic algorithms
 function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "Maximize" begin
-        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
-        (status, time, objval, objbound, sol) = solve_cbf(s, "maximize")
-
-        @show (status, time, objval, objbound, sol)
-
-        @test status == :Optimal
-        @test isapprox(sol[1], 3, atol=TOL)
-        @test isapprox(objval, 9, atol=TOL)
-    end
+    # @testset "Maximize" begin
+    #     s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+    #     (status, time, objval, objbound, sol) = solve_cbf(s, "maximize")
+    #
+    #     @show (status, time, objval, objbound, sol)
+    #
+    #     @test status == :Optimal
+    #     @test isapprox(sol[1], 3, atol=TOL)
+    #     @test isapprox(objval, 9, atol=TOL)
+    # end
 
     @testset "Timeout in 1st MIP" begin
         s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
