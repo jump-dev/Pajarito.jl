@@ -55,6 +55,7 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
     @testset "Timeout 1st MIP, print" begin
         s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver,
             log_level=3, timeout=15.)
+
         (status, time, objval, objbound, sol) = solve_cbf(s, "tls5")
 
         @test time < 60.
@@ -64,16 +65,15 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
     @testset "Optimal SOCRot, print" begin
         (status, time, objval, objbound, sol) = solve_cbf(s, "socrot_optimal")
 
+        @show (status, time, objval, objbound, sol)
 
-@show (status, time, objval, objbound, sol)
         @test status == :Optimal
         @test isapprox(objval, -9, atol=TOL)
         @test isapprox(objbound, -9, atol=TOL)
         @test isapprox(sol, [3, 1.5, 3, 3], atol=TOL)
     end
 
-    s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver,
-        log_level=log_level)
+    s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
     @testset "Infeasible SOCRot" begin
         (status, time, objval, objbound, sol) = solve_cbf(s, "socrot_infeasible")
@@ -93,7 +93,6 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
     @testset "Zero cones" begin
         (status, time, objval, objbound, sol) = solve_cbf(s, "soc_zero")
 
-
         @show (status, time, objval, objbound, sol)
 
         @test status == :Optimal
@@ -112,249 +111,100 @@ end
 # SOC problems for conic algorithm
 function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
     @testset "Dualize SOC" begin
-        x = Convex.Variable(1, :Int)
+        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            dualize_subp=true, dualize_relax=true)
 
-        problem = Convex.maximize(3x,
-                            x <= 10,
-                            x^2 <= 9)
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_optimal")
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, dualize_subp=true, dualize_relax=true))
-
-        @test isapprox(problem.optval, 9.0, atol=TOL)
-        @test isapprox(x.value, 3.0, atol=TOL)
-        @test problem.status == :Optimal
+        @test status == :Optimal
+        @test isapprox(sol[1], 3, atol=TOL)
+        @test isapprox(objval, -9, atol=TOL)
     end
 
-    @testset "Suboptimal solves" begin
-        x = Convex.Variable(1, :Int)
+    @testset "Suboptimal MIP solves" begin
+        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            mip_subopt_count=3, mip_subopt_solver=mip_solver)
 
-        problem = Convex.maximize(3x,
-                            x <= 10,
-                            x^2 <= 9)
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_optimal")
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, mip_subopt_count=3, mip_subopt_solver=mip_solver, cont_solver=cont_solver, log_level=3, dualize_subp=true, dualize_relax=true))
-
-        @test isapprox(problem.optval, 9.0, atol=TOL)
-        @test isapprox(x.value, 3.0, atol=TOL)
-        @test problem.status == :Optimal
+        @test status == :Optimal
+        @test isapprox(sol[1], 3, atol=TOL)
+        @test isapprox(objval, -9, atol=TOL)
     end
 
-    @testset "Dualize rotated SOC" begin
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, dualize_subp=true, dualize_relax=true))
+    @testset "Dualize SOCRot" begin
+        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            dualize_subp=true, dualize_relax=true)
 
-        c = [-3.0, 0.0, 0.0, 0.0]
-        A = zeros(4,4)
-        A[1,1] = 1.0
-        A[2,2] = 1.0
-        A[3,3] = 1.0
-        A[4,1] = 1.0
-        A[4,4] = -1.0
-        b = [10.0, 1.5, 3.0, 0.0]
-        constr_cones = Any[(:NonNeg,[1,2,3]),(:Zero,[4])]
-        var_cones = Any[(:SOCRotated,[2,3,1]),(:Free,[4])]
-        vartypes = [:Cont, :Cont, :Cont, :Int]
-        MathProgBase.loadproblem!(m, c, A, b, constr_cones, var_cones)
-        MathProgBase.setvartype!(m, vartypes)
+        (status, time, objval, objbound, sol) = solve_cbf(s, "socrot_optimal")
 
-        MathProgBase.optimize!(m)
-
-        @test MathProgBase.status(m) == :Optimal
-        @test isapprox(MathProgBase.getobjval(m), -9.0, atol=TOL)
-        @test isapprox(MathProgBase.getobjbound(m), -9.0, atol=TOL)
-        @test isapprox(MathProgBase.getsolution(m), [3.0,1.5,3.0,3.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -9, atol=TOL)
+        @test isapprox(objbound, -9, atol=TOL)
+        @test isapprox(sol, [3, 1.5, 3, 3], atol=TOL)
     end
 
-    # @testset "Infinite duality gap: primal assist" begin
-    #     # Example of polyhedral OA failure due to infinite duality gap from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
-    #     # min  z
-    #     # st   x == 0
-    #     #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
-    #     #      x in {0,1}
-    #
-    #     m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
-    #
-    #     MathProgBase.loadproblem!(m,
-    #     [ 0.0, 0.0, 1.0],
-    #     [ -1.0  0.0  0.0;
-    #     -1.0  0.0  0.0;
-    #     0.0 -1.0  0.0;
-    #     0.0  0.0 -1.0],
-    #     [ 0.0, 0.0, 0.0, 0.0],
-    #     Any[(:Zero,1:1),(:SOCRotated,2:4)],
-    #     Any[(:Free,[1,2,3])])
-    #     MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
-    #
-    #     MathProgBase.optimize!(m)
-    #
-    #     status = MathProgBase.status(m)
-    #     @test status == :CutsFailure
-    # end
-    #
-    # @testset "Infinite duality gap: no primal assist" begin
-    #     m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
-    #
-    #     MathProgBase.loadproblem!(m,
-    #     [ 0.0, 0.0, 1.0],
-    #     [ -1.0  0.0  0.0;
-    #     -1.0  0.0  0.0;
-    #     0.0 -1.0  0.0;
-    #     0.0  0.0 -1.0],
-    #     [ 0.0, 0.0, 0.0, 0.0],
-    #     Any[(:Zero,1:1),(:SOCRotated,2:4)],
-    #     Any[(:Free,[1,2,3])])
-    #     MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
-    #
-    #     MathProgBase.optimize!(m)
-    #
-    #     status = MathProgBase.status(m)
-    #     @test status == :CutsFailure
-    # end
-    #
-    # @testset "Finite duality gap: primal assist" begin
-    #     # Example of polyhedral OA failure due to finite duality gap, modified from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
-    #     # min  z
-    #     # st   x == 0
-    #     #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
-    #     #      z >= -10
-    #     #      x in {0,1}
-    #
-    #     m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
-    #
-    #     MathProgBase.loadproblem!(m,
-    #     [ 0.0, 0.0, 1.0],
-    #     [ -1.0  0.0  0.0;
-    #      -1.0  0.0  0.0;
-    #       0.0 -1.0  0.0;
-    #       0.0  0.0 -1.0;
-    #       0.0  0.0 -1.0],
-    #     [ 0.0, 0.0, 0.0, 0.0, 10.0],
-    #     Any[(:Zero,1:1),(:SOCRotated,2:4),(:NonNeg,5:5)],
-    #     Any[(:Free,[1,2,3])])
-    #     MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
-    #
-    #     MathProgBase.optimize!(m)
-    #
-    #     status = MathProgBase.status(m)
-    #     @test status == :CutsFailure
-    # end
-    #
-    # @testset "Finite duality gap: no primal assist" begin
-    #     m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
-    #
-    #     MathProgBase.loadproblem!(m,
-    #     [ 0.0, 0.0, 1.0],
-    #     [ -1.0  0.0  0.0;
-    #      -1.0  0.0  0.0;
-    #       0.0 -1.0  0.0;
-    #       0.0  0.0 -1.0;
-    #       0.0  0.0 -1.0],
-    #     [ 0.0, 0.0, 0.0, 0.0, 10.0],
-    #     Any[(:Zero,1:1),(:SOCRotated,2:4),(:NonNeg,5:5)],
-    #     Any[(:Free,[1,2,3])])
-    #     MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
-    #
-    #     MathProgBase.optimize!(m)
-    #
-    #     status = MathProgBase.status(m)
-    #     @test status == :CutsFailure
-    # end
+    @testset "Infeas: L1, disagg" begin
+        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=true, soc_disagg=true, soc_abslift=false)
 
-    @testset "Hijazi: L1, disagg, no abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=true, soc_disagg=true, soc_abslift=false))
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
 
-        dim = 5
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
-
-        @test solve(m, suppress_warnings=true) == :Infeasible
-        @test internalmodel(m).logs[:n_inf] == 0
+        @test status == :Infeasible
     end
 
-    @testset "Hijazi: L1, disagg, abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=true, soc_disagg=true, soc_abslift=true))
+    @testset "Infeas: L1, disagg, abslift" begin
+        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=true, soc_disagg=true, soc_abslift=true)
 
-        dim = 5
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
 
-        @test solve(m, suppress_warnings=true) == :Infeasible
-        @test internalmodel(m).logs[:n_inf] == 0
+        @test status == :Infeasible
     end
 
-    @testset "Hijazi: L1, no disagg, abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=true, soc_disagg=false, soc_abslift=true))
+    @testset "Infeas: L1, abslift" begin
+        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=true, soc_disagg=false, soc_abslift=true)
 
-        dim = 5
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
 
-        @test solve(m, suppress_warnings=true) == :Infeasible
-        @test internalmodel(m).logs[:n_inf] == 0
+        @test status == :Infeasible
     end
 
-    @testset "Hijazi: no L1, no disagg, no abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, init_soc_inf=false, soc_disagg=false, soc_abslift=false))
+    @testset "Infeas: none" begin
+        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=false, soc_disagg=false, soc_abslift=false)
 
-        dim = 4
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
 
-        @test solve(m, suppress_warnings=true) == :Infeasible
-        # @test internalmodel(m).logs[:n_inf] == 2^dim
+        @test status == :Infeasible
     end
 
-    @testset "Hijazi: no L1, disagg, no abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, init_soc_inf=false, soc_disagg=true, soc_abslift=false))
+    @testset "Infeas: disagg" begin
+        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=false, soc_disagg=true, soc_abslift=false)
 
-        dim = 4
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
 
-        @test solve(m, suppress_warnings=true) == :Infeasible
-        # @test internalmodel(m).logs[:n_inf] == 2
+        @test status == :Infeasible
     end
 
-    @testset "Hijazi: no L1, disagg, abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, init_soc_inf=false, soc_disagg=true, soc_abslift=true))
+    @testset "Infeas: disagg, abslift" begin
+        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=false, soc_disagg=true, soc_abslift=true)
 
-        dim = 4
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
 
-        @test solve(m, suppress_warnings=true) == :Infeasible
-        # @test internalmodel(m).logs[:n_inf] == 1
+        @test status == :Infeasible
     end
 
-    @testset "Hijazi: no L1, no disagg, abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, soc_disagg=false, soc_abslift=true))
+    @testset "Infeas: abslift" begin
+        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=false, soc_disagg=false, soc_abslift=true)
 
-        dim = 4
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
 
-        @test solve(m, suppress_warnings=true) == :Infeasible
-        # @test internalmodel(m).logs[:n_inf] == 1
+        @test status == :Infeasible
     end
 end
 
