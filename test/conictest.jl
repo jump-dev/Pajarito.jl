@@ -29,50 +29,40 @@ end
 
 # SOC problems for NLP and conic algorithms
 function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
-    # @testset "Maximize" begin
-    #     s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
-    #     (status, time, objval, objbound, sol) = solve_cbf(s, "maximize")
-    #
-    #     @show (status, time, objval, objbound, sol)
-    #
-    #     @test status == :Optimal
-    #     @test isapprox(sol[1], 3, atol=TOL)
-    #     @test isapprox(objval, 9, atol=TOL)
-    # end
+    s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver,
+        log_level=3)
 
-    @testset "Timeout in 1st MIP" begin
-        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            timeout=15.)
+    @testset "Optimal, print" begin
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_optimal")
+
+        @test status == :Optimal
+        @test isapprox(sol[1], 3, atol=TOL)
+        @test isapprox(objval, -9, atol=TOL)
+    end
+
+    @testset "Infeasible, print" begin
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeasible")
+
+        @test status == :Infeasible
+    end
+
+    @testset "Unbounded, print" begin
+        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_unbounded")
+
+        @test status == :Unbounded
+    end
+
+    @testset "Timeout 1st MIP, print" begin
+        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver,
+            log_level=3, timeout=15.)
         (status, time, objval, objbound, sol) = solve_cbf(s, "tls5")
 
         @test time < 60.
+        @test status == :UserLimit
     end
 
-    @testset "Infeasible" begin
-        x = Convex.Variable(1, :Int)
 
-        problem = Convex.maximize(3x,
-                            x >= 4,
-                            x^2 <= 9)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level), verbose=false)
-
-        @test problem.status == :Infeasible
-    end
-
-    @testset "Unbounded" begin
-        x = Convex.Variable(1, :Int)
-        t = Convex.Variable(1, :Int)
-
-        problem = Convex.maximize(-3x + t,
-                            x <= 10,
-                            x^2 <= 2t,
-                            t >= 5)
-
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level), verbose=false)
-
-        @test problem.status == :Unbounded
-    end
 
     @testset "Equality constraint" begin
         # max  y + z
