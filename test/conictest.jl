@@ -4,85 +4,114 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-function solve_cbf(solver, name)
-    dat = ConicBenchmarkUtilities.readcbfdata("cbf/$(name).cbf")
+
+# Take a solver and a CBF file basename and solve the problem and return important solve information
+function solve_cbf(testname, probname, solver, redirect)
+    @printf "%-30s... " testname
+    tic()
+
+    dat = ConicBenchmarkUtilities.readcbfdata("cbf/$(probname).cbf")
     (c, A, b, con_cones, var_cones, vartypes, sense, objoffset) = ConicBenchmarkUtilities.cbftompb(dat)
 
     m = MathProgBase.ConicModel(solver)
-    MathProgBase.loadproblem!(m, c, A, b, con_cones, var_cones)
-    MathProgBase.setvartype!(m, vartypes)
 
-    # @printf "\n%-16s... " name
-    # tic()
-    #TODO redirect stdout?
-    MathProgBase.optimize!(m)
+    if redirect
+        mktemp() do path,io
+            TT = STDOUT
+            redirect_stdout(io)
+
+            MathProgBase.loadproblem!(m, c, A, b, con_cones, var_cones)
+            MathProgBase.setvartype!(m, vartypes)
+            MathProgBase.optimize!(m)
+
+            redirect_stdout(TT)
+        end
+    else
+        MathProgBase.loadproblem!(m, c, A, b, con_cones, var_cones)
+        MathProgBase.setvartype!(m, vartypes)
+        MathProgBase.optimize!(m)
+    end
+
     status = MathProgBase.status(m)
     time = MathProgBase.getsolvetime(m)
     objval = MathProgBase.getobjval(m)
     objbound = MathProgBase.getobjbound(m)
     sol = MathProgBase.getsolution(m)
-    # @printf ":%-16s  %5.2f s" status toq()
+
+    @printf ":%-12s %5.2f s\n" status toq()
 
     return (status, time, objval, objbound, sol)
 end
 
 
 # SOC problems for NLP and conic algorithms
-function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
-    s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver,
+function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver,
         log_level=3)
 
-    @testset "Optimal, print" begin
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_optimal")
+    testname = "Optimal"
+    probname = "soc_optimal"
+    @testset "$testname" begin
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
         @test isapprox(sol[1], 3, atol=TOL)
         @test isapprox(objval, -9, atol=TOL)
     end
 
-    @testset "Infeasible, print" begin
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeasible")
+    testname = "Infeasible"
+    probname = "soc_infeasible"
+    @testset "$testname" begin
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Infeasible
     end
 
-    @testset "Unbounded, print" begin
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_unbounded")
+    testname = "Unbounded"
+    probname = "soc_unbounded"
+    @testset "$testname" begin
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Unbounded
     end
 
-    @testset "Timeout 1st MIP, print" begin
-        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver,
+    testname = "Timeout 1st MIP"
+    probname = "tls5"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver,
             log_level=3, timeout=15.)
 
-        (status, time, objval, objbound, sol) = solve_cbf(s, "tls5")
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test time < 60.
         @test status == :UserLimit
     end
 
-    @testset "Optimal SOCRot, print" begin
-        (status, time, objval, objbound, sol) = solve_cbf(s, "socrot_optimal")
-
-        @show (status, time, objval, objbound, sol)
+    testname = "Optimal SOCRot"
+    probname = "socrot_optimal"
+    @testset "$testname" begin
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
         @test isapprox(objval, -9, atol=TOL)
         @test isapprox(objbound, -9, atol=TOL)
-        @test isapprox(sol, [3, 1.5, 3, 3], atol=TOL)
+        @test isapprox(sol, [1.5, 3, 3, 3], atol=TOL)
     end
 
-    s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+    solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
-    @testset "Infeasible SOCRot" begin
-        (status, time, objval, objbound, sol) = solve_cbf(s, "socrot_infeasible")
+    testname = "Infeasible SOCRot"
+    probname = "socrot_infeasible"
+    @testset "$testname" begin
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Infeasible
     end
 
-    @testset "Equality constraint" begin
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_equality")
+    testname = "Equality constraint"
+    probname = "soc_equality"
+    @testset "$testname" begin
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
         @test isapprox(objval, -sqrt(2), atol=TOL)
@@ -90,126 +119,148 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(sol, [1, 1/sqrt(2), 1/sqrt(2)], atol=TOL)
     end
 
-    @testset "Zero cones" begin
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_zero")
-
-        @show (status, time, objval, objbound, sol)
+    testname = "Zero cones"
+    probname = "soc_zero"
+    @testset "$testname" begin
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
         @test isapprox(objval, -sqrt(2), atol=TOL)
         @test isapprox(objbound, -sqrt(2), atol=TOL)
-        @test isapprox(sol, [1, 0, 1/sqrt(2), 0, 1/sqrt(2)], atol=TOL)
+        @test isapprox(sol, [1, 1/sqrt(2), 1/sqrt(2), 0, 0], atol=TOL)
     end
 
-    @testset "Infeasible all binary" begin
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
+    testname = "Infeasible all binary"
+    probname = "soc_infeas_bin"
+    @testset "$testname" begin
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Infeasible
     end
 end
 
 # SOC problems for conic algorithm
-function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "Dualize SOC" begin
-        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    testname = "Dualize SOC"
+    probname = "soc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
             dualize_subp=true, dualize_relax=true)
 
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_optimal")
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
         @test isapprox(sol[1], 3, atol=TOL)
         @test isapprox(objval, -9, atol=TOL)
     end
 
-    @testset "Suboptimal MIP solves" begin
-        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+    testname = "Suboptimal MIP solves"
+    probname = "soc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
             mip_subopt_count=3, mip_subopt_solver=mip_solver)
 
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_optimal")
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
         @test isapprox(sol[1], 3, atol=TOL)
         @test isapprox(objval, -9, atol=TOL)
     end
 
-    @testset "Dualize SOCRot" begin
-        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+    testname = "Dualize SOCRot"
+    probname = "socrot_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
             dualize_subp=true, dualize_relax=true)
 
-        (status, time, objval, objbound, sol) = solve_cbf(s, "socrot_optimal")
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
         @test isapprox(objval, -9, atol=TOL)
         @test isapprox(objbound, -9, atol=TOL)
-        @test isapprox(sol, [3, 1.5, 3, 3], atol=TOL)
+        @test isapprox(sol, [1.5, 3, 3, 3], atol=TOL)
     end
 
-    @testset "Infeas: L1, disagg" begin
-        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+    testname = "Infeas L1, disagg"
+    probname = "soc_infeas_bin"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
             init_soc_one=true, soc_disagg=true, soc_abslift=false)
 
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Infeasible
     end
 
-    @testset "Infeas: L1, disagg, abslift" begin
-        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+    testname = "Infeas L1, disagg, abs"
+    probname = "soc_infeas_bin"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
             init_soc_one=true, soc_disagg=true, soc_abslift=true)
 
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Infeasible
     end
 
-    @testset "Infeas: L1, abslift" begin
-        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+    testname = "Infeas L1, abs"
+    probname = "soc_infeas_bin"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
             init_soc_one=true, soc_disagg=false, soc_abslift=true)
 
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Infeasible
     end
 
-    @testset "Infeas: none" begin
-        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+    testname = "Infeas none"
+    probname = "soc_infeas_bin"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
             init_soc_one=false, soc_disagg=false, soc_abslift=false)
 
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Infeasible
     end
 
-    @testset "Infeas: disagg" begin
-        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+    testname = "Infeas disagg"
+    probname = "soc_infeas_bin"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
             init_soc_one=false, soc_disagg=true, soc_abslift=false)
 
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Infeasible
     end
 
-    @testset "Infeas: disagg, abslift" begin
-        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+    testname = "Infeas disagg, abs"
+    probname = "soc_infeas_bin"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
             init_soc_one=false, soc_disagg=true, soc_abslift=true)
 
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Infeasible
     end
 
-    @testset "Infeas: abslift" begin
-        s = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+    testname = "Infeas abs"
+    probname = "soc_infeas_bin"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
             init_soc_one=false, soc_disagg=false, soc_abslift=true)
 
-        (status, time, objval, objbound, sol) = solve_cbf(s, "soc_infeas_bin")
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Infeasible
     end
 end
 
 # Exp+SOC problems for NLP and conic algorithms
-function runexpsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
+function runexpsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
     @testset "Exp and SOC" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1, Convex.Positive())
@@ -294,7 +345,7 @@ function runexpsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level
 end
 
 # Exp+SOC problems for conic algorithm
-function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
+function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
     @testset "No init exp" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1, Convex.Positive())
@@ -329,7 +380,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
         @test isapprox(y.value, 0.0, atol=TOL)
     end
 
-    @testset "No disagg, abslift" begin
+    @testset "No disagg, abs" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1, Convex.Positive())
 
@@ -346,7 +397,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
        @test isapprox(y.value, 2.0, atol=TOL)
     end
 
-    @testset "Disagg, no abslift" begin
+    @testset "Disagg, no abs" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1, Convex.Positive())
 
@@ -363,7 +414,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
        @test isapprox(y.value, 2.0, atol=TOL)
     end
 
-    @testset "Disagg, abslift" begin
+    @testset "Disagg, abs" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1, Convex.Positive())
 
@@ -467,7 +518,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
 end
 
 # SDP+SOC problems for conic algorithm
-function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
+function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
     @testset "SDP and SOC" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1, Convex.Positive())
@@ -896,7 +947,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
 end
 
 # SDP+Exp problems for conic algorithm
-function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
+function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
     @testset "Convex.jl D-opt" begin
         # D-optimal design
         #   maximize    nthroot det V*diag(lambda)*V'
@@ -925,7 +976,7 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
 end
 
 # Exp+SOC problems for conic algorithm with MISOCP
-function runexpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level)
+function runexpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
     @testset "SOC in MIP: More constraints" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1)
@@ -963,7 +1014,7 @@ function runexpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
 end
 
 # SDP+SOC problems for conic algorithm with MISOCP
-function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level)
+function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
     @testset "SOC in MIP: SDP and SOC" begin
         x = Convex.Variable(1, :Int)
         y = Convex.Variable(1, Convex.Positive())
@@ -1407,7 +1458,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
 end
 
 # SDP+Exp problems for conic algorithm with MISOCP
-function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level)
+function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
     @testset "SOC eig cuts: D-opt" begin
         (q, p, n, nmax) = (4, 8, 12, 3)
         V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
