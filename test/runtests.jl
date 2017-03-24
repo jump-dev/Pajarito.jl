@@ -31,9 +31,9 @@ tol_int = 1e-8
 tol_feas = 1e-7
 tol_gap = 1e-7
 
-# if grb
-#     solvers["MILP"]["Gurobi"] = solvers["MISOCP"]["Gurobi"] = Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=tol_int, FeasibilityTol=tol_feas, MIPGap=tol_gap)
-# end
+if grb
+    solvers["MILP"]["Gurobi"] = solvers["MISOCP"]["Gurobi"] = Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=tol_int, FeasibilityTol=tol_feas, MIPGap=tol_gap)
+end
 if cpx
     solvers["MILP"]["CPLEX"] = solvers["MISOCP"]["CPLEX"] = CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=tol_int, CPX_PARAM_EPRHS=tol_feas, CPX_PARAM_EPGAP=tol_gap)
     if mos
@@ -68,7 +68,7 @@ if eco
     solvers["SOC"]["ECOS"] = solvers["Exp+SOC"]["ECOS"] = ECOS.ECOSSolver(verbose=false)
 end
 if scs
-    solvers["Exp+SOC"]["SCS"] = SCS.SCSSolver(eps=1e-6, max_iters=1000000, verbose=0)
+    solvers["Exp+SOC"]["SCS"] = SCS.SCSSolver(eps=1e-5, max_iters=1000000, verbose=0)
     solvers["SOC"]["SCS"] = solvers["PSD+SOC"]["SCS"] = solvers["PSD+Exp"]["SCS"] = SCS.SCSSolver(eps=1e-6, max_iters=1000000, verbose=0)
 end
 if mos

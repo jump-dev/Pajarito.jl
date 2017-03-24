@@ -122,6 +122,7 @@ function runnlp(mip_solver_drives, mip_solver, nlp_solver, log_level, redirect)
 
         status = solve(m, suppress_warnings=true)
 
+        @test status == :Optimal
         @test isapprox(getobjectivevalue(m), 9.5, atol=TOL)
     end
 
