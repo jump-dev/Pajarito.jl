@@ -346,7 +346,6 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
             max_side = round(Int, sqrt(1/4+2*max_sdp)-1/2)
             @printf "%16s | %9d | %7s^2 | %7s^2\n" "Pos. semidef." num_sdp min_side max_side
         end
-        flush(STDOUT)
     end
 
     if m.solve_relax || m.solve_subp
@@ -377,6 +376,8 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
 
     m.final_soln = fill(NaN, m.num_var_orig)
     m.status = :Loaded
+    flush(STDOUT)
+    flush(STDERR)
 end
 
 # Store warm-start vector on original variables in Pajarito model
@@ -432,10 +433,11 @@ function MathProgBase.setvartype!(m::PajaritoConicModel, var_types::Vector{Symbo
         if num_int > 0
             @printf "%16s | %9d\n" "integer" num_int
         end
-        flush(STDOUT)
     end
 
     m.var_types = var_types
+    flush(STDOUT)
+    flush(STDERR)
 end
 
 # Solve, given the initial conic model data and the variable types vector and possibly a warm-start vector
@@ -487,6 +489,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     if m.log_level > 1
         @printf "%.2fs\n" m.logs[:data_mip]
     end
+    flush(STDOUT)
+    flush(STDERR)
 
     # Calculate subproblem cuts scaling factor
     m.new_scale_factor = m.scale_factor*m.tol_prim_infeas/m.rel_gap*(m.num_soc + m.num_exp + m.num_sdp)
@@ -555,6 +559,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         if applicable(MathProgBase.freemodel!, model_relax)
             MathProgBase.freemodel!(model_relax)
         end
+        flush(STDOUT)
+        flush(STDERR)
     end
 
     # Finish if exceeded timeout option
@@ -590,6 +596,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         m.oa_started = true
         m.new_incumb = false
         m.cache_dual = Dict{Vector{Float64},Vector{Float64}}()
+        flush(STDOUT)
+        flush(STDERR)
 
         if m.mip_solver_drives
             if m.log_level > 1
@@ -602,6 +610,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             end
             solve_iterative!(m)
         end
+        flush(STDOUT)
+        flush(STDERR)
 
         if m.best_obj < Inf
             # Have a best feasible solution, update final solution on original variables
@@ -616,6 +626,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     # Finish timer and print summary
     m.logs[:total] = time() - m.logs[:total]
     print_finish(m)
+    flush(STDOUT)
+    flush(STDERR)
 end
 
 MathProgBase.numconstr(m::PajaritoConicModel) = m.num_con_orig
@@ -2184,12 +2196,11 @@ function print_gap(m)
         @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" m.logs[:n_iter] m.best_obj m.mip_obj (isnan(m.gap_rel_opt) ? "Inf" : ">1000") (time() - m.logs[:total])
     end
     flush(STDOUT)
+    flush(STDERR)
 end
 
 # Print after finish
 function print_finish(m::PajaritoConicModel)
-    flush(STDOUT)
-
     if m.gap_rel_opt < -10*m.rel_gap
         if m.is_best_conic
             warn("Best feasible value is smaller than best bound: conic solver's solution may have significant infeasibilities (try tightening primal feasibility tolerance of conic solver)\n")
@@ -2319,7 +2330,7 @@ function print_finish(m::PajaritoConicModel)
         end
     end
 
-    flush(STDOUT)
+    println()
 end
 
 # Calculate absolute linear infeasibilities on each cone, and print worst

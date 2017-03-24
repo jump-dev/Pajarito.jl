@@ -4,1687 +4,951 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# SOC problems for NLP and conic algorithms
-function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "Maximize" begin
-        x = Convex.Variable(1, :Int)
 
-        problem = Convex.maximize(3x,
-                            x <= 10,
-                            x^2 <= 9)
+# Take a solver and a CBF file basename and solve the problem and return important solve information
+function solve_cbf(testname, probname, solver, redirect)
+    flush(STDOUT)
+    flush(STDERR)
+    @printf "%-30s... " testname
+    tic()
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3))
+    dat = ConicBenchmarkUtilities.readcbfdata("cbf/$(probname).cbf")
+    (c, A, b, con_cones, var_cones, vartypes, sense, objoffset) = ConicBenchmarkUtilities.cbftompb(dat)
+    flush(STDOUT)
+    flush(STDERR)
 
-        @test isapprox(x.value, 3.0, atol=TOL)
-        @test isapprox(problem.optval, 9.0, atol=TOL)
-        @test problem.status == :Optimal
-    end
+    m = MathProgBase.ConicModel(solver)
 
-    @testset "Infeasible" begin
-        x = Convex.Variable(1, :Int)
+    if redirect
+        mktemp() do path,io
+            out = STDOUT
+            err = STDERR
+            redirect_stdout(io)
+            redirect_stderr(io)
 
-        problem = Convex.maximize(3x,
-                            x >= 4,
-                            x^2 <= 9)
+            MathProgBase.loadproblem!(m, c, A, b, con_cones, var_cones)
+            MathProgBase.setvartype!(m, vartypes)
+            MathProgBase.optimize!(m)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level), verbose=false)
-
-        @test problem.status == :Infeasible
-    end
-
-    @testset "Unbounded" begin
-        x = Convex.Variable(1, :Int)
-        t = Convex.Variable(1, :Int)
-
-        problem = Convex.maximize(-3x + t,
-                            x <= 10,
-                            x^2 <= 2t,
-                            t >= 5)
-
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level), verbose=false)
-
-        @test problem.status == :Unbounded
-    end
-
-    @testset "Equality constraint" begin
-        # max  y + z
-        # st   x == 1
-        #     (x,y,z) in SOC
-        #      x in {0,1}
-
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
-
-        MathProgBase.loadproblem!(m,
-        [ 0.0, -1.0, -1.0],
-        [ 1.0  0.0  0.0;
-         -1.0  0.0  0.0;
-          0.0 -1.0  0.0;
-          0.0  0.0 -1.0],
-        [ 1.0, 0.0, 0.0, 0.0],
-        Any[(:Zero,1:1),(:SOC,2:4)],
-        Any[(:Free,[1,2,3])])
-        MathProgBase.setvartype!(m, [:Int,:Cont,:Cont])
-
-        MathProgBase.optimize!(m)
-
-        @test MathProgBase.status(m) == :Optimal
-        @test isapprox(MathProgBase.getobjval(m), -sqrt(2.0), atol=TOL)
-        @test isapprox(MathProgBase.getobjbound(m), -sqrt(2.0), atol=TOL)
-        @test isapprox(MathProgBase.getsolution(m), [1.0,1.0/sqrt(2.0),1.0/sqrt(2.0)], atol=TOL)
-    end
-
-    @testset "Zero cones" begin
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
-
-        MathProgBase.loadproblem!(m,
-        [ 0.0, 0.0, -1.0, 1.0, -1.0],
-        [ 1.0  1.0  0.0  0.0  0.0;
-         -1.0  0.0  0.0 -0.5  0.0;
-          0.0  2.0 -1.0  0.0  0.0;
-          0.0  0.0  0.0 0.5  -1.0],
-        [ 1.0, 0.0, 0.0, 0.0],
-        Any[(:Zero,1:1),(:SOC,2:4)],
-        Any[(:Free,[1,3,5]),(:Zero,[2,4])])
-        MathProgBase.setvartype!(m, [:Int,:Int,:Cont,:Cont,:Cont])
-
-        MathProgBase.optimize!(m)
-
-        @test MathProgBase.status(m) == :Optimal
-        @test isapprox(MathProgBase.getobjval(m), -sqrt(2.0), atol=TOL)
-        @test isapprox(MathProgBase.getobjbound(m), -sqrt(2.0), atol=TOL)
-        @test isapprox(MathProgBase.getsolution(m), [1.0,0.0,1.0/sqrt(2.0),0.0,1.0/sqrt(2.0)], atol=TOL)
-    end
-
-    @testset "Rotated SOC" begin
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
-
-        c = [-3.0, 0.0, 0.0, 0.0]
-        A = zeros(4,4)
-        A[1,1] = 1.0
-        A[2,2] = 1.0
-        A[3,3] = 1.0
-        A[4,1] = 1.0
-        A[4,4] = -1.0
-        b = [10.0, 1.5, 3.0, 0.0]
-        constr_cones = Any[(:NonNeg,[1,2,3]),(:Zero,[4])]
-        var_cones = Any[(:SOCRotated,[2,3,1]),(:Free,[4])]
-        vartypes = [:Cont, :Cont, :Cont, :Int]
-        MathProgBase.loadproblem!(m, c, A, b, constr_cones, var_cones)
+            flush(io)
+            redirect_stdout(out)
+            redirect_stderr(err)
+        end
+    else
+        MathProgBase.loadproblem!(m, c, A, b, con_cones, var_cones)
         MathProgBase.setvartype!(m, vartypes)
-
         MathProgBase.optimize!(m)
+    end
+    flush(STDOUT)
+    flush(STDERR)
 
-        @test MathProgBase.status(m) == :Optimal
-        @test isapprox(MathProgBase.getobjval(m), -9.0, atol=TOL)
-        @test isapprox(MathProgBase.getobjbound(m), -9.0, atol=TOL)
-        @test isapprox(MathProgBase.getsolution(m), [3.0,1.5,3.0,3.0], atol=TOL)
+    status = MathProgBase.status(m)
+    time = MathProgBase.getsolvetime(m)
+    objval = MathProgBase.getobjval(m)
+    objbound = MathProgBase.getobjbound(m)
+    sol = MathProgBase.getsolution(m)
+    @printf ":%-12s %5.2f s\n" status toq()
+    flush(STDOUT)
+    flush(STDERR)
+
+    return (status, time, objval, objbound, sol)
+end
+
+
+# SOC problems for NLP and conic algorithms
+function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    testname = "SOC Optimal"
+    probname = "soc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(sol[1], 3, atol=TOL)
+        @test isapprox(objval, -9, atol=TOL)
     end
 
-    @testset "No continuous variables, infeasible" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+    testname = "Infeasible"
+    probname = "soc_infeasible"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
-        dim = 5
-        @variable(m, x[1:dim], Bin)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= sqrt(dim-1)/2)
-        @objective(m, Min, 0)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        @test solve(m, suppress_warnings=true) == :Infeasible
+        @test status == :Infeasible
+    end
+
+    testname = "Unbounded"
+    probname = "soc_unbounded"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Unbounded
+    end
+
+    testname = "Optimal SOCRot"
+    probname = "socrot_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, -9, atol=TOL)
+        @test isapprox(objbound, -9, atol=TOL)
+        @test isapprox(sol, [1.5, 3, 3, 3], atol=TOL)
+    end
+
+    testname = "Infeasible SOCRot"
+    probname = "socrot_infeasible"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Infeasible
+    end
+
+    testname = "Equality constraint"
+    probname = "soc_equality"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, -sqrt(2), atol=TOL)
+        @test isapprox(objbound, -sqrt(2), atol=TOL)
+        @test isapprox(sol, [1, 1/sqrt(2), 1/sqrt(2)], atol=TOL)
+    end
+
+    testname = "Zero cones"
+    probname = "soc_zero"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, -sqrt(2), atol=TOL)
+        @test isapprox(objbound, -sqrt(2), atol=TOL)
+        @test isapprox(sol, [1, 1/sqrt(2), 1/sqrt(2), 0, 0], atol=TOL)
+    end
+
+    testname = "Infeasible all binary"
+    probname = "soc_infeasible2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Infeasible
     end
 end
 
 # SOC problems for conic algorithm
-function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "Dualize SOC" begin
-        x = Convex.Variable(1, :Int)
+function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    testname = "Timeout 1st MIP"
+    probname = "tls5"
+    @testset "$testname" begin
+        solver_timeout = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            timeout=15.)
 
-        problem = Convex.maximize(3x,
-                            x <= 10,
-                            x^2 <= 9)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver_timeout, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, dualize_subp=true, dualize_relax=true))
-
-        @test isapprox(problem.optval, 9.0, atol=TOL)
-        @test isapprox(x.value, 3.0, atol=TOL)
-        @test problem.status == :Optimal
+        @test time < 60.
+        @test status == :UserLimit
     end
 
-    @testset "Suboptimal solves" begin
-        x = Convex.Variable(1, :Int)
+    testname = "SOC dualize"
+    probname = "soc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            dualize_subp=true, dualize_relax=true)
 
-        problem = Convex.maximize(3x,
-                            x <= 10,
-                            x^2 <= 9)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, mip_subopt_count=3, mip_subopt_solver=mip_solver, cont_solver=cont_solver, log_level=3, dualize_subp=true, dualize_relax=true))
-
-        @test isapprox(problem.optval, 9.0, atol=TOL)
-        @test isapprox(x.value, 3.0, atol=TOL)
-        @test problem.status == :Optimal
+        @test status == :Optimal
+        @test isapprox(sol[1], 3, atol=TOL)
+        @test isapprox(objval, -9, atol=TOL)
     end
 
-    @testset "Dualize rotated SOC" begin
-        m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, dualize_subp=true, dualize_relax=true))
+    testname = "Suboptimal MIP solves"
+    probname = "soc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            mip_subopt_count=3, mip_subopt_solver=mip_solver)
 
-        c = [-3.0, 0.0, 0.0, 0.0]
-        A = zeros(4,4)
-        A[1,1] = 1.0
-        A[2,2] = 1.0
-        A[3,3] = 1.0
-        A[4,1] = 1.0
-        A[4,4] = -1.0
-        b = [10.0, 1.5, 3.0, 0.0]
-        constr_cones = Any[(:NonNeg,[1,2,3]),(:Zero,[4])]
-        var_cones = Any[(:SOCRotated,[2,3,1]),(:Free,[4])]
-        vartypes = [:Cont, :Cont, :Cont, :Int]
-        MathProgBase.loadproblem!(m, c, A, b, constr_cones, var_cones)
-        MathProgBase.setvartype!(m, vartypes)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        MathProgBase.optimize!(m)
-
-        @test MathProgBase.status(m) == :Optimal
-        @test isapprox(MathProgBase.getobjval(m), -9.0, atol=TOL)
-        @test isapprox(MathProgBase.getobjbound(m), -9.0, atol=TOL)
-        @test isapprox(MathProgBase.getsolution(m), [3.0,1.5,3.0,3.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(sol[1], 3, atol=TOL)
+        @test isapprox(objval, -9, atol=TOL)
     end
 
-    # @testset "Infinite duality gap: primal assist" begin
-    #     # Example of polyhedral OA failure due to infinite duality gap from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
-    #     # min  z
-    #     # st   x == 0
-    #     #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
-    #     #      x in {0,1}
-    #
-    #     m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
-    #
-    #     MathProgBase.loadproblem!(m,
-    #     [ 0.0, 0.0, 1.0],
-    #     [ -1.0  0.0  0.0;
-    #     -1.0  0.0  0.0;
-    #     0.0 -1.0  0.0;
-    #     0.0  0.0 -1.0],
-    #     [ 0.0, 0.0, 0.0, 0.0],
-    #     Any[(:Zero,1:1),(:SOCRotated,2:4)],
-    #     Any[(:Free,[1,2,3])])
-    #     MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
-    #
-    #     MathProgBase.optimize!(m)
-    #
-    #     status = MathProgBase.status(m)
-    #     @test status == :CutsFailure
-    # end
-    #
-    # @testset "Infinite duality gap: no primal assist" begin
-    #     m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
-    #
-    #     MathProgBase.loadproblem!(m,
-    #     [ 0.0, 0.0, 1.0],
-    #     [ -1.0  0.0  0.0;
-    #     -1.0  0.0  0.0;
-    #     0.0 -1.0  0.0;
-    #     0.0  0.0 -1.0],
-    #     [ 0.0, 0.0, 0.0, 0.0],
-    #     Any[(:Zero,1:1),(:SOCRotated,2:4)],
-    #     Any[(:Free,[1,2,3])])
-    #     MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
-    #
-    #     MathProgBase.optimize!(m)
-    #
-    #     status = MathProgBase.status(m)
-    #     @test status == :CutsFailure
-    # end
-    #
-    # @testset "Finite duality gap: primal assist" begin
-    #     # Example of polyhedral OA failure due to finite duality gap, modified from "Polyhedral approximation in mixed-integer convex optimization - Lubin et al 2016"
-    #     # min  z
-    #     # st   x == 0
-    #     #     (x,y,z) in RSOC  (2xy >= z^2, x,y >= 0)
-    #     #      z >= -10
-    #     #      x in {0,1}
-    #
-    #     m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
-    #
-    #     MathProgBase.loadproblem!(m,
-    #     [ 0.0, 0.0, 1.0],
-    #     [ -1.0  0.0  0.0;
-    #      -1.0  0.0  0.0;
-    #       0.0 -1.0  0.0;
-    #       0.0  0.0 -1.0;
-    #       0.0  0.0 -1.0],
-    #     [ 0.0, 0.0, 0.0, 0.0, 10.0],
-    #     Any[(:Zero,1:1),(:SOCRotated,2:4),(:NonNeg,5:5)],
-    #     Any[(:Free,[1,2,3])])
-    #     MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
-    #
-    #     MathProgBase.optimize!(m)
-    #
-    #     status = MathProgBase.status(m)
-    #     @test status == :CutsFailure
-    # end
-    #
-    # @testset "Finite duality gap: no primal assist" begin
-    #     m = MathProgBase.ConicModel(PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false, soc_disagg=false, soc_abslift=false, init_soc_one=false, init_soc_inf=false))
-    #
-    #     MathProgBase.loadproblem!(m,
-    #     [ 0.0, 0.0, 1.0],
-    #     [ -1.0  0.0  0.0;
-    #      -1.0  0.0  0.0;
-    #       0.0 -1.0  0.0;
-    #       0.0  0.0 -1.0;
-    #       0.0  0.0 -1.0],
-    #     [ 0.0, 0.0, 0.0, 0.0, 10.0],
-    #     Any[(:Zero,1:1),(:SOCRotated,2:4),(:NonNeg,5:5)],
-    #     Any[(:Free,[1,2,3])])
-    #     MathProgBase.setvartype!(m, [:Bin,:Cont,:Cont])
-    #
-    #     MathProgBase.optimize!(m)
-    #
-    #     status = MathProgBase.status(m)
-    #     @test status == :CutsFailure
-    # end
+    testname = "Dualize SOCRot"
+    probname = "socrot_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            dualize_subp=true, dualize_relax=true)
 
-    @testset "Hijazi: L1, disagg, no abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=true, soc_disagg=true, soc_abslift=false))
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        dim = 5
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
-
-        @test solve(m, suppress_warnings=true) == :Infeasible
-        @test internalmodel(m).logs[:n_inf] == 0
+        @test status == :Optimal
+        @test isapprox(objval, -9, atol=TOL)
+        @test isapprox(objbound, -9, atol=TOL)
+        @test isapprox(sol, [1.5, 3, 3, 3], atol=TOL)
     end
 
-    @testset "Hijazi: L1, disagg, abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=true, soc_disagg=true, soc_abslift=true))
+    testname = "Infeas L1, disagg"
+    probname = "soc_infeasible2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=true, soc_disagg=true, soc_abslift=false)
 
-        dim = 5
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        @test solve(m, suppress_warnings=true) == :Infeasible
-        @test internalmodel(m).logs[:n_inf] == 0
+        @test status == :Infeasible
     end
 
-    @testset "Hijazi: L1, no disagg, abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=true, soc_disagg=false, soc_abslift=true))
+    testname = "Infeas L1, disagg, abs"
+    probname = "soc_infeasible2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=true, soc_disagg=true, soc_abslift=true)
 
-        dim = 5
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        @test solve(m, suppress_warnings=true) == :Infeasible
-        @test internalmodel(m).logs[:n_inf] == 0
+        @test status == :Infeasible
     end
 
-    @testset "Hijazi: no L1, no disagg, no abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, init_soc_inf=false, soc_disagg=false, soc_abslift=false))
+    testname = "Infeas L1, abs"
+    probname = "soc_infeasible2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=true, soc_disagg=false, soc_abslift=true)
 
-        dim = 4
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        @test solve(m, suppress_warnings=true) == :Infeasible
-        # @test internalmodel(m).logs[:n_inf] == 2^dim
+        @test status == :Infeasible
     end
 
-    @testset "Hijazi: no L1, disagg, no abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, init_soc_inf=false, soc_disagg=true, soc_abslift=false))
+    testname = "Infeas disagg"
+    probname = "soc_infeasible2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=false, soc_disagg=true, soc_abslift=false)
 
-        dim = 4
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        @test solve(m, suppress_warnings=true) == :Infeasible
-        # @test internalmodel(m).logs[:n_inf] == 2
+        @test status == :Infeasible
     end
 
-    @testset "Hijazi: no L1, disagg, abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, init_soc_inf=false, soc_disagg=true, soc_abslift=true))
+    testname = "Infeas disagg, abs"
+    probname = "soc_infeasible2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=false, soc_disagg=true, soc_abslift=true)
 
-        dim = 4
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        @test solve(m, suppress_warnings=true) == :Infeasible
-        # @test internalmodel(m).logs[:n_inf] == 1
+        @test status == :Infeasible
     end
 
-    @testset "Hijazi: no L1, no disagg, abslift" begin
-        m = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, soc_disagg=false, soc_abslift=true))
+    testname = "Infeas abs"
+    probname = "soc_infeasible2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=false, soc_disagg=false, soc_abslift=true)
 
-        dim = 4
-        @variable(m, x[1:dim], Bin)
-        @variable(m, t)
-        @constraint(m, t == sqrt(dim-1)/2)
-        @constraint(m, norm(x[j]-0.5 for j in 1:dim) <= t)
-        @objective(m, Min, 0)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        @test solve(m, suppress_warnings=true) == :Infeasible
-        # @test internalmodel(m).logs[:n_inf] == 1
-    end
-
-    @testset "Timeout in first MIP solve" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, timeout=15.)
-        dat = ConicBenchmarkUtilities.readcbfdata("cbf/classical_200_1.cbf.gz")
-
-        c, A, b, con_cones, var_cones, vartypes, sense, objoffset = ConicBenchmarkUtilities.cbftompb(dat)
-        m = MathProgBase.ConicModel(solver)
-        MathProgBase.loadproblem!(m, c, A, b, con_cones, var_cones)
-        MathProgBase.setvartype!(m, vartypes)
-        tic()
-        MathProgBase.optimize!(m)
-        @test MathProgBase.status(m) == :UserLimit
-        t = toq()
-        @test t < 60
+        @test status == :Infeasible
     end
 end
 
 # Exp+SOC problems for NLP and conic algorithms
-function runexpsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "Exp and SOC" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
+function runexpsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    testname = "Exp optimal"
+    probname = "exp_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
-        problem = Convex.maximize(3x + y,
-                            x >= 0,
-                            3x + 2y <= 10,
-                            exp(x) <= 10)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3))
-
-       @test isapprox(problem.optval, 8.0, atol=TOL)
-       @test isapprox(x.value, 2.0, atol=TOL)
-       @test isapprox(y.value, 2.0, atol=TOL)
-       @test problem.status == :Optimal
+        @test status == :Optimal
+        @test isapprox(objval, -8, atol=TOL)
+        @test isapprox(objbound, -8, atol=TOL)
+        @test isapprox(sol[1:2], [2, 2], atol=TOL)
     end
 
-    @testset "No integer variables" begin
-        x = Convex.Variable(1)
-        y = Convex.Variable(1, Convex.Positive())
+    testname = "ExpSOC optimal"
+    probname = "expsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
-        problem = Convex.maximize(3x + y,
-                            x >= 0,
-                            3x + 2y <= 10,
-                            exp(x) <= 10)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-       @test_throws ErrorException Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+        @test status == :Optimal
+        @test isapprox(objval, -7.609438, atol=TOL)
+        @test isapprox(objbound, -7.609438, atol=TOL)
+        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 
-    @testset "More constraints" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1)
+    testname = "No disagg, no L1"
+    probname = "expsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=false, soc_disagg=false)
 
-        problem = Convex.minimize(-3x - y,
-                           x >= 1,
-                           y >= 0,
-                           3x + 2y <= 10,
-                           x^2 <= 5,
-                           exp(y) + x <= 7)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
-
-        @test problem.status == :Optimal
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 1.609438, atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.609438, atol=TOL)
+        @test isapprox(objbound, -7.609438, atol=TOL)
+        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 
-    @testset "No SOC disaggregation" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1)
+    testname = "Cone composition"
+    probname = "expsoc_optimal2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
-        problem = Convex.minimize(-3x - y,
-                           x >= 1,
-                           y >= 0,
-                           3x + 2y <= 10,
-                           x^2 <= 5,
-                           exp(y) + x <= 7)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, soc_disagg=false, init_soc_one=false, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
-
-        @test problem.status == :Optimal
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 1.609438, atol=TOL)
-    end
-
-    @testset "Cone composition" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-
-        problem = Convex.minimize(-3x - y,
-                           x >= 1,
-                           3x + 2y <= 30,
-                           exp(y^2) + x <= 7)
-
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, -18.0, atol=TOL)
-        @test isapprox(x.value, 6.0, atol=TOL)
-        @test isapprox(y.value, 0.0, atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -18, atol=TOL)
+        @test isapprox(objbound, -18, atol=TOL)
+        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
     end
 end
 
 # Exp+SOC problems for conic algorithm
-function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "No init exp" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
+function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    testname = "ExpSOC no init cuts"
+    probname = "expsoc_optimal2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_exp=false, init_soc_one=false, init_soc_inf=false)
 
-        problem = Convex.maximize(3x + y,
-                            x >= 0,
-                            3x + 2y <= 10,
-                            exp(x) <= 10)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, init_exp=false))
-
-       @test problem.status == :Optimal
-       @test isapprox(problem.optval, 8.0, atol=TOL)
-       @test isapprox(x.value, 2.0, atol=TOL)
-       @test isapprox(y.value, 2.0, atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -18, atol=TOL)
+        @test isapprox(objbound, -18, atol=TOL)
+        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
     end
 
-    @testset "No init exp or soc" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
+    testname = "No init cuts, no disagg"
+    probname = "expsoc_optimal2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_exp=false, init_soc_one=false, init_soc_inf=false, soc_disagg=false)
 
-        problem = Convex.minimize(-3x - y,
-                           x >= 1,
-                           3x + 2y <= 30,
-                           exp(y^2) + x <= 7)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_exp=false, init_soc_one=false, init_soc_inf=false))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, -18.0, atol=TOL)
-        @test isapprox(x.value, 6.0, atol=TOL)
-        @test isapprox(y.value, 0.0, atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -18, atol=TOL)
+        @test isapprox(objbound, -18, atol=TOL)
+        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
     end
 
-    @testset "No disagg, abslift" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
+    testname = "No init cuts, no disagg, abs"
+    probname = "expsoc_optimal2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_exp=false, init_soc_one=false, init_soc_inf=false, soc_disagg=false, soc_abslift=true)
 
-        problem = Convex.maximize(3x + y,
-                            x >= 0,
-                            3x + 2y <= 10,
-                            exp(x) <= 10)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=false, soc_abslift=true))
-
-       @test problem.status == :Optimal
-       @test isapprox(problem.optval, 8.0, atol=TOL)
-       @test isapprox(x.value, 2.0, atol=TOL)
-       @test isapprox(y.value, 2.0, atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -18, atol=TOL)
+        @test isapprox(objbound, -18, atol=TOL)
+        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
     end
 
-    @testset "Disagg, no abslift" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
+    testname = "Viol cuts only"
+    probname = "expsoc_optimal2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            viol_cuts_only=true, init_exp=false, init_soc_one=false, init_soc_inf=false)
 
-        problem = Convex.maximize(3x + y,
-                            x >= 0,
-                            3x + 2y <= 10,
-                            exp(x) <= 10)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=true, soc_abslift=false))
-
-       @test problem.status == :Optimal
-       @test isapprox(problem.optval, 8.0, atol=TOL)
-       @test isapprox(x.value, 2.0, atol=TOL)
-       @test isapprox(y.value, 2.0, atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -18, atol=TOL)
+        @test isapprox(objbound, -18, atol=TOL)
+        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
     end
 
-    @testset "Disagg, abslift" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
+    testname = "No scaling"
+    probname = "expsoc_optimal2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            scale_subp_cuts=false, init_exp=false, init_soc_one=false, init_soc_inf=false)
 
-        problem = Convex.maximize(3x + y,
-                            x >= 0,
-                            3x + 2y <= 10,
-                            exp(x) <= 10)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-       Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_disagg=true, soc_abslift=true))
-
-       @test problem.status == :Optimal
-       @test isapprox(problem.optval, 8.0, atol=TOL)
-       @test isapprox(x.value, 2.0, atol=TOL)
-       @test isapprox(y.value, 2.0, atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -18, atol=TOL)
+        @test isapprox(objbound, -18, atol=TOL)
+        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
     end
 
-    @testset "Viol cuts only true" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
+    testname = "Primal cuts always"
+    probname = "expsoc_optimal2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            prim_cuts_always=true, init_exp=false, init_soc_one=false, init_soc_inf=false)
 
-        problem = Convex.minimize(-3x - y,
-                           x >= 1,
-                           3x + 2y <= 30,
-                           exp(y^2) + x <= 7)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, viol_cuts_only=true))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, -18.0, atol=TOL)
-        @test isapprox(x.value, 6.0, atol=TOL)
-        @test isapprox(y.value, 0.0, atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -18, atol=TOL)
+        @test isapprox(objbound, -18, atol=TOL)
+        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
     end
 
-    @testset "Viol cuts only false" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
+    testname = "Primal cuts only"
+    probname = "expsoc_optimal2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            prim_cuts_only=true, init_exp=false, init_soc_one=false, init_soc_inf=false)
 
-        problem = Convex.minimize(-3x - y,
-                           x >= 1,
-                           3x + 2y <= 30,
-                           exp(y^2) + x <= 7)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, viol_cuts_only=false))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, -18.0, atol=TOL)
-        @test isapprox(x.value, 6.0, atol=TOL)
-        @test isapprox(y.value, 0.0, atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -18, atol=TOL)
+        @test isapprox(objbound, -18, atol=TOL)
+        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
     end
 
-    @testset "No scaling" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
+    testname = "No conic solver"
+    probname = "expsoc_optimal2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
+            solve_relax=false, solve_subp=false, prim_cuts_only=true)
 
-        problem = Convex.minimize(-3x - y,
-                           x >= 1,
-                           3x + 2y <= 30,
-                           exp(y^2) + x <= 7)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, scale_subp_cuts=false))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, -18.0, atol=TOL)
-        @test isapprox(x.value, 6.0, atol=TOL)
-        @test isapprox(y.value, 0.0, atol=TOL)
-    end
-
-    @testset "Primal cuts always" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-
-        problem = Convex.minimize(-3x - y,
-                           x >= 1,
-                           3x + 2y <= 30,
-                           exp(y^2) + x <= 7)
-
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_always=true))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, -18.0, atol=TOL)
-        @test isapprox(x.value, 6.0, atol=TOL)
-        @test isapprox(y.value, 0.0, atol=TOL)
-    end
-
-    @testset "Primal cuts only" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-
-        problem = Convex.minimize(-3x - y,
-                           x >= 1,
-                           3x + 2y <= 30,
-                           exp(y^2) + x <= 7)
-
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=true, prim_cuts_always=true, prim_cuts_only=true))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, -18.0, atol=TOL)
-        @test isapprox(x.value, 6.0, atol=TOL)
-        @test isapprox(y.value, 0.0, atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -18, atol=TOL)
+        @test isapprox(objbound, -18, atol=TOL)
+        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
     end
 end
 
 # SDP+SOC problems for conic algorithm
-function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "SDP and SOC" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    testname = "SDPSOC optimal"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "Subopt solves" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "Suboptimal MIP solves"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            mip_subopt_count=3, mip_subopt_solver=mip_solver)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, mip_subopt_count=3, mip_subopt_solver=mip_solver, cont_solver=cont_solver, log_level=3))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "Unbounded" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "Unbounded"
+    probname = "sdpsoc_unbounded"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
-        problem = Convex.maximize(z[1,1] - x,
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level), verbose=false)
-
-        @test problem.status == :Unbounded
+        @test status == :Unbounded
     end
 
-    @testset "Infeasible" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "Infeasible"
+    probname = "sdpsoc_infeasible"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 2,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 2,
-                            y >= z[2,2] + z[1,1])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level), verbose=false)
-
-        @test problem.status == :Infeasible
+        @test status == :Infeasible
     end
 
-    @testset "No integer variables" begin
-        x = Convex.Variable(1)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "No init cuts"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=false, init_soc_inf=false, init_sdp_lin=false)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-       @test_throws ErrorException Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "No init sdp" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "No eig cuts"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=false, init_soc_inf=false, init_sdp_lin=false, sdp_eig=false)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_lin=false))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "No eig cuts" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "Dualize"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            dualize_relax=true, dualize_subp=true)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=false))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "Dualize" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "Viol cuts only"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=false, init_soc_inf=false, init_sdp_lin=false, viol_cuts_only=true)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, dualize_subp=true, dualize_relax=true))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "Viol cuts only" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "No scaling"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            init_soc_one=false, init_soc_inf=false, init_sdp_lin=false, scale_subp_cuts=false)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, viol_cuts_only=true))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "No scaling" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "Primal cuts assist"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            prim_cuts_assist=true)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, scale_subp_cuts=false))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "No primal cuts assist" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "Primal cuts only"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            prim_cuts_only=true)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "Primal cuts always" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "No conic solver"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
+            solve_relax=false, solve_subp=false, prim_cuts_only=true)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_always=true))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "Primal cuts only" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "SDP integer Aopt"
+    probname = "sdp_optimalA"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=true, prim_cuts_always=true, prim_cuts_only=true))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, 8.955043, atol=TOL)
+        @test isapprox(objbound, 8.955043, atol=TOL)
+        @test isapprox(sol[1:8], [0, 3, 2, 2, 0, 3, 0, 2], atol=TOL)
     end
 
-    @testset "Convex.jl A-opt" begin
-        # A-optimal design
-        #   minimize    Trace (sum_i lambdai*vi*vi')^{-1}
-        #   subject to  lambda >= 0, 1'*lambda = 1
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
+    testname = "SDP integer Eopt"
+    probname = "sdp_optimalE"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
-        np = Convex.Variable(p, :Int)
-        Q = Convex.Variable(q, q)
-        u = Convex.Variable(q)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        aOpt = Convex.minimize(
-            sum(u),
-            Q == V * diagm(np./n) * V',
-            sum(np) <= n,
-            np >= 0,
-            np <= nmax
-        )
-        E = eye(q)
-        for i in 1:q
-        	aOpt.constraints += Convex.isposdef([Q E[:,i]; E[i,:]' u[i]])
-        end
-
-        Convex.solve!(aOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
-
-        @test aOpt.status == :Optimal
-        @test isapprox(aOpt.optval, 8.955043, atol=TOL)
-        @test isapprox(Convex.evaluate(sum(u)), aOpt.optval, atol=TOL)
-        @test isapprox(np.value, [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -0.2342348, atol=TOL)
+        @test isapprox(objbound, -0.2342348, atol=TOL)
+        @test isapprox(sol[1:8], [0, 3, 2, 3, 0, 3, 0, 1], atol=TOL)
     end
-
-    @testset "JuMP.jl A-opt" begin
-        aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
-
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-
-        np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-        @constraint(aOpt, sum(np) <= n)
-        u = @variable(aOpt, [i=1:q], lowerbound=0)
-        @objective(aOpt, Min, sum(u))
-        E = eye(q)
-        for i=1:q
-            @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
-        end
-
-        @test solve(aOpt, suppress_warnings=true) == :Optimal
-
-        @test isapprox(getobjectivevalue(aOpt), 8.955043, atol=TOL)
-        @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
-        @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
-    end
-
-    @testset "Convex.jl E-opt" begin
-        # E-optimal design
-        #   maximize    w
-        #   subject to  sum_i lambda_i*vi*vi' >= w*I
-        #               lambda >= 0,  1'*lambda = 1;
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-
-        np = Convex.Variable(p, :Int)
-        Q = Convex.Variable(q, q)
-        t = Convex.Variable()
-
-        eOpt = Convex.maximize(
-            t,
-            Q == V * diagm(np./n) * V',
-            sum(np) <= n,
-            np >= 0,
-            np <= nmax,
-            Convex.isposdef(Q - t * eye(q))
-        )
-
-        Convex.solve!(eOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
-
-        @test eOpt.status == :Optimal
-        @test isapprox(eOpt.optval, 0.2342348, atol=TOL)
-        @test isapprox(Convex.evaluate(t), eOpt.optval, atol=TOL)
-        @test isapprox(np.value, [0.0; 3.0; 2.0; 3.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
-    end
-
-    @testset "JuMP.jl E-opt" begin
-        eOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level))
-
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-
-        np = @variable(eOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-        @constraint(eOpt, sum(np) <= n)
-        t = @variable(eOpt)
-        @objective(eOpt, Max, t)
-        @SDconstraint(eOpt, V * diagm(np./n) * V' - t * eye(q) >= 0)
-
-        @test solve(eOpt, suppress_warnings=true) == :Optimal
-
-        @test isapprox(getobjectivevalue(eOpt), 0.2342348, atol=TOL)
-        @test isapprox(getvalue(t), getobjectivevalue(eOpt), atol=TOL)
-        @test isapprox(getvalue(np), [0.0; 3.0; 2.0; 3.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
-    end
-
-    # @testset "No relax solve: A-opt" begin
-    #     aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, solve_relax=false))
-    #
-    #     (q, p, n, nmax) = (4, 8, 12, 3)
-    #     V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-    #
-    #     np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-    #     @constraint(aOpt, sum(np) <= n)
-    #     u = @variable(aOpt, [i=1:q], lowerbound=0)
-    #     @objective(aOpt, Min, sum(u))
-    #     E = eye(q)
-    #     for i=1:q
-    #         @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
-    #     end
-    #
-    #     @test solve(aOpt, suppress_warnings=true) == :Optimal
-    #
-    #     @test isapprox(getobjectivevalue(aOpt), 8.955043, atol=TOL)
-    #     @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
-    #     @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
-    # end
-
-    @testset "No subp solve: A-opt" begin
-        aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, solve_subp=false))
-
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-
-        np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-        @constraint(aOpt, sum(np) <= n)
-        u = @variable(aOpt, [i=1:q], lowerbound=0)
-        @objective(aOpt, Min, sum(u))
-        E = eye(q)
-        for i=1:q
-            @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
-        end
-
-        @test solve(aOpt, suppress_warnings=true) == :Optimal
-
-        @test isapprox(getobjectivevalue(aOpt), 8.955043, atol=TOL)
-        @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
-        @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
-    end
-
-    @testset "No conic solver: A-opt" begin
-        aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level, solve_relax=false, solve_subp=false))
-
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-
-        np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-        @constraint(aOpt, sum(np) <= n)
-        u = @variable(aOpt, [i=1:q], lowerbound=0)
-        @objective(aOpt, Min, sum(u))
-        E = eye(q)
-        for i=1:q
-            @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
-        end
-
-        @test solve(aOpt, suppress_warnings=true) == :Optimal
-
-        @test isapprox(getobjectivevalue(aOpt), 8.955043, atol=TOL)
-        @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
-        @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
-    end
-
 end
 
 # SDP+Exp problems for conic algorithm
-function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "Convex.jl D-opt" begin
-        # D-optimal design
-        #   maximize    nthroot det V*diag(lambda)*V'
-        #   subject to  sum(lambda)=1,  lambda >=0
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
+function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    testname = "ExpSDP integer Dopt"
+    probname = "expsdp_optimalD"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
-        np = Convex.Variable(p, :Int)
-        Q = Convex.Variable(q, q)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        dOpt = Convex.maximize(
-            Convex.logdet(Q),
-            Q == V * diagm(np./n) * V',
-            sum(np) <= n,
-            np >= 0,
-            np <= nmax
-        )
+        @test status == :Optimal
+        @test isapprox(objval, 1.868872, atol=TOL)
+        @test isapprox(objbound, 1.868872, atol=TOL)
+        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+    end
 
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=0))
+    testname = "Primal cuts only Dopt"
+    probname = "expsdp_optimalD"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            prim_cuts_only=true)
 
-        @test dOpt.status == :Optimal
-        @test isapprox(dOpt.optval, -1.868872, atol=TOL)
-        @test isapprox(Convex.evaluate(Convex.logdet(V * diagm(np./n) * V')), dOpt.optval, atol=TOL)
-        @test isapprox(np.value, [0.0; 3.0; 3.0; 2.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, 1.868872, atol=TOL)
+        @test isapprox(objbound, 1.868872, atol=TOL)
+        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
     end
 end
 
 # Exp+SOC problems for conic algorithm with MISOCP
-function runexpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "SOC in MIP: More constraints" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1)
+function runexpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    testname = "SOC in MIP, suboptimal MIP"
+    probname = "expsoc_optimal2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            soc_in_mip=true, mip_subopt_count=3, mip_subopt_solver=mip_solver)
 
-        problem = Convex.minimize(-3x - y,
-                           x >= 1,
-                           y >= 0,
-                           3x + 2y <= 10,
-                           x^2 <= 5,
-                           exp(y) + x <= 7)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, soc_in_mip=true))
-
-        @test problem.status == :Optimal
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 1.609438, atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -18, atol=TOL)
+        @test isapprox(objbound, -18, atol=TOL)
+        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
     end
 
-    @testset "SOC in MIP: Cone composition" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
+    testname = "SOC in MIP, primal only"
+    probname = "expsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            soc_in_mip=true, prim_cuts_only=true, init_exp=false, init_soc_one=false, init_soc_inf=false)
 
-        problem = Convex.minimize(-3x - y,
-                           x >= 1,
-                           3x + 2y <= 30,
-                           exp(y^2) + x <= 7)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true))
+        @test status == :Optimal
+        @test isapprox(objval, -7.609438, atol=TOL)
+        @test isapprox(objbound, -7.609438, atol=TOL)
+        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
+    end
 
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, -18.0, atol=TOL)
-        @test isapprox(x.value, 6.0, atol=TOL)
-        @test isapprox(y.value, 0.0, atol=TOL)
+    testname = "SOC in MIP, no conic"
+    probname = "expsoc_optimal2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
+            soc_in_mip=true, prim_cuts_only=true, solve_relax=false, solve_subp=false)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, -18, atol=TOL)
+        @test isapprox(objbound, -18, atol=TOL)
+        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
     end
 end
 
 # SDP+SOC problems for conic algorithm with MISOCP
-function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "SOC in MIP: SDP and SOC" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    testname = "SDPSOC SOC in MIP"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            soc_in_mip=true)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, soc_in_mip=true))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "SOC in MIP: Unbounded" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "SOC in MIP unbounded"
+    probname = "sdpsoc_unbounded"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            soc_in_mip=true)
 
-        problem = Convex.maximize(z[1,1] - x,
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true), verbose=false)
-
-        @test problem.status == :Unbounded
+        @test status == :Unbounded
     end
 
-    @testset "SOC in MIP: Infeasible" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "SOC in MIP infeasible"
+    probname = "sdpsoc_infeasible"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            soc_in_mip=true)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 2,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 2,
-                            y >= z[2,2] + z[1,1])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true), verbose=false)
-
-        @test problem.status == :Infeasible
+        @test status == :Infeasible
     end
 
-    @testset "SOC in MIP: No eig cuts" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "SOC in MIP, no eig cuts"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            soc_in_mip=true)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true, sdp_eig=false))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "SOC in MIP: Dualize" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "SOC in MIP, dualize"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            soc_in_mip=true, dualize_subp=true, dualize_relax=true)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true, dualize_subp=true, dualize_relax=true))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "SOC in MIP: No primal cuts assist" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "SOC in MIP, no conic solver"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
+            soc_in_mip=true, prim_cuts_only=true, solve_relax=false, solve_subp=false)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true, prim_cuts_assist=false))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "SOC in MIP: Primal cuts only" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "SDP init SOC cuts optimal"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            sdp_eig=true, init_sdp_soc=true)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true, prim_cuts_assist=true, prim_cuts_always=true, prim_cuts_only=true))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    @testset "Full SOC: SDP and SOC" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    testname = "SDP init SOC cuts infeasible"
+    probname = "sdpsoc_infeasible"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            sdp_eig=true, init_sdp_soc=true)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_soc=true, sdp_eig=false))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
+        @test status == :Infeasible
     end
 
-    @testset "Full SOC: Infeasible" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+    # Only run SOC cut tests if iterative algorithm, because cannot add SOC cuts during MSD
+    if !mip_solver_drives
+        testname = "SDP SOC eig cuts optimal"
+        probname = "sdpsoc_optimal"
+        @testset "$testname" begin
+            solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+                sdp_eig=true, sdp_soc=true)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 2,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 2,
-                            y >= z[2,2] + z[1,1])
+            (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_soc=true, sdp_eig=false), verbose=false)
+            @test status == :Optimal
+            @test isapprox(objval, -7.5, atol=TOL)
+            @test isapprox(objbound, -7.5, atol=TOL)
+            @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
+        end
 
-        @test problem.status == :Infeasible
-    end
+        testname = "SDP SOC eig cuts infeasible"
+        probname = "sdpsoc_infeasible"
+        @testset "$testname" begin
+            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+                sdp_eig=true, sdp_soc=true)
 
-    @testset "Init SOC and eig SOC: SDP and SOC" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+            (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+            @test status == :Infeasible
+        end
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true))
+        testname = "SDP SOC cuts, no conic solver"
+        probname = "sdpsoc_optimal"
+        @testset "$testname" begin
+            solver = PajaritoSolver(mip_solver=mip_solver, log_level=log_level,
+                sdp_eig=true, init_sdp_soc=true, sdp_soc=true, prim_cuts_only=true, solve_relax=false, solve_subp=false)
 
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
-    end
+            (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-    @testset "Init SOC and eig SOC: Infeasible" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+            @test status == :Optimal
+            @test isapprox(objval, -7.5, atol=TOL)
+            @test isapprox(objbound, -7.5, atol=TOL)
+            @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
+        end
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 2,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 2,
-                            y >= z[2,2] + z[1,1])
+        testname = "SDP SOC full cuts optimal"
+        probname = "sdpsoc_optimal"
+        @testset "$testname" begin
+            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+                sdp_eig=true, sdp_soc=true)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true), verbose=false)
+            (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        @test problem.status == :Infeasible
-    end
+            @test status == :Optimal
+            @test isapprox(objval, -7.5, atol=TOL)
+            @test isapprox(objbound, -7.5, atol=TOL)
+            @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
+        end
 
-    @testset "Init SOC and eig SOC: Dualize" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+        testname = "SDP SOC full cuts infeasible"
+        probname = "sdpsoc_infeasible"
+        @testset "$testname" begin
+            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+                sdp_eig=true, sdp_soc=true)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+            (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true, dualize_subp=true, dualize_relax=true))
+            @test status == :Infeasible
+        end
 
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
-    end
+        testname = "SDP SOC eig cuts Aopt"
+        probname = "sdp_optimalA"
+        @testset "$testname" begin
+            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+                sdp_eig=true, sdp_soc=true)
 
-    @testset "Init SOC and eig SOC: No primal cuts assist" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
+            (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
+            @test status == :Optimal
+            @test isapprox(objval, 8.955043, atol=TOL)
+            @test isapprox(objbound, 8.955043, atol=TOL)
+            @test isapprox(sol[1:8], [0, 3, 2, 2, 0, 3, 0, 2], atol=TOL)
+        end
 
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true, prim_cuts_assist=false))
+        testname = "SDP SOC eig cuts Eopt"
+        probname = "sdp_optimalE"
+        @testset "$testname" begin
+            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+                sdp_eig=true, sdp_soc=true)
 
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
-    end
+            (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-    @testset "Init SOC and eig SOC: Primal cuts only" begin
-        x = Convex.Variable(1, :Int)
-        y = Convex.Variable(1, Convex.Positive())
-        z = Convex.Semidefinite(2)
-
-        problem = Convex.maximize(3x + y - z[1,1],
-                            x >= 0,
-                            3x + 2y <= 10,
-                            x^2 <= 4,
-                            z[1,2] >= 1,
-                            y >= z[2,2])
-
-        Convex.solve!(problem, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true, prim_cuts_assist=true, prim_cuts_always=true, prim_cuts_only=true))
-
-        @test problem.status == :Optimal
-        @test isapprox(problem.optval, 7.5, atol=TOL)
-        @test isapprox(x.value, 2.0, atol=TOL)
-        @test isapprox(y.value, 2.0, atol=TOL)
-        @test isapprox(z.value, [0.5 1.0; 1.0 2.0], atol=TOL)
-    end
-
-    # @testset "SOC eig cuts: A-opt" begin
-    #     aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_soc=true))
-    #
-    #     (q, p, n, nmax) = (4, 8, 12, 3)
-    #     V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-    #
-    #     np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-    #     @constraint(aOpt, sum(np) <= n)
-    #     u = @variable(aOpt, [i=1:q], lowerbound=0)
-    #     @objective(aOpt, Min, sum(u))
-    #     E = eye(q)
-    #     for i=1:q
-    #         @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
-    #     end
-    #
-    #     @test solve(aOpt, suppress_warnings=true) == :Optimal
-    #
-    #     @test isapprox(getobjectivevalue(aOpt), 8.955043, atol=TOL)
-    #     @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
-    #     @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
-    # end
-
-    @testset "SOC eig cuts: E-opt" begin
-        eOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_soc=true))
-
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-
-        np = @variable(eOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-        @constraint(eOpt, sum(np) <= n)
-        t = @variable(eOpt)
-        @objective(eOpt, Max, t)
-        @SDconstraint(eOpt, V * diagm(np./n) * V' - t * eye(q) >= 0)
-
-        @test solve(eOpt, suppress_warnings=true) == :Optimal
-
-        @test isapprox(getobjectivevalue(eOpt), 0.2342348, atol=TOL)
-        @test isapprox(getvalue(t), getobjectivevalue(eOpt), atol=TOL)
-        @test isapprox(getvalue(np), [0.0; 3.0; 2.0; 3.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
-    end
-
-    # @testset "SOC full cuts: A-opt" begin
-    #     aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_soc=true, sdp_eig=false))
-    #
-    #     (q, p, n, nmax) = (4, 8, 12, 3)
-    #     V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-    #
-    #     np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-    #     @constraint(aOpt, sum(np) <= n)
-    #     u = @variable(aOpt, [i=1:q], lowerbound=0)
-    #     @objective(aOpt, Min, sum(u))
-    #     E = eye(q)
-    #     for i=1:q
-    #         @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
-    #     end
-    #
-    #     @test solve(aOpt) == :Optimal
-    #
-    #     @test isapprox(getobjectivevalue(aOpt), 8.955043, atol=TOL)
-    #     @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
-    #     @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
-    # end
-
-    @testset "Init SOC cuts: E-opt" begin
-        eOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_soc=true, sdp_eig=false))
-
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-
-        np = @variable(eOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-        @constraint(eOpt, sum(np) <= n)
-        t = @variable(eOpt)
-        @objective(eOpt, Max, t)
-        @SDconstraint(eOpt, V * diagm(np./n) * V' - t * eye(q) >= 0)
-
-        @test solve(eOpt, suppress_warnings=true) == :Optimal
-
-        @test isapprox(getobjectivevalue(eOpt), 0.2342348, atol=TOL)
-        @test isapprox(getvalue(t), getobjectivevalue(eOpt), atol=TOL)
-        @test isapprox(getvalue(np), [0.0; 3.0; 2.0; 3.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
-    end
-
-    # @testset "Init SOC cuts: A-opt" begin
-    #     aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true))
-    #
-    #     (q, p, n, nmax) = (4, 8, 12, 3)
-    #     V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-    #
-    #     np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-    #     @constraint(aOpt, sum(np) <= n)
-    #     u = @variable(aOpt, [i=1:q], lowerbound=0)
-    #     @objective(aOpt, Min, sum(u))
-    #     E = eye(q)
-    #     for i=1:q
-    #         @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
-    #     end
-    #
-    #     @test solve(aOpt) == :Optimal
-    #
-    #     @test isapprox(getobjectivevalue(aOpt), 8.955043, atol=TOL)
-    #     @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
-    #     @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
-    # end
-
-    @testset "SOC full cuts: E-opt" begin
-        eOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true))
-
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-
-        np = @variable(eOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-        @constraint(eOpt, sum(np) <= n)
-        t = @variable(eOpt)
-        @objective(eOpt, Max, t)
-        @SDconstraint(eOpt, V * diagm(np./n) * V' - t * eye(q) >= 0)
-
-        @test solve(eOpt, suppress_warnings=true) == :Optimal
-
-        @test isapprox(getobjectivevalue(eOpt), 0.2342348, atol=TOL)
-        @test isapprox(getvalue(t), getobjectivevalue(eOpt), atol=TOL)
-        @test isapprox(getvalue(np), [0.0; 3.0; 2.0; 3.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
-    end
-
-    # @testset "Init and eig SOC cuts: A-opt" begin
-    #     aOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true))
-    #
-    #     (q, p, n, nmax) = (4, 8, 12, 3)
-    #     V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-    #
-    #     np = @variable(aOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-    #     @constraint(aOpt, sum(np) <= n)
-    #     u = @variable(aOpt, [i=1:q], lowerbound=0)
-    #     @objective(aOpt, Min, sum(u))
-    #     E = eye(q)
-    #     for i=1:q
-    #         @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
-    #     end
-    #
-    #     @test solve(aOpt) == :Optimal
-    #
-    #     @test isapprox(getobjectivevalue(aOpt), 8.955043, atol=TOL)
-    #     @test isapprox(getvalue(sum(u)), getobjectivevalue(aOpt), atol=TOL)
-    #     @test isapprox(getvalue(np), [-0.0; 3.0; 2.0; 2.0; -0.0; 3.0; -0.0; 2.0], atol=TOL)
-    # end
-
-    @testset "Init and eig SOC cuts: E-opt" begin
-        eOpt = Model(solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true))
-
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-
-        np = @variable(eOpt, [j=1:p], Int, lowerbound=0, upperbound=nmax)
-        @constraint(eOpt, sum(np) <= n)
-        t = @variable(eOpt)
-        @objective(eOpt, Max, t)
-        @SDconstraint(eOpt, V * diagm(np./n) * V' - t * eye(q) >= 0)
-
-        @test solve(eOpt, suppress_warnings=true) == :Optimal
-
-        @test isapprox(getobjectivevalue(eOpt), 0.2342348, atol=TOL)
-        @test isapprox(getvalue(t), getobjectivevalue(eOpt), atol=TOL)
-        @test isapprox(getvalue(np), [0.0; 3.0; 2.0; 3.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
+            @test status == :Optimal
+            @test isapprox(objval, -0.2342348, atol=TOL)
+            @test isapprox(objbound, -0.2342348, atol=TOL)
+            @test isapprox(sol[1:8], [0, 3, 2, 3, 0, 3, 0, 1], atol=TOL)
+        end
     end
 end
 
 # SDP+Exp problems for conic algorithm with MISOCP
-function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level)
-    @testset "SOC eig cuts: D-opt" begin
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
+function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    testname = "ExpSDP init SOC cuts Dopt"
+    probname = "expsdp_optimalD"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            sdp_eig=true, sdp_soc=false, init_sdp_soc=true)
 
-        np = Convex.Variable(p, :Int)
-        Q = Convex.Variable(q, q)
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        dOpt = Convex.maximize(
-            Convex.logdet(Q),
-            Q == V * diagm(np./n) * V',
-            sum(np) <= n,
-            np >= 0,
-            np <= nmax
-        )
-
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=3, sdp_soc=true))
-
-        @test dOpt.status == :Optimal
-        @test isapprox(dOpt.optval, -1.868872, atol=TOL)
-        @test isapprox(Convex.evaluate(Convex.logdet(V * diagm(np./n) * V')), dOpt.optval, atol=TOL)
-        @test isapprox(np.value, [0.0; 3.0; 3.0; 2.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
+        @test status == :Optimal
+        @test isapprox(objval, 1.868872, atol=TOL)
+        @test isapprox(objbound, 1.868872, atol=TOL)
+        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
     end
 
-    @testset "SOC full cuts: D-opt" begin
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
+    # Only run SOC cut tests if iterative algorithm, because cannot add SOC cuts during MSD
+    if !mip_solver_drives
+        testname = "SDP SOC eig cuts Dopt"
+        probname = "expsdp_optimalD"
+        @testset "$testname" begin
+            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+                sdp_eig=true, sdp_soc=true)
 
-        np = Convex.Variable(p, :Int)
-        Q = Convex.Variable(q, q)
+            (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        dOpt = Convex.maximize(
-            Convex.logdet(Q),
-            Q == V * diagm(np./n) * V',
-            sum(np) <= n,
-            np >= 0,
-            np <= nmax
-        )
+            @test status == :Optimal
+            @test isapprox(objval, 1.868872, atol=TOL)
+            @test isapprox(objbound, 1.868872, atol=TOL)
+            @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+        end
 
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_soc=true, sdp_eig=false))
+        testname = "SDP SOC full cuts Dopt"
+        probname = "expsdp_optimalD"
+        @testset "$testname" begin
+            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+                sdp_eig=false, sdp_soc=true, init_sdp_soc=true)
 
-        @test dOpt.status == :Optimal
-        @test isapprox(dOpt.optval, -1.868872, atol=TOL)
-        @test isapprox(Convex.evaluate(Convex.logdet(V * diagm(np./n) * V')), dOpt.optval, atol=TOL)
-        @test isapprox(np.value, [0.0; 3.0; 3.0; 2.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
-    end
+            (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-    @testset "Init SOC cuts: D-opt" begin
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-
-        np = Convex.Variable(p, :Int)
-        Q = Convex.Variable(q, q)
-
-        dOpt = Convex.maximize(
-            Convex.logdet(Q),
-            Q == V * diagm(np./n) * V',
-            sum(np) <= n,
-            np >= 0,
-            np <= nmax
-        )
-
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true))
-
-        @test dOpt.status == :Optimal
-        @test isapprox(dOpt.optval, -1.868872, atol=TOL)
-        @test isapprox(Convex.evaluate(Convex.logdet(V * diagm(np./n) * V')), dOpt.optval, atol=TOL)
-        @test isapprox(np.value, [0.0; 3.0; 3.0; 2.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
-    end
-
-    @testset "Init and eig SOC cuts: D-opt" begin
-        (q, p, n, nmax) = (4, 8, 12, 3)
-        V = [-0.658136 0.383753 -0.601421 -0.211517 1.57874 2.03256 0.396071 -0.870703; -0.705681 1.63771 -0.304213 -0.213992 0.88695 1.54024 -0.134482 -0.0874732; -0.414197 -0.39504 1.31011 1.72996 -0.215804 -0.515882 0.15529 -0.630257; -0.375281 0.0 1.1321 -0.0720246 0.180677 0.524403 -0.220045 0.62724]
-
-        np = Convex.Variable(p, :Int)
-        Q = Convex.Variable(q, q)
-
-        dOpt = Convex.maximize(
-            Convex.logdet(Q),
-            Q == V * diagm(np./n) * V',
-            sum(np) <= n,
-            np >= 0,
-            np <= nmax
-        )
-
-        Convex.solve!(dOpt, PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_sdp_soc=true, sdp_soc=true))
-
-        @test dOpt.status == :Optimal
-        @test isapprox(dOpt.optval, -1.868872, atol=TOL)
-        @test isapprox(Convex.evaluate(Convex.logdet(V * diagm(np./n) * V')), dOpt.optval, atol=TOL)
-        @test isapprox(np.value, [0.0; 3.0; 3.0; 2.0; 0.0; 3.0; 0.0; 1.0], atol=TOL)
+            @test status == :Optimal
+            @test isapprox(objval, 1.868872, atol=TOL)
+            @test isapprox(objbound, 1.868872, atol=TOL)
+            @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+        end
     end
 end
