@@ -8,7 +8,7 @@ function runnlp(mip_solver_drives, mip_solver, nlp_solver, log_level, redirect)
     if redirect
         log_level = 0
     end
-    solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log_level))
+    solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log_level)
 
     @testset "Optimal" begin
         m = Model(solver)
