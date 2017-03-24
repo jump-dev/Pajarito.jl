@@ -5,7 +5,6 @@
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 using JuMP
-import Convex
 import ConicBenchmarkUtilities
 using Pajarito
 using Base.Test
