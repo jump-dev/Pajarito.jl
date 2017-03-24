@@ -29,7 +29,7 @@ P = Convex.minimize(3x - t,
 ConicBenchmarkUtilities.convex_to_cbf(P, name, joinpath(pwd(), "$name.cbf"))
 
 
-name = "expsoc_optimal"
+name = "exp_optimal"
 x = Convex.Variable(1, :Int)
 y = Convex.Variable(1, Convex.Positive())
 P = Convex.minimize(-3x - y,
@@ -39,7 +39,7 @@ P = Convex.minimize(-3x - y,
 ConicBenchmarkUtilities.convex_to_cbf(P, name, joinpath(pwd(), "$name.cbf"))
 
 
-name = "expsoc_larger"
+name = "expsoc_optimal"
 x = Convex.Variable(1, :Int)
 y = Convex.Variable(1)
 P = Convex.minimize(-3x - y,
@@ -51,7 +51,7 @@ P = Convex.minimize(-3x - y,
 ConicBenchmarkUtilities.convex_to_cbf(P, name, joinpath(pwd(), "$name.cbf"))
 
 
-name = "expsoc_compose"
+name = "expsoc_optimal2"
 x = Convex.Variable(1, :Int)
 y = Convex.Variable(1, Convex.Positive())
 P = Convex.minimize(-3x - y,
@@ -100,7 +100,7 @@ P = Convex.maximize(3x + y - z[1,1],
 ConicBenchmarkUtilities.convex_to_cbf(P, name, joinpath(pwd(), "$name.cbf"))
 
 
-name = "expsdp_Dopt"
+name = "expsdp_optimalD"
 # D-optimal design
 #   maximize    log det V*diag(lambda)*V'
 #   subject to  sum(lambda)=1,  lambda >=0

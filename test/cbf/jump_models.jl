@@ -3,7 +3,7 @@
 using ConicBenchmarkUtilities, JuMP
 
 
-name = "soc_infeas_bin"
+name = "soc_infeasible2"
 # Hijazi example - no feasible binary points in the ball centered at 1/2
 dim = 5
 m = Model()
@@ -15,7 +15,7 @@ m = Model()
 ConicBenchmarkUtilities.jump_to_cbf(m, name, joinpath(pwd(), "$name.cbf"))
 
 
-name = "sdp_Aopt"
+name = "sdp_optimalA"
 # A-optimal design
 #   minimize    Trace (sum_i lambdai*vi*vi')^{-1}
 #   subject to  lambda >= 0, 1'*lambda = 1
@@ -33,7 +33,7 @@ end
 ConicBenchmarkUtilities.jump_to_cbf(m, name, joinpath(pwd(), "$name.cbf"))
 
 
-name = "sdp_Eopt"
+name = "sdp_optimalE"
 # E-optimal design
 #   maximize    w
 #   subject to  sum_i lambda_i*vi*vi' >= w*I

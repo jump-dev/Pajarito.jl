@@ -2329,6 +2329,8 @@ function print_finish(m::PajaritoConicModel)
             end
         end
     end
+
+    println()
 end
 
 # Calculate absolute linear infeasibilities on each cone, and print worst
