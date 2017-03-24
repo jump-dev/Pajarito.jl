@@ -268,17 +268,6 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redi
 
         @test status == :Infeasible
     end
-
-    testname = "Infeas none"
-    probname = "soc_infeasible2"
-    @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_soc_one=false, soc_disagg=false, soc_abslift=false)
-
-        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-
-        @test status == :Infeasible
-    end
 end
 
 # Exp+SOC problems for NLP and conic algorithms
