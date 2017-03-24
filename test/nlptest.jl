@@ -11,7 +11,7 @@ function runnlp(mip_solver_drives, mip_solver, nlp_solver, log_level, redirect)
     solver=PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=nlp_solver, log_level=log_level)
 
     @testset "Optimal" begin
-        m = Model(solver)
+        m = Model(solver=solver)
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -25,7 +25,7 @@ function runnlp(mip_solver_drives, mip_solver, nlp_solver, log_level, redirect)
     end
 
     @testset "Nonconvex error" begin
-        m = Model(solver)
+        m = Model(solver=solver)
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -39,7 +39,7 @@ function runnlp(mip_solver_drives, mip_solver, nlp_solver, log_level, redirect)
     end
 
     @testset "Infeasible 1" begin
-        m = Model(solver)
+        m = Model(solver=solver)
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -56,7 +56,7 @@ function runnlp(mip_solver_drives, mip_solver, nlp_solver, log_level, redirect)
     end
 
     @testset "Infeasible 2" begin
-        m = Model(solver)
+        m = Model(solver=solver)
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -74,7 +74,7 @@ function runnlp(mip_solver_drives, mip_solver, nlp_solver, log_level, redirect)
     end
 
     @testset "Optimal 2" begin
-        m = Model(solver)
+        m = Model(solver=solver)
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -93,7 +93,7 @@ function runnlp(mip_solver_drives, mip_solver, nlp_solver, log_level, redirect)
     end
 
     @testset "Continuous error" begin
-        m = Model(solver)
+        m = Model(solver=solver)
 
         @variable(m, x >= 0, start = 1)
         @variable(m, y >= 0, start = 1)
@@ -110,7 +110,7 @@ function runnlp(mip_solver_drives, mip_solver, nlp_solver, log_level, redirect)
     end
 
     @testset "Maximization" begin
-        m = Model(solver)
+        m = Model(solver=solver)
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -127,7 +127,7 @@ function runnlp(mip_solver_drives, mip_solver, nlp_solver, log_level, redirect)
     end
 
     @testset "Nonlinear objective" begin
-        m = Model(solver)
+        m = Model(solver=solver)
 
         @variable(m, x >= 0, start = 1, Int)
         @variable(m, y >= 0, start = 1)
@@ -143,4 +143,6 @@ function runnlp(mip_solver_drives, mip_solver, nlp_solver, log_level, redirect)
         @test isapprox(getobjectivevalue(m), -2.0, atol=TOL)
         @test isapprox(getobjbound(m), -2.0, atol=TOL)
     end
+    flush(STDOUT)
+    flush(STDERR)
 end

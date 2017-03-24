@@ -7,25 +7,32 @@
 
 # Take a solver and a CBF file basename and solve the problem and return important solve information
 function solve_cbf(testname, probname, solver, redirect)
+    flush(STDOUT)
+    flush(STDERR)
     @printf "%-30s... " testname
     tic()
 
     dat = ConicBenchmarkUtilities.readcbfdata("cbf/$(probname).cbf")
     (c, A, b, con_cones, var_cones, vartypes, sense, objoffset) = ConicBenchmarkUtilities.cbftompb(dat)
+    flush(STDOUT)
+    flush(STDERR)
 
     m = MathProgBase.ConicModel(solver)
-    flush(STDOUT)
+
     if redirect
         mktemp() do path,io
-            TT = STDOUT
+            out = STDOUT
+            err = STDERR
             redirect_stdout(io)
+            redirect_stderr(io)
 
             MathProgBase.loadproblem!(m, c, A, b, con_cones, var_cones)
             MathProgBase.setvartype!(m, vartypes)
             MathProgBase.optimize!(m)
 
             flush(io)
-            redirect_stdout(TT)
+            redirect_stdout(out)
+            redirect_stderr(err)
         end
     else
         MathProgBase.loadproblem!(m, c, A, b, con_cones, var_cones)
@@ -33,13 +40,16 @@ function solve_cbf(testname, probname, solver, redirect)
         MathProgBase.optimize!(m)
     end
     flush(STDOUT)
+    flush(STDERR)
+
     status = MathProgBase.status(m)
     time = MathProgBase.getsolvetime(m)
     objval = MathProgBase.getobjval(m)
     objbound = MathProgBase.getobjbound(m)
     sol = MathProgBase.getsolution(m)
-
     @printf ":%-12s %5.2f s\n" status toq()
+    flush(STDOUT)
+    flush(STDERR)
 
     return (status, time, objval, objbound, sol)
 end
@@ -910,7 +920,7 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     probname = "expsdp_Dopt"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            sdp_eig=true, init_sdp_soc=true)
+            sdp_eig=true, sdp_soc=false, init_sdp_soc=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
