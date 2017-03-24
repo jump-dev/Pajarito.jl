@@ -13,7 +13,7 @@ using Base.Test
 # Tests absolute tolerance and Pajarito printing level
 TOL = 1e-3
 ll = 3
-redirect = false
+redirect = true
 
 # Define dictionary of solvers, using JuMP list of available solvers
 include(Pkg.dir("JuMP", "test", "solvers.jl"))
@@ -42,7 +42,13 @@ end
 if glp
     solvers["MILP"]["GLPK"] = GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, tol_obj=tol_gap)
     if eco
-        solvers["MISOCP"]["Pajarito(GLPK, ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=1e-8, tol_bnd=1e-8, tol_obj=1e-10), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=3, rel_gap=1e-6)
+        solvers["MISOCP"]["Pajarito(GLPK, ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=1e-8, tol_bnd=1e-8, tol_obj=1e-10), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-6)
+    end
+end
+if cbc
+    solvers["MILP"]["CBC"] = Cbc.CbcSolver(logLevel=0, integerTolerance=tol_int, primalTolerance=tol_feas, ratioGap=tol_gap, check_warmstart=false)
+    if eco
+        solvers["MISOCP"]["Pajarito(CBC, ECOS)"] = PajaritoSolver(mip_solver=Cbc.CbcSolver(logLevel=0, integerTolerance=1e-8, primalTolerance=1e-8, ratioGap=1e-10, check_warmstart=false), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-6)
     end
 end
 # if try_import(:SCIP)
