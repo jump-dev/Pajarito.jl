@@ -655,25 +655,11 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
         @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
     end
 
-    testname = "No init cuts Dopt"
-    probname = "expsdp_optimalD"
-    @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_exp=false, init_sdp_lin=false)
-
-        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-
-        @test status == :Optimal
-        @test isapprox(objval, 1.868872, atol=TOL)
-        @test isapprox(objbound, 1.868872, atol=TOL)
-        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
-    end
-
     testname = "Primal cuts only Dopt"
     probname = "expsdp_optimalD"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_exp=false, init_sdp_lin=false, prim_cuts_only=true)
+            prim_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -932,35 +918,35 @@ end
 
 # SDP+Exp problems for conic algorithm with MISOCP
 function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
-    # testname = "ExpSDP init SOC cuts Dopt"
-    # probname = "expsdp_optimalD"
-    # @testset "$testname" begin
-    #     solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-    #         sdp_eig=true, sdp_soc=false, init_sdp_soc=true)
-    #
-    #     (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-    #
-    #     @test status == :Optimal
-    #     @test isapprox(objval, 1.868872, atol=TOL)
-    #     @test isapprox(objbound, 1.868872, atol=TOL)
-    #     @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
-    # end
+    testname = "ExpSDP init SOC cuts Dopt"
+    probname = "expsdp_optimalD"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            sdp_eig=true, sdp_soc=false, init_sdp_soc=true)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, 1.868872, atol=TOL)
+        @test isapprox(objbound, 1.868872, atol=TOL)
+        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+    end
 
     # Only run SOC cut tests if iterative algorithm, because cannot add SOC cuts during MSD
     if !mip_solver_drives
-        # testname = "SDP SOC eig cuts Dopt"
-        # probname = "expsdp_optimalD"
-        # @testset "$testname" begin
-        #     solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-        #         sdp_eig=true, sdp_soc=true)
-        #
-        #     (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-        #
-        #     @test status == :Optimal
-        #     @test isapprox(objval, 1.868872, atol=TOL)
-        #     @test isapprox(objbound, 1.868872, atol=TOL)
-        #     @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
-        # end
+        testname = "SDP SOC eig cuts Dopt"
+        probname = "expsdp_optimalD"
+        @testset "$testname" begin
+            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+                sdp_eig=true, sdp_soc=true)
+
+            (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+            @test status == :Optimal
+            @test isapprox(objval, 1.868872, atol=TOL)
+            @test isapprox(objbound, 1.868872, atol=TOL)
+            @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+        end
 
         testname = "SDP SOC full cuts Dopt"
         probname = "expsdp_optimalD"
