@@ -96,7 +96,7 @@ println()
         end
 
         @testset "NLP solver - $conname" for (conname, con) in solvers["NLP"]
-            println("\nNLP solver\n$alg, $mipname, $conname:")
+            println("\nNLP     - $alg, $mipname, $conname:")
             runnlp(msd, mip, con, ll, redirect)
             runsocnlpconic(msd, mip, con, ll, redirect)
             runexpsocnlpconic(msd, mip, con, ll, redirect)
@@ -104,27 +104,27 @@ println()
         end
 
         @testset "SOC solver - $conname" for (conname, con) in solvers["SOC"]
-            println("\nSOC solver\n$alg, $mipname, $conname:")
+            println("\nSOC     - $alg, $mipname, $conname:")
             runsocnlpconic(msd, mip, con, ll, redirect)
             runsocconic(msd, mip, con, ll, redirect)
             flush(STDOUT)
         end
 
         @testset "Exp+SOC solver - $conname" for (conname, con) in solvers["Exp+SOC"]
-            println("\nExp+SOC solver\n$alg, $mipname, $conname:")
+            println("\nExp+SOC - $alg, $mipname, $conname:")
             runexpsocnlpconic(msd, mip, con, ll, redirect)
             runexpsocconic(msd, mip, con, ll, redirect)
             flush(STDOUT)
         end
 
         @testset "PSD+SOC solver - $conname" for (conname, con) in solvers["PSD+SOC"]
-            println("\nPSD+SOC solver\n$alg, $mipname, $conname:")
+            println("\nPSD+SOC - $alg, $mipname, $conname:")
             runsdpsocconic(msd, mip, con, ll, redirect)
             flush(STDOUT)
         end
 
         @testset "PSD+Exp solver - $conname" for (conname, con) in solvers["PSD+Exp"]
-            println("\nPSD+Exp solver\n$alg, $mipname, $conname:")
+            println("\nPSD+Exp - $alg, $mipname, $conname:")
             runsdpexpconic(msd, mip, con, ll, redirect)
             flush(STDOUT)
         end
@@ -137,21 +137,22 @@ println()
         end
 
         @testset "Exp+SOC solver - $conname" for (conname, con) in solvers["Exp+SOC"]
-            println("\nExp+SOC solver\n$alg, $mipname, $conname:")
+            println("\nExp+SOC - $alg, $mipname, $conname:")
             runexpsocconicmisocp(msd, mip, con, ll, redirect)
             flush(STDOUT)
         end
 
         @testset "PSD+SOC solver - $conname" for (conname, con) in solvers["PSD+SOC"]
-            println("\nPSD+SOC solver\n$alg, $mipname, $conname:")
+            println("\nPSD+SOC - $alg, $mipname, $conname:")
             runsdpsocconicmisocp(msd, mip, con, ll, redirect)
             flush(STDOUT)
         end
 
         @testset "PSD+Exp solver - $conname" for (conname, con) in solvers["PSD+Exp"]
-            println("\nPSD+Exp solver\n$alg, $mipname, $conname:")
+            println("\nPSD+Exp - $alg, $mipname, $conname:")
             runsdpexpconicmisocp(msd, mip, con, ll, redirect)
             flush(STDOUT)
         end
     end
+    println()
 end

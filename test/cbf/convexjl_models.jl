@@ -56,6 +56,7 @@ x = Convex.Variable(1, :Int)
 y = Convex.Variable(1, Convex.Positive())
 P = Convex.minimize(-3x - y,
     x >= 1,
+    y >= -2,
     3x + 2y <= 30,
     exp(y^2) + x <= 7)
 ConicBenchmarkUtilities.convex_to_cbf(P, name, joinpath(pwd(), "$name.cbf"))
