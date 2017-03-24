@@ -956,8 +956,6 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-            @show (status, time, objval, objbound, sol)
-
             @test status == :Optimal
             @test isapprox(objval, 1.868872, atol=TOL)
             @test isapprox(objbound, 1.868872, atol=TOL)
