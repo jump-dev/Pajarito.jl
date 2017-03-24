@@ -59,6 +59,7 @@ type PajaritoNonlinearModel <: MathProgBase.AbstractNonlinearModel
         m.cont_solver = cont_solver
         m.opt_tolerance = opt_tolerance
         m.time_limit = time_limit
+        m.total_time = 0.
         return m
     end
 end
