@@ -85,18 +85,6 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
         @test status == :Unbounded
     end
 
-    testname = "Timeout 1st MIP"
-    probname = "tls5"
-    @testset "$testname" begin
-        solver_timeout = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            timeout=15.)
-
-        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver_timeout, redirect)
-
-        @test time < 60.
-        @test status == :UserLimit
-    end
-
     testname = "Optimal SOCRot"
     probname = "socrot_optimal"
     @testset "$testname" begin
@@ -149,6 +137,18 @@ end
 
 # SOC problems for conic algorithm
 function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    testname = "Timeout 1st MIP"
+    probname = "tls5"
+    @testset "$testname" begin
+        solver_timeout = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            timeout=15.)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver_timeout, redirect)
+
+        @test time < 60.
+        @test status == :UserLimit
+    end
+    
     testname = "SOC dualize"
     probname = "soc_optimal"
     @testset "$testname" begin
