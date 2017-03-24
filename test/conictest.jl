@@ -615,9 +615,9 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
-        @test isapprox(objval, -1.868872, atol=TOL)
-        @test isapprox(objbound, -1.868872, atol=TOL)
-        @test isapprox(sol[1:8], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+        @test isapprox(objval, 1.868872, atol=TOL)
+        @test isapprox(objbound, 1.868872, atol=TOL)
+        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
     end
 
     testname = "No init cuts Dopt"
@@ -629,9 +629,9 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
-        @test isapprox(objval, -1.868872, atol=TOL)
-        @test isapprox(objbound, -1.868872, atol=TOL)
-        @test isapprox(sol[1:8], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+        @test isapprox(objval, 1.868872, atol=TOL)
+        @test isapprox(objbound, 1.868872, atol=TOL)
+        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
     end
 
     testname = "Primal cuts only Dopt"
@@ -643,9 +643,9 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
-        @test isapprox(objval, -1.868872, atol=TOL)
-        @test isapprox(objbound, -1.868872, atol=TOL)
-        @test isapprox(sol[1:8], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+        @test isapprox(objval, 1.868872, atol=TOL)
+        @test isapprox(objbound, 1.868872, atol=TOL)
+        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
     end
 end
 
@@ -911,9 +911,9 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
-        @test isapprox(objval, -1.868872, atol=TOL)
-        @test isapprox(objbound, -1.868872, atol=TOL)
-        @test isapprox(sol[1:8], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+        @test isapprox(objval, 1.868872, atol=TOL)
+        @test isapprox(objbound, 1.868872, atol=TOL)
+        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
     end
 
     testname = "SDP SOC full cuts Dopt"
@@ -925,9 +925,9 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
-        @test isapprox(objval, -1.868872, atol=TOL)
-        @test isapprox(objbound, -1.868872, atol=TOL)
-        @test isapprox(sol[1:8], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+        @test isapprox(objval, 1.868872, atol=TOL)
+        @test isapprox(objbound, 1.868872, atol=TOL)
+        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
     end
 
     testname = "SDP init SOC cuts Dopt"
@@ -939,8 +939,8 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
-        @test isapprox(objval, -1.868872, atol=TOL)
-        @test isapprox(objbound, -1.868872, atol=TOL)
-        @test isapprox(sol[1:8], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+        @test isapprox(objval, 1.868872, atol=TOL)
+        @test isapprox(objbound, 1.868872, atol=TOL)
+        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
     end
 end
