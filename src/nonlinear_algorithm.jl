@@ -47,6 +47,7 @@ type PajaritoNonlinearModel <: MathProgBase.AbstractNonlinearModel
     d
 
     nlp_load_timer
+    total_time
 
     # CONSTRUCTOR:
     function PajaritoNonlinearModel(verbose,algorithm,mip_solver,cont_solver,opt_tolerance,time_limit)
@@ -741,14 +742,18 @@ function MathProgBase.optimize!(m::PajaritoNonlinearModel)
         m.objbound = -m.objbound
     end
 
-    (m.verbose > 0) && println("\nPajarito finished...\n")
-    (m.verbose > 0) && @printf "Status            = %13s.\n" m.status
-    (m.verbose > 0) && (m.status == :Optimal) && @printf "Optimum objective = %13.5f.\n" m.objval
-    (m.verbose > 0) && (m.algorithm == "OA")  && @printf "Iterations        = %13d.\n" iter
-    (m.verbose > 0) && @printf "Total time        = %13.5f sec.\n" (time()-start)
-    (m.verbose > 0) && @printf "MIP total time    = %13.5f sec.\n" cputime_mip
-    (m.verbose > 0) && @printf "NLP total time    = %13.5f sec.\n" cputime_nlp
-    (m.verbose > 0) && @printf "Subprob load time = %13.5f sec.\n" m.nlp_load_timer
+    m.total_time = time()-start
+
+    if m.verbose > 0
+        println("\nPajarito finished...\n")
+        @printf "Status            = %13s.\n" m.status
+        (m.status == :Optimal) && @printf "Optimum objective = %13.5f.\n" m.objval
+        (m.algorithm == "OA")  && @printf "Iterations        = %13d.\n" iter
+        @printf "Total time        = %13.5f sec.\n" m.total_time
+        @printf "MIP total time    = %13.5f sec.\n" cputime_mip
+        @printf "NLP total time    = %13.5f sec.\n" cputime_nlp
+        @printf "Subprob load time = %13.5f sec.\n" m.nlp_load_timer
+    end
 end
 
 MathProgBase.setwarmstart!(m::PajaritoNonlinearModel, x) = (m.solution = x)
@@ -760,3 +765,4 @@ MathProgBase.status(m::PajaritoNonlinearModel) = m.status
 MathProgBase.getobjval(m::PajaritoNonlinearModel) = m.objval
 MathProgBase.getobjbound(m::PajaritoNonlinearModel) = m.objbound
 MathProgBase.getsolution(m::PajaritoNonlinearModel) = m.solution
+MathProgBase.getsolvetime(m::PajaritoNonlinearModel) = m.total_time

@@ -149,7 +149,7 @@ end
 
 # SOC problems for conic algorithm
 function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
-    testname = "Dualize SOC"
+    testname = "SOC dualize"
     probname = "soc_optimal"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
@@ -321,7 +321,7 @@ end
 
 # Exp+SOC problems for conic algorithm
 function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
-    testname = "No init cuts"
+    testname = "ExpSOC no init cuts"
     probname = "expsoc_compose"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
@@ -665,7 +665,7 @@ function runexpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
         soc_in_mip=true)
 
-    testname = "SOC in MIP ExpSOC"
+    testname = "ExpSOC SOC in MIP"
     probname = "expsoc_optimal"
     @testset "$testname" begin
 
@@ -724,7 +724,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
         soc_in_mip=true)
 
-    testname = "SOC in MIP SDPSOC"
+    testname = "SDPSOC SOC in MIP"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -916,7 +916,7 @@ end
 
 # SDP+Exp problems for conic algorithm with MISOCP
 function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
-    testname = "SDP init SOC cuts Dopt"
+    testname = "ExpSDP init SOC cuts Dopt"
     probname = "expsdp_Dopt"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
