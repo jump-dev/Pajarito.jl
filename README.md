@@ -40,7 +40,7 @@ JuMP and Convex.jl are algebraic modeling interfaces, while MathProgBase is a lo
 
 Pajarito may be accessed through MathProgBase from outside Julia by using the experimental [cmpb](https://github.com/mlubin/cmpb) interface which provides a C API to the low-level conic input format. The [ConicBenchmarkUtilities](https://github.com/mlubin/ConicBenchmarkUtilities.jl) package provides utilities to read files in the [CBF](http://cblib.zib.de/) format.
 
-## MIP and Continuous solvers
+## MIP and continuous solvers
 
 The algorithm implemented by Pajarito itself is relatively simple, and most of the hard work is performed by the MIP outer-approximation model solver and the continuous convex subproblem models solver. **The performance of Pajarito depends on these two types of solvers.** For best performance, use commercial solvers.
 
