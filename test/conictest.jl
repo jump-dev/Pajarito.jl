@@ -966,7 +966,7 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         probname = "expsdp_optimalD"
         @testset "$testname" begin
             solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-                sdp_eig=false, sdp_soc=true)
+                sdp_eig=false, sdp_soc=true, init_sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
