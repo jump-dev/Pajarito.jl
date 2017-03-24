@@ -14,7 +14,7 @@ function solve_cbf(testname, probname, solver, redirect)
     (c, A, b, con_cones, var_cones, vartypes, sense, objoffset) = ConicBenchmarkUtilities.cbftompb(dat)
 
     m = MathProgBase.ConicModel(solver)
-
+    flush(STDOUT)
     if redirect
         mktemp() do path,io
             TT = STDOUT
@@ -24,6 +24,7 @@ function solve_cbf(testname, probname, solver, redirect)
             MathProgBase.setvartype!(m, vartypes)
             MathProgBase.optimize!(m)
 
+            flush(io)
             redirect_stdout(TT)
         end
     else
@@ -31,7 +32,7 @@ function solve_cbf(testname, probname, solver, redirect)
         MathProgBase.setvartype!(m, vartypes)
         MathProgBase.optimize!(m)
     end
-
+    flush(STDOUT)
     status = MathProgBase.status(m)
     time = MathProgBase.getsolvetime(m)
     objval = MathProgBase.getobjval(m)
