@@ -41,7 +41,7 @@ ConicBenchmarkUtilities.convex_to_cbf(P, name, joinpath(pwd(), "$name.cbf"))
 
 name = "expsoc_larger"
 x = Convex.Variable(1, :Int)
-y = Convex.Variable(1, :Bin)
+y = Convex.Variable(1)
 P = Convex.minimize(-3x - y,
     x >= 1,
     y >= 0,
