@@ -29,5 +29,6 @@ MathProgBase.loadproblem!(m, c, A, b, con_cones, var_cones)
 MathProgBase.setvartype!(m, vartypes)
 MathProgBase.optimize!(m)
 
-@show MathProgBase.getsolution(m)
+@show MathProgBase.getsolvetime(m)
+# @show MathProgBase.getsolution(m)
 @show MathProgBase.getobjval(m)
