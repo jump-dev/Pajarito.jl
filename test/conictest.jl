@@ -60,7 +60,7 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "SOC Optimal"
     probname = "soc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -72,7 +72,7 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Infeasible"
     probname = "soc_infeasible"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -82,7 +82,7 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Unbounded"
     probname = "soc_unbounded"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -92,7 +92,7 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Optimal SOCRot"
     probname = "socrot_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -105,7 +105,7 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Infeasible SOCRot"
     probname = "socrot_infeasible"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -115,7 +115,7 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Equality constraint"
     probname = "soc_equality"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -128,7 +128,7 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Zero cones"
     probname = "soc_zero"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -141,7 +141,7 @@ function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Infeasible all binary"
     probname = "soc_infeasible2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -154,7 +154,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redi
     testname = "Timeout 1st MIP"
     probname = "tls5"
     @testset "$testname" begin
-        solver_timeout = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver_timeout = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             timeout=15.)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver_timeout, redirect)
@@ -166,7 +166,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redi
     testname = "SOC dualize"
     probname = "soc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             dualize_subp=true, dualize_relax=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -179,8 +179,8 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redi
     testname = "Suboptimal MIP solves"
     probname = "soc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            mip_subopt_count=3, mip_subopt_solver=mip_solver)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
+            mip_subopt_count=3, mip_subopt_solver=deepcopy(mip_solver))
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -192,7 +192,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redi
     testname = "Dualize SOCRot"
     probname = "socrot_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             dualize_subp=true, dualize_relax=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -206,7 +206,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redi
     testname = "Infeas L1, disagg"
     probname = "soc_infeasible2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             init_soc_one=true, soc_disagg=true, soc_abslift=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -217,7 +217,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redi
     testname = "Infeas L1, disagg, abs"
     probname = "soc_infeasible2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             init_soc_one=true, soc_disagg=true, soc_abslift=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -228,7 +228,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redi
     testname = "Infeas L1, abs"
     probname = "soc_infeasible2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             init_soc_one=true, soc_disagg=false, soc_abslift=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -239,7 +239,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redi
     testname = "Infeas disagg"
     probname = "soc_infeasible2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             init_soc_one=false, soc_disagg=true, soc_abslift=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -250,7 +250,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redi
     testname = "Infeas disagg, abs"
     probname = "soc_infeasible2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             init_soc_one=false, soc_disagg=true, soc_abslift=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -261,7 +261,7 @@ function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redi
     testname = "Infeas abs"
     probname = "soc_infeasible2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             init_soc_one=false, soc_disagg=false, soc_abslift=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -275,7 +275,7 @@ function runexpsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "Exp optimal"
     probname = "exp_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -288,7 +288,7 @@ function runexpsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "ExpSOC optimal"
     probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -301,7 +301,7 @@ function runexpsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "No disagg, no L1"
     probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             init_soc_one=false, soc_disagg=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -315,7 +315,7 @@ function runexpsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "Cone composition"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -331,7 +331,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "ExpSOC no init cuts"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             init_exp=false, init_soc_one=false, init_soc_inf=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -345,7 +345,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "No init cuts, no disagg"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             init_exp=false, init_soc_one=false, init_soc_inf=false, soc_disagg=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -359,7 +359,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "No init cuts, no disagg, abs"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             init_exp=false, init_soc_one=false, init_soc_inf=false, soc_disagg=false, soc_abslift=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -373,7 +373,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Viol cuts only"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             viol_cuts_only=true, init_exp=false, init_soc_one=false, init_soc_inf=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -387,7 +387,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "No scaling"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             scale_subp_cuts=false, init_exp=false, init_soc_one=false, init_soc_inf=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -401,7 +401,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Primal cuts always"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             prim_cuts_always=true, init_exp=false, init_soc_one=false, init_soc_inf=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -415,7 +415,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Primal cuts only"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             prim_cuts_only=true, init_exp=false, init_soc_one=false, init_soc_inf=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -429,7 +429,7 @@ function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "No conic solver"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), log_level=log_level,
             solve_relax=false, solve_subp=false, prim_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -446,7 +446,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "SDPSOC optimal"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -459,8 +459,8 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Suboptimal MIP solves"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            mip_subopt_count=3, mip_subopt_solver=mip_solver)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
+            mip_subopt_count=3, mip_subopt_solver=deepcopy(mip_solver))
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -473,7 +473,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Unbounded"
     probname = "sdpsoc_unbounded"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -483,7 +483,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Infeasible"
     probname = "sdpsoc_infeasible"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -493,7 +493,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "No init cuts"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             init_soc_one=false, init_soc_inf=false, init_sdp_lin=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -507,7 +507,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "No eig cuts"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             init_soc_one=false, init_soc_inf=false, init_sdp_lin=false, sdp_eig=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -521,7 +521,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Dualize"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             dualize_relax=true, dualize_subp=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -535,7 +535,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Viol cuts only"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             init_soc_one=false, init_soc_inf=false, init_sdp_lin=false, viol_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -549,7 +549,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "No scaling"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             init_soc_one=false, init_soc_inf=false, init_sdp_lin=false, scale_subp_cuts=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -563,7 +563,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Primal cuts assist"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             prim_cuts_assist=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -577,7 +577,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Primal cuts only"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             prim_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -591,7 +591,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "No conic solver"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), log_level=log_level,
             solve_relax=false, solve_subp=false, prim_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -605,7 +605,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "SDP integer Aopt"
     probname = "sdp_optimalA"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -618,7 +618,7 @@ function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "SDP integer Eopt"
     probname = "sdp_optimalE"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -634,7 +634,7 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "ExpSDP integer Dopt"
     probname = "expsdp_optimalD"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -647,7 +647,7 @@ function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level, r
     testname = "Primal cuts only Dopt"
     probname = "expsdp_optimalD"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             prim_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -664,8 +664,8 @@ function runexpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     testname = "SOC in MIP, suboptimal MIP"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            soc_in_mip=true, mip_subopt_count=3, mip_subopt_solver=mip_solver)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
+            soc_in_mip=true, mip_subopt_count=3, mip_subopt_solver=deepcopy(mip_solver))
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -678,7 +678,7 @@ function runexpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     testname = "SOC in MIP, primal only"
     probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             soc_in_mip=true, prim_cuts_only=true, init_exp=false, init_soc_one=false, init_soc_inf=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -692,7 +692,7 @@ function runexpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     testname = "SOC in MIP, no conic"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), log_level=log_level,
             soc_in_mip=true, prim_cuts_only=true, solve_relax=false, solve_subp=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -709,7 +709,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     testname = "SDPSOC SOC in MIP"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             soc_in_mip=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -723,7 +723,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     testname = "SOC in MIP unbounded"
     probname = "sdpsoc_unbounded"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             soc_in_mip=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -734,7 +734,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     testname = "SOC in MIP infeasible"
     probname = "sdpsoc_infeasible"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             soc_in_mip=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -745,7 +745,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     testname = "SOC in MIP, no eig cuts"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             soc_in_mip=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -759,7 +759,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     testname = "SOC in MIP, dualize"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             soc_in_mip=true, dualize_subp=true, dualize_relax=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -773,7 +773,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     testname = "SOC in MIP, no conic solver"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), log_level=log_level,
             soc_in_mip=true, prim_cuts_only=true, solve_relax=false, solve_subp=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -787,7 +787,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     testname = "SDP init SOC cuts optimal"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             sdp_eig=true, init_sdp_soc=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -801,7 +801,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     testname = "SDP init SOC cuts infeasible"
     probname = "sdpsoc_infeasible"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             sdp_eig=true, init_sdp_soc=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -814,7 +814,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         testname = "SDP SOC eig cuts optimal"
         probname = "sdpsoc_optimal"
         @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
                 sdp_eig=true, sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -828,7 +828,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         testname = "SDP SOC eig cuts infeasible"
         probname = "sdpsoc_infeasible"
         @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            solver = PajaritoSolver(mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
                 sdp_eig=true, sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -839,7 +839,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         testname = "SDP SOC cuts, no conic solver"
         probname = "sdpsoc_optimal"
         @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, log_level=log_level,
+            solver = PajaritoSolver(mip_solver=deepcopy(mip_solver), log_level=log_level,
                 sdp_eig=true, init_sdp_soc=true, sdp_soc=true, prim_cuts_only=true, solve_relax=false, solve_subp=false)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -853,7 +853,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         testname = "SDP SOC full cuts optimal"
         probname = "sdpsoc_optimal"
         @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            solver = PajaritoSolver(mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
                 sdp_eig=true, sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -867,7 +867,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         testname = "SDP SOC full cuts infeasible"
         probname = "sdpsoc_infeasible"
         @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            solver = PajaritoSolver(mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
                 sdp_eig=true, sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -878,7 +878,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         testname = "SDP SOC eig cuts Aopt"
         probname = "sdp_optimalA"
         @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            solver = PajaritoSolver(mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
                 sdp_eig=true, sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -892,7 +892,7 @@ function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         testname = "SDP SOC eig cuts Eopt"
         probname = "sdp_optimalE"
         @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            solver = PajaritoSolver(mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
                 sdp_eig=true, sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -910,7 +910,7 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
     testname = "ExpSDP init SOC cuts Dopt"
     probname = "expsdp_optimalD"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
             sdp_eig=true, sdp_soc=false, init_sdp_soc=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -926,7 +926,7 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         testname = "SDP SOC eig cuts Dopt"
         probname = "expsdp_optimalD"
         @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            solver = PajaritoSolver(mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
                 sdp_eig=true, sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
@@ -940,7 +940,7 @@ function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_le
         testname = "SDP SOC full cuts Dopt"
         probname = "expsdp_optimalD"
         @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            solver = PajaritoSolver(mip_solver=deepcopy(mip_solver), cont_solver=deepcopy(cont_solver), log_level=log_level,
                 sdp_eig=false, sdp_soc=true, init_sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
