@@ -12,8 +12,14 @@ mip_solver = CplexSolver(
     CPX_PARAM_EPRHS=1e-7,
 )
 
-using Mosek
-cont_solver = MosekSolver(LOG=0)
+# using Mosek
+# cont_solver = MosekSolver(LOG=0)
+
+# using SCS
+# cont_solver = SCSSolver(eps=1e-5, max_iters=100000, verbose=0)
+
+using ECOS
+cont_solver = ECOSSolver(verbose=false)
 
 solver = PajaritoSolver(
     mip_solver_drives=mip_solver_drives,
@@ -23,7 +29,7 @@ solver = PajaritoSolver(
 )
 
 dat = readcbfdata(ARGS[1])
-c, A, b, con_cones, var_cones, vartypes, sense, objoffset = cbftompb(dat)
+(c, A, b, con_cones, var_cones, vartypes, sense, objoffset) = cbftompb(dat)
 m = MathProgBase.ConicModel(solver)
 MathProgBase.loadproblem!(m, c, A, b, con_cones, var_cones)
 MathProgBase.setvartype!(m, vartypes)
