@@ -13,7 +13,7 @@ using Base.Test
 # Tests absolute tolerance and Pajarito printing level
 TOL = 1e-3
 ll = 3
-redirect = true
+redirect = false
 
 # Define dictionary of solvers, using JuMP list of available solvers
 include(Pkg.dir("JuMP", "test", "solvers.jl"))
@@ -96,11 +96,6 @@ println()
     alg = (msd ? "MSD" : "Iter")
 
     @testset "MILP solver - $mipname" for (mipname, mip) in solvers["MILP"]
-        # if msd && mipname == "GLPK"
-        #     # GLPK MSD is broken
-        #     continue
-        # end
-
         @testset "NLP models - $conname" for (conname, con) in solvers["NLP"]
             println("\nNLP models: $alg, $mipname, $conname")
             runnlp(msd, mip, con, ll, redirect)

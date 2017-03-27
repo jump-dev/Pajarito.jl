@@ -16,6 +16,7 @@ ConicBenchmarkUtilities.jump_to_cbf(m, name, joinpath(pwd(), "$name.cbf"))
 
 
 name = "sdp_optimalA"
+# See examples/expdesign.jl
 # A-optimal design
 #   minimize    Trace (sum_i lambdai*vi*vi')^{-1}
 #   subject to  lambda >= 0, 1'*lambda = 1
@@ -34,6 +35,7 @@ ConicBenchmarkUtilities.jump_to_cbf(m, name, joinpath(pwd(), "$name.cbf"))
 
 
 name = "sdp_optimalE"
+# See examples/expdesign.jl
 # E-optimal design
 #   maximize    w
 #   subject to  sum_i lambda_i*vi*vi' >= w*I
