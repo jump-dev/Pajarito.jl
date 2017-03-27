@@ -1,14 +1,26 @@
-# These problems are numerically challenging (small epsilons etc) and cause poor stability in the MIP and conic solvers and Pajarito itself (eg negative opt gap)
-# Experimental design examples from CVX, Boyd & Vandenberghe 2004 section 7.5
-# http://web.cvxr.com/cvx/examples/cvxbook/Ch07_statistical_estim/html/expdesign.html
+# Experimental design examples (D-optimal, A-optimal, and E-optimal) from Boyd and Vandenberghe, "Convex Optimization", section 7.5
+# CVX code adapted from expdesign.m by Lieven Vandenberghe and Almir Mutapcic
+# http://cvxr.com/cvx/examples/cvxbook/Ch07_statistical_estim/html/expdesign.html
+#
+# A-optimal design
+#   minimize    Trace (sum_i lambdai*vi*vi')^{-1}
+#   subject to  lambda >= 0, 1'*lambda = 1
+#
+# E-optimal design
+#   maximize    w
+#   subject to  sum_i lambda_i*vi*vi' >= w*I
+#               lambda >= 0,  1'*lambda = 1;
+#
+# D-optimal design
+#   maximize    log det V*diag(lambda)*V'
+#   subject to  sum(lambda)=1,  lambda >=0
 
 using Convex, JuMP, Pajarito
 
 # Generate random V (experimental matrix) data
 # q is dimension of estimate space
 # p is number of experimental vectors
-function gen_V(q, p)
-    V = Array{Float64}(q, p)
+function gen_V(q, p, V)
     for i in 1:q, j in 1:p
         v = randn()
         if abs(v) < 1e-2
@@ -18,19 +30,6 @@ function gen_V(q, p)
     end
     return V
 end
-
-# A-optimal design
-#   minimize    Trace (sum_i lambdai*vi*vi')^{-1}
-#   subject to  lambda >= 0, 1'*lambda = 1
-
-# E-optimal design
-#   maximize    w
-#   subject to  sum_i lambda_i*vi*vi' >= w*I
-#               lambda >= 0,  1'*lambda = 1;
-
-# D-optimal design
-#   maximize    log det V*diag(lambda)*V'
-#   subject to  sum(lambda)=1,  lambda >=0
 
 # A Optimal: Convex.jl
 function aOpt_Convexjl(q, p, V, n, nmax)
@@ -148,6 +147,7 @@ end
 #=========================================================
 Choose solvers and options
 =========================================================#
+
 mip_solver_drives = false
 log_level = 3
 rel_gap = 1e-5
@@ -191,8 +191,9 @@ solver = PajaritoSolver(
 
 
 #=========================================================
-Specify data dimensions
+Specify/generate data
 =========================================================#
+
 # Uncomment only the line with the desired data dimensions
 (q, p, n, nmax) = (
     # 100, 250, 500, 5   # Huge
@@ -204,13 +205,14 @@ Specify data dimensions
 @assert (p > q) && (n > q)
 
 # Generate matrix of experimental vectors
-V = Array{Float64}(q, p)
+# Change or comment random seed to get different random V matrix
 srand(100)
 
+V = Array{Float64}(q, p)
 tries = 0
 while true
     # Generate random V
-    V = gen_V(q, p)
+    V = gen_V(q, p, V)
     tries += 1
 
     # Ensure rank is q
@@ -229,6 +231,7 @@ end
 #=========================================================
 Solve Convex.jl models
 =========================================================#
+
 aOpt_Convexjl(q, p, V, n, nmax)
 eOpt_Convexjl(q, p, V, n, nmax)
 dOpt_Convexjl(q, p, V, n, nmax)
@@ -237,5 +240,6 @@ dOpt_Convexjl(q, p, V, n, nmax)
 #=========================================================
 Solve JuMP.jl models
 =========================================================#
-# aOpt_JuMPjl(q, p, V, n, nmax)
-# eOpt_JuMPjl(q, p, V, n, nmax)
+
+aOpt_JuMPjl(q, p, V, n, nmax)
+eOpt_JuMPjl(q, p, V, n, nmax)
