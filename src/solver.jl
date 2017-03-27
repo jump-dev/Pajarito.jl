@@ -18,16 +18,16 @@ end
 
 # Pajarito solver
 type PajaritoSolver <: MathProgBase.AbstractMathProgSolver
-    log_level::Int              # Verbosity flag: 0 for minimal information, 1 for basic solve statistics, 2 for iteration information, 3 for cone information
-    timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
+    log_level::Int              # Verbosity flag: 0 for quiet, 1 for basic solve info, 2 for iteration info, 3 for detailed timing and cuts and solution feasibility info
+    timeout::Float64            # Time limit for algorithm (in seconds)
     rel_gap::Float64            # Relative optimality gap termination condition
 
-    mip_solver_drives::Bool     # Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
+    mip_solver_drives::Bool     # Let MIP solver manage convergence ("branch and cut")
     mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver (MILP or MISOCP)
-    mip_subopt_solver::MathProgBase.AbstractMathProgSolver # MIP solver for suboptimal solves, with appropriate options (gap or timeout) specified directly
-    mip_subopt_count::Int       # (Conic only) Number of times to solve MIP suboptimally with time limit between zero gap solves
-    round_mip_sols::Bool        # (Conic only) Round the integer variable values from the MIP solver before passing to the conic subproblems
-    pass_mip_sols::Bool         # (Conic only) Give best feasible solutions constructed from conic subproblem solution to MIP
+    mip_subopt_solver::MathProgBase.AbstractMathProgSolver # MIP solver for suboptimal solves (with appropriate options already passed)
+    mip_subopt_count::Int       # (Conic only) Number of times to use `mip_subopt_solver` between `mip_solver` solves
+    round_mip_sols::Bool        # (Conic only) Round integer variable values before solving subproblems
+    use_mip_starts::Bool        # (Conic only) Use conic subproblem feasible solutions as MIP warm-starts or heuristic solutions
 
     cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver (conic or nonlinear)
     solve_relax::Bool           # (Conic only) Solve the continuous conic relaxation to add initial subproblem cuts
@@ -35,26 +35,26 @@ type PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     dualize_relax::Bool         # (Conic only) Solve the conic dual of the continuous conic relaxation
     dualize_subp::Bool          # (Conic only) Solve the conic duals of the continuous conic subproblems
 
-    soc_disagg::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
-    soc_abslift::Bool           # (Conic only) Use SOC absolute value lifting in the MIP only
-    soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
-    sdp_eig::Bool               # (Conic SDP only) Use SDP eigenvector-derived cuts
-    sdp_soc::Bool               # (Conic SDP only) Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
-    init_soc_one::Bool          # (Conic only) Start with disaggregated L_1 outer approximation cuts for SOCs
-    init_soc_inf::Bool          # (Conic only) Start with disaggregated L_inf outer approximation cuts for SOCs
-    init_exp::Bool              # (Conic Exp only) Start with several outer approximation cuts on the exponential cones
-    init_sdp_lin::Bool          # (Conic SDP only) Use SDP initial linear cuts
-    init_sdp_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
+    soc_disagg::Bool            # (Conic only) Disaggregate SOC cones
+    soc_abslift::Bool           # (Conic only) Use SOC absolute value lifting
+    soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP model (if `mip_solver` supports MISOCP)
+    sdp_eig::Bool               # (Conic only) Use PSD cone eigenvector cuts
+    sdp_soc::Bool               # (Conic only) Use PSD cone eigenvector SOC cuts (if `mip_solver` supports MISOCP)
+    init_soc_one::Bool          # (Conic only) Use SOC initial L_1 cuts
+    init_soc_inf::Bool          # (Conic only) Use SOC initial L_inf cuts
+    init_exp::Bool              # (Conic only) Use Exp initial cuts
+    init_sdp_lin::Bool          # (Conic only) Use PSD cone initial linear cuts
+    init_sdp_soc::Bool          # (Conic only) Use PSD cone initial SOC cuts (if `mip_solver` supports MISOCP)
 
-    scale_subp_cuts::Bool       # (Conic only) Use scaling for subproblem cuts based on subproblem status
-    scale_factor::Float64       # (Conic only) Multiplicative factor for scaled subproblem cuts (cuts are scaled by scale_factor*tol_prim_infeas/rel_gap)
-    viol_cuts_only::Bool        # (Conic only) Only add cuts that are violated by the current MIP solution (may be useful for MSD algorithm where many cuts are added)
-    prim_cuts_only::Bool        # (Conic only) Do not add subproblem cuts
-    prim_cuts_always::Bool      # (Conic only) Add primal cuts at each iteration or in each lazy callback
-    prim_cuts_assist::Bool      # (Conic only) Add primal cuts only when integer solutions are repeating or when conic solver fails
+    scale_subp_cuts::Bool       # (Conic only) Use scaling for subproblem cuts
+    scale_subp_factor::Float64  # (Conic only) Fixed multiplicative factor for scaled subproblem cuts
+    viol_cuts_only::Bool        # (Conic only) Only add cuts violated by current MIP solution
+    prim_cuts_only::Bool        # (Conic only) Add primal cuts, do not add subproblem cuts
+    prim_cuts_always::Bool      # (Conic only) Add primal cuts and subproblem cuts
+    prim_cuts_assist::Bool      # (Conic only) Add subproblem cuts, and add primal cuts only subproblem cuts cannot be added
 
-    tol_zero::Float64           # (Conic only) Tolerance for small epsilons as zeros
-    tol_prim_infeas::Float64    # (Conic only) Tolerance level for cone outer infeasibilities for primal cut adding functions (should be at least 1e-5)
+    cut_zero_tol::Float64       # (Conic only) Zero tolerance for cut coefficients
+    prim_cut_feas_tol::Float64  # (Conic only) Absolute feasibility tolerance used for primal cuts (set equal to feasibility tolerance of `mip_solver`)
 end
 
 
@@ -68,7 +68,7 @@ function PajaritoSolver(;
     mip_subopt_solver = UnsetSolver(),
     mip_subopt_count = 0,
     round_mip_sols = false,
-    pass_mip_sols = true,
+    use_mip_starts = true,
 
     cont_solver = UnsetSolver(),
     solve_relax = true,
@@ -89,14 +89,14 @@ function PajaritoSolver(;
     init_sdp_soc = false,
 
     scale_subp_cuts = true,
-    scale_factor = 10.,
+    scale_subp_factor = 10.,
     viol_cuts_only = nothing,
     prim_cuts_only = false,
     prim_cuts_always = false,
     prim_cuts_assist = true,
 
-    tol_zero = 1e-10,
-    tol_prim_infeas = 1e-6,
+    cut_zero_tol = 1e-10,
+    prim_cut_feas_tol = 1e-6,
     )
 
     if mip_solver == UnsetSolver()
@@ -108,7 +108,7 @@ function PajaritoSolver(;
         viol_cuts_only = mip_solver_drives
     end
 
-    PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_factor, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
+    PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, use_mip_starts, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_subp_factor, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, cut_zero_tol, prim_cut_feas_tol)
 end
 
 
@@ -132,7 +132,7 @@ function MathProgBase.ConicModel(s::PajaritoSolver)
 
         if !s.solve_subp
             s.prim_cuts_only = true
-            s.pass_mip_sols = false
+            s.use_mip_starts = false
             s.round_mip_sols = false
         end
         if s.prim_cuts_only
@@ -142,7 +142,7 @@ function MathProgBase.ConicModel(s::PajaritoSolver)
             s.prim_cuts_assist = true
         end
 
-        return PajaritoConicModel(s.log_level, s.timeout, s.rel_gap, s.mip_solver_drives, s.mip_solver, s.mip_subopt_solver, s.mip_subopt_count, s.round_mip_sols, s.pass_mip_sols, s.cont_solver, s.solve_relax, s.solve_subp, s.dualize_relax, s.dualize_subp, s.soc_disagg, s.soc_abslift, s.soc_in_mip, s.sdp_eig, s.sdp_soc, s.init_soc_one, s.init_soc_inf, s.init_exp, s.init_sdp_lin, s.init_sdp_soc, s.scale_subp_cuts, s.scale_factor, s.viol_cuts_only, s.prim_cuts_only, s.prim_cuts_always, s.prim_cuts_assist, s.tol_zero, s.tol_prim_infeas)
+        return PajaritoConicModel(s.log_level, s.timeout, s.rel_gap, s.mip_solver_drives, s.mip_solver, s.mip_subopt_solver, s.mip_subopt_count, s.round_mip_sols, s.use_mip_starts, s.cont_solver, s.solve_relax, s.solve_subp, s.dualize_relax, s.dualize_subp, s.soc_disagg, s.soc_abslift, s.soc_in_mip, s.sdp_eig, s.sdp_soc, s.init_soc_one, s.init_soc_inf, s.init_exp, s.init_sdp_lin, s.init_sdp_soc, s.scale_subp_cuts, s.scale_subp_factor, s.viol_cuts_only, s.prim_cuts_only, s.prim_cuts_always, s.prim_cuts_assist, s.cut_zero_tol, s.prim_cut_feas_tol)
     elseif applicable(MathProgBase.NonlinearModel, s.cont_solver)
         return MathProgBase.ConicModel(ConicNonlinearBridge.ConicNLPWrapper(nlp_solver=s))
     else
