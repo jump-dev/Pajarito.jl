@@ -16,7 +16,6 @@ http://mathprogbasejl.readthedocs.org/en/latest/conic.html
 
 TODO features
 - implement warm-starting: use set_best_soln!
-- enable querying logs information etc
 
 =========================================================#
 
@@ -202,7 +201,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     num_con_orig = length(b)
     num_var_orig = length(c)
     if size(A) != (num_con_orig, num_var_orig)
-        error("Dimensions of matrix A $(size(A)) do not match lengths of vector b ($(length(b))) and c ($(length(c)))\n")
+        error("Dimension mismatch between A matrix $(size(A)), b vector ($(length(b))), and c vector ($(length(c)))\n")
     end
     if isempty(cone_con) || isempty(cone_var)
         error("Variable or constraint cones are missing\n")
@@ -222,7 +221,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     inds_con = zeros(Int, num_con_orig)
     for (spec, inds) in cone_con
         if spec == :Free
-            error("A cone $spec is in the constraint cones\n")
+            error("A cone $spec should not be in the constraint cones\n")
         end
 
         if any(inds .> num_con_orig)
@@ -360,7 +359,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
         # Error if a cone in data is not supported
         for (spec, _) in vcat(cone_con, cone_var)
             if !(spec in conic_spec)
-                error("Cones $spec are not supported by the specified conic solver\n")
+                error("Cones $spec are not supported by the specified conic solver (only $conic_spec)\n")
             end
         end
     end
@@ -443,35 +442,51 @@ end
 # Solve, given the initial conic model data and the variable types vector and possibly a warm-start vector
 function MathProgBase.optimize!(m::PajaritoConicModel)
     if m.status != :Loaded
-        error("Must call optimize! after setvartype! and loadproblem!\n")
+        error("Must call optimize! function after setvartype! and loadproblem!\n")
     end
     if isempty(m.var_types)
-        error("Variable types were not specified; must call setvartype! function\n")
+        error("Variable types were not specified (use setvartype! function)\n")
     end
 
     m.logs[:total] = time()
 
     # Transform data
     if m.log_level > 1
-        @printf "\nTransforming original data..."
+        @printf "\n%-33s" "Transforming data..."
     end
     tic()
     (c_new, A_new, b_new, cone_con_new, cone_var_new, keep_cols, var_types_new, cols_cont, cols_int) = transform_data(copy(m.c_orig), copy(m.A_orig), copy(m.b_orig), deepcopy(m.cone_con_orig), deepcopy(m.cone_var_orig), copy(m.var_types), m.solve_relax)
     m.logs[:data_trans] += toq()
     if m.log_level > 1
-        @printf "%.2fs\n" m.logs[:data_trans]
+        @printf "%6.2fs\n" m.logs[:data_trans]
     end
 
     if m.solve_subp
-        # Create conic subproblem data
+        # Create conic subproblem
         if m.log_level > 1
-            @printf "\nCreating conic model data..."
+            @printf "\n%-33s" "Creating conic subproblem..."
         end
         tic()
+
         map_rows_subp = create_conicsub_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new, cols_cont, cols_int)
+
+        if m.dualize_subp
+            solver_conicsub = ConicDualWrapper(conicsolver=m.cont_solver)
+        else
+            solver_conicsub = m.cont_solver
+        end
+        m.model_conic = MathProgBase.ConicModel(solver_conicsub)
+        if method_exists(MathProgBase.setbvec!, (typeof(m.model_conic), Vector{Float64}))
+            # Can use setbvec! on the conic subproblem model: load it
+            m.update_conicsub = true
+            MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, m.b_sub, m.cone_con_sub, m.cone_var_sub)
+        else
+            m.update_conicsub = false
+        end
+
         m.logs[:data_conic] += toq()
         if m.log_level > 1
-            @printf "%.2fs\n" m.logs[:data_conic]
+            @printf "%6.2fs\n" m.logs[:data_conic]
         end
     else
         map_rows_subp = zeros(Int, length(b_new))
@@ -481,13 +496,13 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
     # Create MIP model
     if m.log_level > 1
-        @printf "\nCreating MIP model..."
+        @printf "\n%-33s" "Building MIP model..."
     end
     tic()
     (v_idxs_soc_relx, r_idx_exp_relx, s_idx_exp_relx, v_idxs_sdp_relx) = create_mip_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new, map_rows_subp, cols_cont, cols_int)
     m.logs[:data_mip] += toq()
     if m.log_level > 1
-        @printf "%.2fs\n" m.logs[:data_mip]
+        @printf "%6.2fs\n" m.logs[:data_mip]
     end
     flush(STDOUT)
     flush(STDERR)
@@ -498,7 +513,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     if m.solve_relax
         # Solve relaxed conic problem, proceed with algorithm if optimal or suboptimal, else finish
         if m.log_level > 1
-            @printf "\nSolving conic relaxation..."
+            @printf "\n%-33s" "Solving conic relaxation..."
         end
         tic()
         if m.dualize_relax
@@ -511,22 +526,17 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         MathProgBase.optimize!(model_relax)
         m.logs[:relax_solve] += toq()
         if m.log_level > 1
-            @printf "%.2fs\n" m.logs[:relax_solve]
+            @printf "%6.2fs\n" m.logs[:relax_solve]
         end
 
         status_relax = MathProgBase.status(model_relax)
         obj_relax = MathProgBase.getobjval(model_relax)
 
-        if status_relax == :Infeasible
+        if (status_relax == :Infeasible) || (status_relax == :Unbounded)
             if m.log_level > 0
                 println("Initial conic relaxation status was $status_relax")
             end
-            m.status = :Infeasible
-        elseif status_relax == :Unbounded
-            if m.log_level > 0
-                println("Initial conic relaxation status was $status_relax")
-            end
-            m.status = :Unbounded
+            m.status = status_relax
         elseif (status_relax != :Optimal) && (status_relax != :Suboptimal)
             warn("Conic solver failure on initial relaxation: returned status $status_relax\n")
             m.status = :CutsFailure
@@ -569,29 +579,6 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     end
 
     if (m.status != :UserLimit) && (m.status != :Infeasible) && (m.status != :Unbounded) && (m.prim_cuts_assist || (m.status != :CutsFailure))
-        if m.solve_subp
-            if m.log_level > 2
-                @printf "\nCreating conic subproblem model..."
-            end
-            tic()
-            if m.dualize_subp
-                solver_conicsub = ConicDualWrapper(conicsolver=m.cont_solver)
-            else
-                solver_conicsub = m.cont_solver
-            end
-            m.model_conic = MathProgBase.ConicModel(solver_conicsub)
-            if method_exists(MathProgBase.setbvec!, (typeof(m.model_conic), Vector{Float64}))
-                # Can use setbvec! on the conic subproblem model: load it
-                m.update_conicsub = true
-                MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, m.b_sub, m.cone_con_sub, m.cone_var_sub)
-            else
-                m.update_conicsub = false
-            end
-            if m.log_level > 2
-                @printf "%.2fs\n" toq()
-            end
-        end
-
         # Initialize and begin iterative or MIP-solver-driven algorithm
         m.oa_started = true
         m.new_incumb = false
@@ -601,12 +588,12 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
         if m.mip_solver_drives
             if m.log_level > 1
-                @printf "\nStarting MIP-solver-driven outer approximation algorithm\n"
+                @printf "\nStarting MIP-solver-driven algorithm\n"
             end
             solve_mip_driven!(m)
         else
             if m.log_level > 1
-                @printf "\nStarting iterative outer approximation algorithm\n"
+                @printf "\nStarting iterative algorithm\n"
             end
             solve_iterative!(m)
         end
@@ -1124,8 +1111,6 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
                     # t >= 1/sqrt(dim)*sum(a_j)
                     # Scale by 2
                     @constraint(model_mip, 2*(t - 1/sqrt(dim)*sum(a)) >= 0)
-                else
-                    Base.warn_once("Cannot use initial SOC L_1 constraints if not using SOC disaggregation or SOC absvalue lifting\n")
                 end
             end
 
@@ -1231,10 +1216,6 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
                     @constraint(model_mip, V[iSD, iSD] + V[jSD, jSD] + 2*V[iSD, jSD] >= 0)
                 end
             end
-
-            if m.sdp_soc && m.mip_solver_drives
-                Base.warn_once("SOC cuts for SDP cones cannot be added in callbacks in the MIP-solver-driven algorithm\n")
-            end
         end
     end
 
@@ -1304,9 +1285,9 @@ function solve_iterative!(m)
         elseif status_mip == :Unbounded
             # Stop if unbounded (initial conic relax solve should detect this)
             if !m.solve_relax
-                warn("MIP solver returned status $status_mip but the conic relaxation problem was not solved (set solve_relax = true)\n")
+                warn("MIP solver returned status $status_mip; try using the conic relaxation cuts (set solve_relax = true)\n")
             else
-                warn("MIP solver returned status $status_mip, which could indicate a problem with the conic relaxation solve\n")
+                warn("MIP solver returned status $status_mip; this could be caused by a problem with the conic relaxation solve\n")
             end
             m.status = :CutsFailure
             break
@@ -1337,7 +1318,7 @@ function solve_iterative!(m)
                 warn("Solution has NaN values, proceeding to next optimal MIP solve\n")
             end
         else
-            warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
+            warn("MIP solver returned status $status_mip, which Pajarito does not handle\n")
             m.status = :MIPFailure
             break
         end
@@ -1386,7 +1367,7 @@ function solve_iterative!(m)
                 if count_subopt == 0
                     # Solve was optimal solve, so nothing more we can do
                     if m.prim_cuts_assist
-                        warn("No violated cuts were added on repeated integer solution (this should not happen: please submit an issue)\n")
+                        warn("No violated cuts were added on repeated integer solution\n")
                     else
                         warn("No violated cuts were added on repeated integer solution (try using prim_cuts_assist = true)\n")
                     end
@@ -1395,7 +1376,7 @@ function solve_iterative!(m)
                 end
 
                 # Try solving next MIP to optimality, if that doesn't help then we will fail next iteration
-                warn("Integer solution has repeated and no violated cuts were added: solving next MIP to optimality\n")
+                warn("Integer solution has repeated and no violated cuts were added; solving next MIP to optimality\n")
                 count_subopt = m.mip_subopt_count
             end
         end
@@ -1455,7 +1436,7 @@ function solve_mip_driven!(m)
         # No violated cuts could be added on conic infeasible solution: fail
         # (Don't need to fail if solution doesn't improve MIP's best solution value, but this is probably rare or impossible depending on MIP solver behavior)
         if m.prim_cuts_assist
-            warn("No violated subproblem cuts or primal cuts were added on conic-infeasible OA solution (this should not happen: please submit an issue)\n")
+            warn("No violated subproblem cuts or primal cuts were added on conic-infeasible OA solution\n")
         else
             warn("No violated subproblem cuts or primal cuts were added on conic-infeasible OA solution (try using prim_cuts_assist = true)\n")
         end
@@ -1491,9 +1472,9 @@ function solve_mip_driven!(m)
     elseif status_mip == :Unbounded
         # Stop if unbounded (initial conic relax solve should detect this)
         if !m.solve_relax
-            warn("MIP solver returned status $status_mip but the conic relaxation problem was not solved (set solve_relax = true)\n")
+            warn("MIP solver returned status $status_mip; try using the conic relaxation cuts (set solve_relax = true)\n")
         else
-            warn("MIP solver returned status $status_mip, which could indicate a problem with the conic relaxation solve\n")
+            warn("MIP solver returned status $status_mip; this could be caused by a problem with the conic relaxation solve\n")
         end
         m.status = :CutsFailure
     elseif status_mip == :UserLimit
@@ -1533,7 +1514,7 @@ function solve_mip_driven!(m)
         end
         return
     else
-        warn("MIP solver returned status $status_mip, which Pajarito does not handle (please submit an issue)\n")
+        warn("MIP solver returned status $status_mip, which Pajarito does not handle\n")
         m.status = :MIPFailure
         return
     end
@@ -1670,7 +1651,7 @@ function solve_subp_add_subp_cuts!(m)
                     scale!(dual_conic, m.new_scale_subp_factor/ray_value)
                 end
             else
-                warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (this should not happen: please submit an issue)\n")
+                warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (please submit an issue)\n")
                 return (false, false)
             end
         elseif (status_conic == :Optimal) && !isempty(dual_conic)
@@ -1729,14 +1710,7 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
         # Reuse model already created by changing b vector
         MathProgBase.setbvec!(m.model_conic, b_sub_int)
     else
-        # Load new model
-        if m.dualize_subp
-            solver_conicsub = ConicDualWrapper(conicsolver=m.cont_solver)
-        else
-            solver_conicsub = m.cont_solver
-        end
-
-        m.model_conic = MathProgBase.ConicModel(solver_conicsub)
+        # Load all data
         MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, b_sub_int, m.cone_con_sub, m.cone_var_sub)
     end
 
@@ -1911,7 +1885,7 @@ function clean_zeros!{N}(m, data::Array{Float64,N})
 
     if max_nz > m.cut_zero_tol
         if max_nz/min_nz > 1e7
-            warn("Numerically unstable dual vector encountered\n")
+            warn("Numerically unstable dual vector encountered (maxabs = $max_nz, minabs = $min_nz)\n")
         end
         return true
     else
@@ -2149,59 +2123,58 @@ end
 
 # Print objective gap information for iterative
 function print_gap(m)
-    if m.log_level < 1
-        return
+    if m.log_level >= 1
+        if (m.logs[:n_iter] == 1) || (m.log_level > 2)
+            @printf "\n%-5s | %-14s | %-14s | %-11s | %-11s\n" "Iter." "Best feasible" "Best bound" "Rel. gap" "Time (s)"
+        end
+        if m.gap_rel_opt < 1000
+            @printf "%5d | %+14.6e | %+14.6e | %11.3e | %11.3e\n" m.logs[:n_iter] m.best_obj m.mip_obj m.gap_rel_opt (time() - m.logs[:total])
+        else
+            @printf "%5d | %+14.6e | %+14.6e | %11s | %11.3e\n" m.logs[:n_iter] m.best_obj m.mip_obj (isnan(m.gap_rel_opt) ? "Inf" : ">1000") (time() - m.logs[:total])
+        end
+        flush(STDOUT)
+        flush(STDERR)
     end
-
-    if (m.logs[:n_iter] == 1) || (m.log_level > 2)
-        @printf "\n%-4s | %-14s | %-14s | %-11s | %-11s\n" "Iter" "Best feasible" "Best bound" "Rel gap" "Time (s)"
-    end
-    if m.gap_rel_opt < 1000
-        @printf "%4d | %+14.6e | %+14.6e | %11.3e | %11.3e\n" m.logs[:n_iter] m.best_obj m.mip_obj m.gap_rel_opt (time() - m.logs[:total])
-    else
-        @printf "%4d | %+14.6e | %+14.6e | %11s | %11.3e\n" m.logs[:n_iter] m.best_obj m.mip_obj (isnan(m.gap_rel_opt) ? "Inf" : ">1000") (time() - m.logs[:total])
-    end
-    flush(STDOUT)
-    flush(STDERR)
 end
 
 # Print after finish
 function print_finish(m::PajaritoConicModel)
+    ll = m.log_level
+
     if m.gap_rel_opt < -10*m.rel_gap
-        if m.is_best_conic
-            warn("Best feasible value is smaller than best bound: conic solver's solution may have significant infeasibilities (try tightening primal feasibility tolerance of conic solver)\n")
-        else
-            warn("Best feasible value is smaller than best bound: check solution feasibility and bounds returned by MIP solver (please submit an issue)\n")
-        end
+        # Warn if the best "feasible" solution has value better than the best OA bound (possible the conic solver solutions are not feasible for the MIP solver's tolerances)
+        warn("Solution value ($(m.best_obj)) is smaller than best bound ($(m.mip_obj)): check solution feasibility (tightening primal feasibility tolerance of conic solver may help)\n")
         # m.status = :Error
-    end
-
-    if (m.log_level > 0) && !in(m.status, [:Optimal, :Suboptimal, :UserLimit, :Unbounded, :Infeasible])
-        m.log_level = 3
-    end
-
-    if m.log_level >= 1
-        if m.mip_solver_drives
-            @printf "\nMIP-solver-driven algorithm summary:\n"
-        else
-            @printf "\nIterative algorithm summary:\n"
+        if ll > 0
+            # Print more
+            ll = 3
         end
-        @printf " - Status               = %14s\n" m.status
-        @printf " - Best feasible        = %+14.6e\n" m.best_obj
-        @printf " - Best bound           = %+14.6e\n" m.mip_obj
-        if m.gap_rel_opt < -10*m.rel_gap
-            @printf " - Relative opt. gap    =*%14.3e*\n" m.gap_rel_opt
-        else
-            @printf " - Relative opt. gap    = %14.3e\n" m.gap_rel_opt
-        end
-        @printf " - Total time (s)       = %14.2e\n" m.logs[:total]
     end
 
-    if m.log_level >= 2
-        @printf "Solution constructed by %s solver\n" (m.is_best_conic ? "conic" : "MIP")
+    if ll <= 0
+        # Nothing to print
+        return
+    elseif !in(m.status, [:Optimal, :Suboptimal, :UserLimit, :Unbounded, :Infeasible])
+        # Print more on a problematic status
+        ll = 3
     end
 
-    if m.log_level >= 3
+    if m.mip_solver_drives
+        @printf "\nMIP-solver-driven algorithm summary:\n"
+    else
+        @printf "\nIterative algorithm summary:\n"
+    end
+    @printf " - Status               = %14s\n" m.status
+    @printf " - Best feasible        = %+14.6e\n" m.best_obj
+    @printf " - Best bound           = %+14.6e\n" m.mip_obj
+    if m.gap_rel_opt < -10*m.rel_gap
+        @printf " - Relative opt. gap    =*%14.3e*\n" m.gap_rel_opt
+    else
+        @printf " - Relative opt. gap    = %14.3e\n" m.gap_rel_opt
+    end
+    @printf " - Total time (s)       = %14.2e\n" m.logs[:total]
+
+    if ll >= 3
         @printf "\nTimers (s):\n"
         @printf " - Setup                = %10.2e\n" (m.logs[:data_trans] + m.logs[:data_conic] + m.logs[:data_mip])
         @printf " -- Transform data      = %10.2e\n" m.logs[:data_trans]
@@ -2238,15 +2211,16 @@ function print_finish(m::PajaritoConicModel)
         @printf " -- Feasible solutions  = %5d\n" (m.logs[:n_feas_conic] + m.logs[:n_feas_mip])
         @printf " --- From subproblems   = %5d\n" m.logs[:n_feas_conic]
         if !m.mip_solver_drives
-            @printf " --- From OA model      = %5d\n" m.logs[:n_feas_mip]
+            @printf " --- From MIP solve     = %5d\n" m.logs[:n_feas_mip]
         else
             @printf " --- In lazy callback   = %5d\n" m.logs[:n_feas_mip]
             @printf " - Heuristic callbacks  = %5d\n" m.logs[:n_heur]
             @printf " -- Solutions passed    = %5d\n" m.logs[:n_add]
         end
+        @printf "Solution returned by %s solver\n" (m.is_best_conic ? "conic" : "MIP")
     end
 
-    if m.log_level >= 2
+    if ll >= 2
         @printf "\nOuter-approximation cuts added:"
         @printf "\n%-16s | %-9s | %-9s | %-9s\n" "Cone" "Relax." "Violated" "Nonviol."
         for (cone, name) in zip((:SOC, :ExpPrimal, :SDP), ("Second order", "Primal expon.", "Pos. semidef."))
