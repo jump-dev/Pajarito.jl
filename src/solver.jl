@@ -131,6 +131,14 @@ function MathProgBase.ConicModel(s::PajaritoSolver)
             error("Using suboptimal solves (mip_subopt_count > 0), but no suboptimal MIP solver specified (set mip_subopt_solver)\n")
         end
 
+        if s.init_soc_one && !s.soc_disagg && !s.soc_abslift
+            error("Cannot use SOC initial L_1 cuts (init_soc_one) if both SOC disaggregation (soc_disagg) and SOC absvalue lifting (soc_abslift) are not used\n")
+        end
+
+        if s.sdp_soc && s.mip_solver_drives
+            warn("In the MIP-solver-driven algorithm, SOC cuts for SDP cones (sdp_soc) cannot be added from subproblems or primal solutions, but they will be added from the conic relaxation\n")
+        end
+
         if !s.solve_subp
             s.prim_cuts_only = true
             s.use_mip_starts = false

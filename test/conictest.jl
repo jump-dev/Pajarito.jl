@@ -57,13 +57,6 @@ end
 
 # SOC problems for NLP and conic algorithms
 function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
-    @testset "Supported cones check" begin
-        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
-        cones = MathProgBase.supportedcones(solver)
-        @test :SOC in cones
-        @test :SOCRotated in cones
-    end
-
     testname = "SOC Optimal"
     probname = "soc_optimal"
     @testset "$testname" begin
@@ -158,6 +151,13 @@ end
 
 # SOC problems for conic algorithm
 function runsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    @testset "Supported cones check" begin
+        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        cones = MathProgBase.supportedcones(solver)
+        @test :SOC in cones
+        @test :SOCRotated in cones
+    end
+
     testname = "Timeout 1st MIP"
     probname = "tls5"
     @testset "$testname" begin
@@ -335,6 +335,14 @@ end
 
 # Exp+SOC problems for conic algorithm
 function runexpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    @testset "Supported cones check" begin
+        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        cones = MathProgBase.supportedcones(solver)
+        @test :SOC in cones
+        @test :SOCRotated in cones
+        @test :ExpPrimal in cones
+    end
+
     testname = "ExpSOC no init cuts"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
@@ -450,6 +458,14 @@ end
 
 # SDP+SOC problems for conic algorithm
 function runsdpsocconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    @testset "Supported cones check" begin
+        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        cones = MathProgBase.supportedcones(solver)
+        @test :SOC in cones
+        @test :SOCRotated in cones
+        @test :SDP in cones
+    end
+
     testname = "SDPSOC optimal"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
@@ -638,6 +654,13 @@ end
 
 # SDP+Exp problems for conic algorithm
 function runsdpexpconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    @testset "Supported cones check" begin
+        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        cones = MathProgBase.supportedcones(solver)
+        @test :ExpPrimal in cones
+        @test :SDP in cones
+    end
+
     testname = "ExpSDP integer Dopt"
     probname = "expsdp_optimalD"
     @testset "$testname" begin
@@ -668,6 +691,14 @@ end
 
 # Exp+SOC problems for conic algorithm with MISOCP
 function runexpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    @testset "Supported cones check" begin
+        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        cones = MathProgBase.supportedcones(solver)
+        @test :SOC in cones
+        @test :SOCRotated in cones
+        @test :ExpPrimal in cones
+    end
+
     testname = "SOC in MIP, suboptimal MIP"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
@@ -713,6 +744,14 @@ end
 
 # SDP+SOC problems for conic algorithm with MISOCP
 function runsdpsocconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    @testset "Supported cones check" begin
+        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        cones = MathProgBase.supportedcones(solver)
+        @test :SOC in cones
+        @test :SOCRotated in cones
+        @test :SDP in cones
+    end
+
     testname = "SDPSOC SOC in MIP"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
@@ -914,6 +953,15 @@ end
 
 # SDP+Exp problems for conic algorithm with MISOCP
 function runsdpexpconicmisocp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    @testset "Supported cones check" begin
+        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        cones = MathProgBase.supportedcones(solver)
+        @test :SOC in cones
+        @test :SOCRotated in cones
+        @test :SDP in cones
+        @test :ExpPrimal in cones
+    end
+    
     testname = "ExpSDP init SOC cuts Dopt"
     probname = "expsdp_optimalD"
     @testset "$testname" begin
