@@ -15,8 +15,8 @@ mip_solver = CplexSolver(
 # using Mosek
 # cont_solver = MosekSolver(LOG=0)
 
-# using SCS
-# cont_solver = SCSSolver(eps=1e-5, max_iters=100000, verbose=0)
+#using SCS
+#cont_solver = SCSSolver(eps=1e-5, max_iters=100000, verbose=0)
 
 using ECOS
 cont_solver = ECOSSolver(verbose=false)
@@ -26,7 +26,9 @@ solver = PajaritoSolver(
     mip_solver=mip_solver,
     cont_solver=cont_solver,
     log_level=3,
-)
+    soc_in_mip=true,
+    solve_relax=false,
+    )
 
 dat = readcbfdata(ARGS[1])
 (c, A, b, con_cones, var_cones, vartypes, sense, objoffset) = cbftompb(dat)
