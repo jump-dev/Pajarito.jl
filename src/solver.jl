@@ -108,7 +108,8 @@ function PajaritoSolver(;
         viol_cuts_only = mip_solver_drives
     end
 
-    PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, use_mip_starts, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_subp_factor, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, cut_zero_tol, prim_cut_feas_tol)
+    # Deepcopy the solvers because we may change option values inside Pajarito
+    PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, deepcopy(mip_solver), deepcopy(mip_subopt_solver), mip_subopt_count, round_mip_sols, use_mip_starts, deepcopy(cont_solver), solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_subp_factor, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, cut_zero_tol, prim_cut_feas_tol)
 end
 
 
