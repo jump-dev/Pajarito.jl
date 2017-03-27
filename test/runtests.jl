@@ -74,7 +74,7 @@ if eco
 end
 if scs
     solvers["PSD+Exp"]["SCS"] = SCS.SCSSolver(eps=1e-5, max_iters=1000000, verbose=0)
-    solvers["Exp+SOC"]["SCS"] = SCS.SCSSolver(eps=e-5, max_iters=1000000, verbose=0)
+    solvers["Exp+SOC"]["SCS"] = SCS.SCSSolver(eps=1e-5, max_iters=1000000, verbose=0)
     solvers["SOC"]["SCS"] = solvers["PSD+SOC"]["SCS"] =  SCS.SCSSolver(eps=1e-6, max_iters=1000000, verbose=0)
 end
 if mos
