@@ -117,13 +117,13 @@ end
 function MathProgBase.ConicModel(s::PajaritoSolver)
     if applicable(MathProgBase.ConicModel, s.cont_solver) || (s.cont_solver == UnsetSolver())
         if (s.solve_relax || s.solve_subp) && (s.cont_solver == UnsetSolver())
-            error("Using conic relaxation or subproblem solves (solve_relax or solve_subp), but no continuous solver specified (set cont_solver)\n")
+            error("Using conic relaxation (solve_relax) or subproblem solves (solve_subp), but no continuous solver specified (set cont_solver)\n")
         end
 
         if s.soc_in_mip || s.init_sdp_soc || s.sdp_soc
             # If using MISOCP outer approximation, check MIP solver handles MISOCP
             if !(:SOC in MathProgBase.supportedcones(s.mip_solver))
-                error("Using SOCs in the MIP model (soc_in_mip or init_sdp_soc or sdp_soc), but MIP solver specified does not support MISOCP\n")
+                error("Using SOC constraints in the MIP model (soc_in_mip or init_sdp_soc or sdp_soc), but MIP solver (mip_solver) specified does not support MISOCP\n")
             end
         end
 
@@ -147,7 +147,7 @@ function MathProgBase.ConicModel(s::PajaritoSolver)
     elseif applicable(MathProgBase.NonlinearModel, s.cont_solver)
         return MathProgBase.ConicModel(ConicNonlinearBridge.ConicNLPWrapper(nlp_solver=s))
     else
-        error("Continuous solver specified is neither a conic solver nor a nonlinear solver recognized by MathProgBase\n")
+        error("Continuous solver (cont_solver) specified is not a conic or NLP solver recognized by MathProgBase\n")
     end
 end
 
@@ -155,7 +155,7 @@ end
 # Create Pajarito nonlinear model: can solve with nonlinear algorithm only
 function MathProgBase.NonlinearModel(s::PajaritoSolver)
     if !applicable(MathProgBase.NonlinearModel, s.cont_solver)
-        error("Continuous solver specified is not a nonlinear solver recognized by MathProgBase\n")
+        error("Continuous solver (cont_solver) specified is not a NLP solver recognized by MathProgBase\n")
     end
 
     # Translate options into old nonlinearmodel.jl fields
@@ -174,5 +174,20 @@ end
 MathProgBase.LinearQuadraticModel(s::PajaritoSolver) = MathProgBase.NonlinearToLPQPBridge(MathProgBase.NonlinearModel(s))
 
 
-# Supported cones are those supported by the continuous solvers
-MathProgBase.supportedcones(s::PajaritoSolver) = MathProgBase.supportedcones(s.cont_solver)
+# Return a vector of the supported cone types, for conic algorithm only
+function MathProgBase.supportedcones(s::PajaritoSolver)
+    if s.cont_solver == UnsetSolver()
+        # No conic solver, using primal cuts only, so support all Pajarito cones
+        return [:Free, :Zero, :NonNeg, :NonPos, :SOC, :SOCRotated, :SDP, :ExpPrimal]
+    elseif applicable(MathProgBase.ConicModel, s.cont_solver)
+        # Using conic solver, so supported cones are its cones (plus rotated SOC if SOC is supported)
+        cones = MathProgBase.supportedcones(s.cont_solver)
+        if :SOC in cones
+            push!(cones, :SOCRotated)
+        end
+        return cones
+    else
+        # Solver must be NLP
+        error("Cannot get cones supported by continuous solver (cont_solver)\n")
+    end
+end

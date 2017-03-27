@@ -57,6 +57,13 @@ end
 
 # SOC problems for NLP and conic algorithms
 function runsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
+    @testset "Supported cones check" begin
+        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        cones = MathProgBase.supportedcones(solver)
+        @test :SOC in cones
+        @test :SOCRotated in cones
+    end
+
     testname = "SOC Optimal"
     probname = "soc_optimal"
     @testset "$testname" begin

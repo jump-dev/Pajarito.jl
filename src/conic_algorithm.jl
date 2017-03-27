@@ -16,7 +16,6 @@ http://mathprogbasejl.readthedocs.org/en/latest/conic.html
 
 TODO features
 - implement warm-starting: use set_best_soln!
-- enable querying logs information etc
 
 =========================================================#
 
@@ -202,7 +201,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     num_con_orig = length(b)
     num_var_orig = length(c)
     if size(A) != (num_con_orig, num_var_orig)
-        error("Dimensions of matrix A $(size(A)) do not match lengths of vector b ($(length(b))) and c ($(length(c)))\n")
+        error("Dimension mismatch between A matrix $(size(A)), b vector ($(length(b))), and c vector ($(length(c)))\n")
     end
     if isempty(cone_con) || isempty(cone_var)
         error("Variable or constraint cones are missing\n")
@@ -222,7 +221,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
     inds_con = zeros(Int, num_con_orig)
     for (spec, inds) in cone_con
         if spec == :Free
-            error("A cone $spec is in the constraint cones\n")
+            error("A cone $spec should not be in the constraint cones\n")
         end
 
         if any(inds .> num_con_orig)
@@ -360,7 +359,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
         # Error if a cone in data is not supported
         for (spec, _) in vcat(cone_con, cone_var)
             if !(spec in conic_spec)
-                error("Cones $spec are not supported by the specified conic solver\n")
+                error("Cones $spec are not supported by the specified conic solver (only $conic_spec)\n")
             end
         end
     end
