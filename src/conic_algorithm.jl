@@ -24,16 +24,16 @@ using JuMP
 
 type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # Solver parameters
-    log_level::Int              # Verbosity flag: 0 for minimal information, 1 for basic solve statistics, 2 for iteration information, 3 for cone information
-    timeout::Float64            # Time limit for outer approximation algorithm not including initial load (in seconds)
+    log_level::Int              # Verbosity flag: 0 for quiet, 1 for basic solve info, 2 for iteration info, 3 for detailed timing and cuts and solution feasibility info
+    timeout::Float64            # Time limit for algorithm (in seconds)
     rel_gap::Float64            # Relative optimality gap termination condition
 
-    mip_solver_drives::Bool     # Let MIP solver manage convergence and conic subproblem calls (to add lazy cuts and heuristic solutions in branch and cut fashion)
+    mip_solver_drives::Bool     # Let MIP solver manage convergence ("branch and cut")
     mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver (MILP or MISOCP)
-    mip_subopt_solver::MathProgBase.AbstractMathProgSolver # MIP solver for suboptimal solves, with appropriate options (gap or timeout) specified directly
-    mip_subopt_count::Int       # (Conic only) Number of times to solve MIP suboptimally with time limit between zero gap solves
-    round_mip_sols::Bool        # (Conic only) Round the integer variable values from the MIP solver before passing to the conic subproblems
-    pass_mip_sols::Bool         # (Conic only) Give best feasible solutions constructed from conic subproblem solution to MIP
+    mip_subopt_solver::MathProgBase.AbstractMathProgSolver # MIP solver for suboptimal solves (with appropriate options already passed)
+    mip_subopt_count::Int       # (Conic only) Number of times to use `mip_subopt_solver` between `mip_solver` solves
+    round_mip_sols::Bool        # (Conic only) Round integer variable values before solving subproblems
+    use_mip_starts::Bool        # (Conic only) Use conic subproblem feasible solutions as MIP warm-starts or heuristic solutions
 
     cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver (conic or nonlinear)
     solve_relax::Bool           # (Conic only) Solve the continuous conic relaxation to add initial subproblem cuts
@@ -41,26 +41,26 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     dualize_relax::Bool         # (Conic only) Solve the conic dual of the continuous conic relaxation
     dualize_subp::Bool          # (Conic only) Solve the conic duals of the continuous conic subproblems
 
-    soc_disagg::Bool            # (Conic only) Disaggregate SOC cones in the MIP only
-    soc_abslift::Bool           # (Conic only) Use SOC absolute value lifting in the MIP only
-    soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP outer approximation model (if MIP solver supports MISOCP)
-    sdp_eig::Bool               # (Conic SDP only) Use SDP eigenvector-derived cuts
-    sdp_soc::Bool               # (Conic SDP only) Use SDP eigenvector SOC cuts (if MIP solver supports MISOCP; except during MIP-driven solve)
-    init_soc_one::Bool          # (Conic only) Start with disaggregated L_1 outer approximation cuts for SOCs
-    init_soc_inf::Bool          # (Conic only) Start with disaggregated L_inf outer approximation cuts for SOCs
-    init_exp::Bool              # (Conic Exp only) Start with several outer approximation cuts on the exponential cones
-    init_sdp_lin::Bool          # (Conic SDP only) Use SDP initial linear cuts
-    init_sdp_soc::Bool          # (Conic SDP only) Use SDP initial SOC cuts (if MIP solver supports MISOCP)
+    soc_disagg::Bool            # (Conic only) Disaggregate SOC cones
+    soc_abslift::Bool           # (Conic only) Use SOC absolute value lifting
+    soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP model (if `mip_solver` supports MISOCP)
+    sdp_eig::Bool               # (Conic only) Use PSD cone eigenvector cuts
+    sdp_soc::Bool               # (Conic only) Use PSD cone eigenvector SOC cuts (if `mip_solver` supports MISOCP)
+    init_soc_one::Bool          # (Conic only) Use SOC initial L_1 cuts
+    init_soc_inf::Bool          # (Conic only) Use SOC initial L_inf cuts
+    init_exp::Bool              # (Conic only) Use Exp initial cuts
+    init_sdp_lin::Bool          # (Conic only) Use PSD cone initial linear cuts
+    init_sdp_soc::Bool          # (Conic only) Use PSD cone initial SOC cuts (if `mip_solver` supports MISOCP)
 
-    scale_subp_cuts::Bool       # (Conic only) Use scaling for subproblem cuts based on subproblem status
-    scale_factor::Float64       # (Conic only) Multiplicative factor for scaled subproblem cuts (cuts are scaled by scale_factor*tol_prim_infeas/rel_gap)
-    viol_cuts_only::Bool        # (Conic only) Only add cuts that are violated by the current MIP solution (may be useful for MSD algorithm where many cuts are added)
-    prim_cuts_only::Bool        # (Conic only) Do not add subproblem cuts
-    prim_cuts_always::Bool      # (Conic only) Add primal cuts at each iteration or in each lazy callback
-    prim_cuts_assist::Bool      # (Conic only) Add primal cuts only when integer solutions are repeating or when conic solver fails
+    scale_subp_cuts::Bool       # (Conic only) Use scaling for subproblem cuts
+    scale_subp_factor::Float64  # (Conic only) Fixed multiplicative factor for scaled subproblem cuts
+    viol_cuts_only::Bool        # (Conic only) Only add cuts violated by current MIP solution
+    prim_cuts_only::Bool        # (Conic only) Add primal cuts, do not add subproblem cuts
+    prim_cuts_always::Bool      # (Conic only) Add primal cuts and subproblem cuts
+    prim_cuts_assist::Bool      # (Conic only) Add subproblem cuts, and add primal cuts only subproblem cuts cannot be added
 
-    tol_zero::Float64           # (Conic only) Tolerance for small epsilons as zeros
-    tol_prim_infeas::Float64    # (Conic only) Tolerance level for cone outer infeasibilities for primal cut adding functions (should be at least 1e-5)
+    cut_zero_tol::Float64       # (Conic only) Zero tolerance for cut coefficients
+    prim_cut_feas_tol::Float64  # (Conic only) Absolute feasibility tolerance used for primal cuts (set equal to feasibility tolerance of `mip_solver`)
 
     # Initial data
     num_var_orig::Int           # Initial number of variables
@@ -112,7 +112,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     V_sdp::Vector{Array{JuMP.AffExpr,2}} # smat V variables in SDPs
 
     # Miscellaneous for algorithms
-    new_scale_factor::Float64   # Calculated value for subproblem cuts scaling
+    new_scale_subp_factor::Float64   # Calculated value for subproblem cuts scaling
     update_conicsub::Bool       # Indicates whether to use setbvec! to update an existing conic subproblem model
     model_conic::MathProgBase.AbstractConicModel # Conic subproblem model: persists when the conic solver implements MathProgBase.setbvec!
     oa_started::Bool            # Indicator for Iterative or MIP-solver-driven algorithms started
@@ -135,7 +135,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     status::Symbol              # Current Pajarito status
 
     # Model constructor
-    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, pass_mip_sols, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_factor, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, tol_zero, tol_prim_infeas)
+    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, use_mip_starts, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_subp_factor, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, cut_zero_tol, prim_cut_feas_tol)
         m = new()
 
         m.log_level = log_level
@@ -144,7 +144,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.solve_subp = solve_subp
         m.dualize_relax = dualize_relax
         m.dualize_subp = dualize_subp
-        m.pass_mip_sols = pass_mip_sols
+        m.use_mip_starts = use_mip_starts
         m.round_mip_sols = round_mip_sols
         m.mip_subopt_count = mip_subopt_count
         m.mip_subopt_solver = mip_subopt_solver
@@ -155,17 +155,17 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.init_soc_inf = init_soc_inf
         m.init_exp = init_exp
         m.scale_subp_cuts = scale_subp_cuts
-        m.scale_factor = scale_factor
+        m.scale_subp_factor = scale_subp_factor
         m.viol_cuts_only = viol_cuts_only
         m.mip_solver = mip_solver
         m.cont_solver = cont_solver
         m.timeout = timeout
         m.rel_gap = rel_gap
-        m.tol_zero = tol_zero
+        m.cut_zero_tol = cut_zero_tol
         m.prim_cuts_only = prim_cuts_only
         m.prim_cuts_always = prim_cuts_always
         m.prim_cuts_assist = prim_cuts_assist
-        m.tol_prim_infeas = tol_prim_infeas
+        m.prim_cut_feas_tol = prim_cut_feas_tol
         m.init_sdp_lin = init_sdp_lin
         m.init_sdp_soc = init_sdp_soc
         m.sdp_eig = sdp_eig
@@ -493,7 +493,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     flush(STDERR)
 
     # Calculate subproblem cuts scaling factor
-    m.new_scale_factor = m.scale_factor*m.tol_prim_infeas/m.rel_gap*(m.num_soc + m.num_exp + m.num_sdp)
+    m.new_scale_subp_factor = m.scale_subp_factor*m.prim_cut_feas_tol/m.rel_gap*(m.num_soc + m.num_exp + m.num_sdp)
 
     if m.solve_relax
         # Solve relaxed conic problem, proceed with algorithm if optimal or suboptimal, else finish
@@ -545,7 +545,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 # Optionally scale dual
                 if m.scale_subp_cuts
                     # Rescale by number of cones / absval of full conic objective
-                    scale!(dual_conic, m.new_scale_factor/(abs(obj_relax) + 1e-5))
+                    scale!(dual_conic, m.new_scale_subp_factor/(abs(obj_relax) + 1e-5))
                 end
 
                 # Add relaxation cuts
@@ -1442,7 +1442,7 @@ function solve_iterative!(m)
             break
         end
 
-        if m.pass_mip_sols && isfinite(m.best_obj)
+        if m.use_mip_starts && isfinite(m.best_obj)
             # Give the best feasible solution to the MIP as a warm-start
             m.logs[:n_add] += 1
             set_best_soln!(m, m.best_int, m.best_cont)
@@ -1498,7 +1498,7 @@ function solve_mip_driven!(m)
     end
     addlazycallback(m.model_mip, callback_lazy)
 
-    if m.pass_mip_sols
+    if m.use_mip_starts
         # Add heuristic callback to give MIP solver feasible solutions from conic solves
         function callback_heur(cb)
             # If have a new best feasible solution since last heuristic solution added, set MIP solution to the new best feasible solution
@@ -1698,10 +1698,10 @@ function solve_subp_add_subp_cuts!(m)
         if (status_conic == :Infeasible) && !isempty(dual_conic)
             # Subproblem infeasible: first check infeasible ray has negative value
             ray_value = vecdot(dual_conic, b_sub_int)
-            if ray_value < -m.tol_zero
+            if ray_value < -m.cut_zero_tol
                 if m.scale_subp_cuts
                     # Rescale by number of cones / value of ray
-                    scale!(dual_conic, m.new_scale_factor/ray_value)
+                    scale!(dual_conic, m.new_scale_subp_factor/ray_value)
                 end
             else
                 warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (this should not happen: please submit an issue)\n")
@@ -1713,7 +1713,7 @@ function solve_subp_add_subp_cuts!(m)
 
             if m.scale_subp_cuts
                 # Rescale by number of cones / abs(objective + 1e-5)
-                scale!(dual_conic, m.new_scale_factor/(abs(obj_full) + 1e-5))
+                scale!(dual_conic, m.new_scale_subp_factor/(abs(obj_full) + 1e-5))
             end
 
             m.logs[:n_feas_conic] += 1
@@ -1729,7 +1729,7 @@ function solve_subp_add_subp_cuts!(m)
             # We have a dual but don't know the status, so we can't use subproblem scaling
             if m.scale_subp_cuts
                 # Rescale by number of cones
-                scale!(dual_conic, m.new_scale_factor)
+                scale!(dual_conic, m.new_scale_subp_factor)
             end
         else
             # Status not handled, cannot add subproblem cuts
@@ -1848,7 +1848,7 @@ function add_subp_cuts!(m, dual_conic, v_idxs_soc, r_idx_exp, s_idx_exp, v_idxs_
     for n in 1:m.num_sdp
         # Dual is sum_{j: lambda_j > 0} lamda_j V_j V_j'
         v_dual = dual_conic[v_idxs_sdp[n]]
-        V_eig = eigfact!(make_smat!(m.smat_sdp[n], v_dual), sqrt(m.tol_zero), Inf)
+        V_eig = eigfact!(make_smat!(m.smat_sdp[n], v_dual), sqrt(m.cut_zero_tol), Inf)
         if add_cut_sdp!(m, m.V_sdp[n], V_eig[:vectors] * Diagonal(sqrt.(V_eig[:values])))
             is_viol_subp = true
         end
@@ -1866,7 +1866,7 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
     for n in 1:m.num_soc
         # Get cone current solution, check infeasibility
         v_vals = getvalue(m.v_soc[n])
-        if (vecnorm(v_vals) - getvalue(m.t_soc[n])) < m.tol_prim_infeas
+        if (vecnorm(v_vals) - getvalue(m.t_soc[n])) < m.prim_cut_feas_tol
             continue
         end
         is_infeas = true
@@ -1883,7 +1883,7 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
     for n in 1:m.num_exp
         r_val = getvalue(m.r_exp[n])
         s_val = getvalue(m.s_exp[n])
-        if (s_val*exp(r_val/s_val) - getvalue(m.t_exp[n])) < m.tol_prim_infeas
+        if (s_val*exp(r_val/s_val) - getvalue(m.t_exp[n])) < m.prim_cut_feas_tol
             continue
         end
         is_infeas = true
@@ -1899,7 +1899,7 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
     end
 
     for n in 1:m.num_sdp
-        V_eig = eigfact!(Symmetric(getvalue(m.V_sdp[n])), -Inf, -m.tol_prim_infeas)
+        V_eig = eigfact!(Symmetric(getvalue(m.V_sdp[n])), -Inf, -m.prim_cut_feas_tol)
         if isempty(V_eig[:values])
             continue
         end
@@ -1930,7 +1930,7 @@ function clean_zeros!{N}(m, data::Array{Float64,N})
     for j in 1:length(data)
         absj = abs(data[j])
 
-        if absj < m.tol_zero
+        if absj < m.cut_zero_tol
             data[j] = 0.
             continue
         end
@@ -1943,7 +1943,7 @@ function clean_zeros!{N}(m, data::Array{Float64,N})
         end
     end
 
-    if max_nz > m.tol_zero
+    if max_nz > m.cut_zero_tol
         if max_nz/min_nz > 1e7
             warn("Numerically unstable dual vector encountered\n")
         end
@@ -1972,7 +1972,7 @@ function add_cut_soc!(m, t, v, d, a, v_dual)
             if v_dual[j] == 0.
                 # Zero cut, don't add
                 continue
-            elseif dim*v_dual[j]^2/t_dual < m.tol_zero
+            elseif dim*v_dual[j]^2/t_dual < m.cut_zero_tol
                 # Coefficient is too small, don't add, add full cut later
                 add_full = true
                 continue
@@ -2021,17 +2021,17 @@ end
 # Add K* cuts for a ExpPrimal cone, where (r,s,t) is the vector of slacks, return true if a cut is violated by current solution
 function add_cut_exp!(m, r, s, t, r_dual, s_dual)
     # Clean zeros
-    if r_dual >= -m.tol_zero
+    if r_dual >= -m.cut_zero_tol
         return false
     end
-    if abs(s_dual) < m.tol_zero
+    if abs(s_dual) < m.cut_zero_tol
         s_dual = 0.
     end
 
     # Calculate t_dual according to dual exp cone definition
     # (u,v,w) in ExpDual <-> exp(1)*w >= -u*exp(v/u), w >= 0, u < 0
     t_dual = -r_dual*exp(s_dual/r_dual - 1)
-    if t_dual < m.tol_zero
+    if t_dual < m.cut_zero_tol
         return false
     end
 
@@ -2113,7 +2113,7 @@ function add_cut!(m, cut_expr, cone_logs)
         return false
     end
 
-    if -getvalue(cut_expr) > m.tol_prim_infeas
+    if -getvalue(cut_expr) > m.prim_cut_feas_tol
         if m.mip_solver_drives
             @lazyconstraint(m.cb_lazy, cut_expr >= 0)
         else
