@@ -727,7 +727,6 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
     var_types_new = var_types[keep_cols]
 
     # Convert SOCRotated cones to SOC cones (MathProgBase definitions)
-    # (y,z,x) in RSOC <=> (1/sqrt2*(y+z),1/sqrt2*w,x) in SOC, y >= 0, z >= 0, w >= -y+z, w >= -z+y
     socr_rows = Vector{Int}[]
     for n_cone in 1:length(cone_con_new)
         (spec, rows) = cone_con_new[n_cone]
@@ -762,59 +761,26 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
 
         num_con_new += 2
 
-        # Add new variable cone for w
-        num_var_new += 1
-        push!(cone_var_new, (:NonNeg, [num_var_new]))
-        push!(c_new, 0.)
-        push!(var_types_new, :Cont)
+        # Use old constraint cone SOCRotated for (sqrt2inv*(y+z),sqrt2inv*(-y+z),x) in SOC
+        for ind in inds_1
+            A_V[ind] *= sqrt2inv
+        end
+        for ind in inds_2
+            A_V[ind] *= sqrt2inv
+        end
 
-        # Add new constraint cone for w+y-z >= 0
-        num_con_new += 1
-        push!(cone_con_new, (:NonNeg, [num_con_new]))
-        append!(A_I, fill(num_con_new, (length(inds_1) + length(inds_2) + 1)))
-        push!(A_J, num_var_new)
-        append!(A_J, A_J[inds_1])
-        append!(A_J, A_J[inds_2])
-        push!(A_V, -1.)
-        append!(A_V, A_V[inds_1])
-        append!(A_V, -A_V[inds_2])
-        push!(b_new, (b_new[rows[1]] - b_new[rows[2]]))
-
-        # Add new constraint cone for w-y+z >= 0
-        num_con_new += 1
-        push!(cone_con_new, (:NonNeg, [num_con_new]))
-        append!(A_I, fill(num_con_new, (length(inds_1) + length(inds_2) + 1)))
-        push!(A_J, num_var_new)
-        append!(A_J, A_J[inds_1])
-        append!(A_J, A_J[inds_2])
-        push!(A_V, -1.)
-        append!(A_V, -A_V[inds_1])
-        append!(A_V, A_V[inds_2])
-        push!(b_new, (-b_new[rows[1]] + b_new[rows[2]]))
-
-        # Use old constraint cone SOCRotated for (y+z,w,sqrt2*x) in SOC
-        # Set up index 1: y -> y+z
         append!(A_I, fill(rows[1], length(inds_2)))
         append!(A_J, A_J[inds_2])
         append!(A_V, A_V[inds_2])
-        b_new[rows[1]] += b_new[rows[2]]
 
-        # Set up index 2: z -> w
-        for ind in inds_2
-            A_V[ind] = 0.
-        end
-        push!(A_I, rows[2])
-        push!(A_J, num_var_new)
-        push!(A_V, -1.)
-        b_new[rows[2]] = 0.
+        append!(A_I, fill(rows[2], length(inds_1)))
+        append!(A_J, A_J[inds_1])
+        append!(A_V, -A_V[inds_1])
 
-        # Multiply x by sqrt(2)
-        b_new[rows[3:end]] .*= sqrt2
-        for i in rows[3:end]
-            for ind in row_to_nzind[i]
-                A_V[ind] *= sqrt2
-            end
-        end
+        b1 = b_new[rows[1]]
+        b2 = b_new[rows[2]]
+        b_new[rows[1]] = sqrt2inv*(b1 + b2)
+        b_new[rows[2]] = sqrt2inv*(-b1 + b2)
     end
 
     if solve_relax
