@@ -110,7 +110,7 @@ solver = PajaritoSolver(
 
 
 #=========================================================
-Specify data
+Generate data
 =========================================================#
 
 # Number of nodes in graph
@@ -118,6 +118,18 @@ n = 10
 
 # Number of samples
 m = 30
+
+
+
+gen data info ....
+
+gen_true(n)
+gen_samples(n)
+
+
+#=========================================================
+Specify model info
+=========================================================#
 
 # Type of objective regularization: Lk gives the type of norm
 # L0 (cardinality), L1 (lasso), L2 (ridge)
