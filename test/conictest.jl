@@ -342,8 +342,20 @@ function runexpsocnlpconic(mip_solver_drives, mip_solver, cont_solver, log_level
         @test status == :Optimal
         @test isapprox(objval, 8.33333, atol=TOL)
         @test isapprox(objbound, 8.33333, atol=TOL)
-        @show status, time, objval, objbound, sol
         @test isapprox(exp.(sol[1:7]), [2, 3, 3, 3, 2, 3, 3], atol=TOL)
+    end
+
+    testname = "Exp larger 2 (Ising)"
+    probname = "exp_ising"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, 0.696499, atol=TOL)
+        @test isapprox(objbound, 0.696499, atol=TOL)
+        @test isapprox(sol[end-8:end], [0, 0, 1, 0, 0, 0, 2, 1, 0], atol=TOL)
     end
 end
 

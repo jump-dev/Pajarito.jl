@@ -54,7 +54,6 @@ function aOpt_Convexjl(q, p, V, n, nmax)
     solve!(aOpt, solver)
     println("\n  objective $(aOpt.optval)")
     println("  solution\n$(np.value)")
-    return np.value
 end
 
 # A Optimal: JuMP.jl
@@ -75,7 +74,6 @@ function aOpt_JuMPjl(q, p, V, n, nmax)
     solve(aOpt)
     println("\n  objective $(getobjectivevalue(aOpt))")
     println("  solution\n$(getvalue(np))\n")
-    return getvalue(np)
 end
 
 # E Optimal: Convex.jl
@@ -98,7 +96,6 @@ function eOpt_Convexjl(q, p, V, n, nmax)
     solve!(eOpt, solver)
     println("\n  objective $(eOpt.optval)")
     println("  solution\n$(np.value)")
-    return np.value
 end
 
 # E Optimal: JuMP.jl
@@ -116,7 +113,6 @@ function eOpt_JuMPjl(q, p, V, n, nmax)
     solve(eOpt)
     println("\n  objective $(getobjectivevalue(eOpt))")
     println("  solution\n$(getvalue(np))\n")
-    return getvalue(np)
 end
 
 # D Optimal: Convex.jl
@@ -137,7 +133,6 @@ function dOpt_Convexjl(q, p, V, n, nmax)
     solve!(dOpt, solver)
     println("\n  objective $(dOpt.optval)")
     println("  solution\n$(np.value)")
-    return np.value
 end
 
 # D Optimal: JuMP.jl model

@@ -648,7 +648,6 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
     cone_var_new = Tuple{Symbol,Vector{Int}}[]
 
     old_new_col = zeros(Int, length(c_orig))
-    bin_vars_new = Int[]
 
     vars_nonneg = Int[]
     vars_nonpos = Int[]
@@ -667,7 +666,6 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
                         num_var_new += 1
                         old_new_col[j] = num_var_new
                         push!(vars_nonneg, j)
-                        push!(bin_vars_new, j)
                     end
                 else
                     # Put non-binary vars in NonNeg or NonPos or Free var cone
@@ -784,10 +782,7 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
             end
         end
 
-        bin_set_upper = falses(length(bin_vars_new))
-        j = 0
-        type_j = :Cont
-        bound_j = 0.0
+        bin_set_upper = falses(length(var_types_new))
 
         # For each bound-type constraint, tighten by rounding
         for (spec, rows) in cone_con_new
@@ -799,12 +794,12 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
                 if row_slck_count[i] > 0
                     # Isolated variable x_j with b_i - a_ij*x_j in spec, b_i & a_ij nonzero
                     j = A_J[row_slck_count[i]]
-                    type_j = var_types[keep_cols[j]]
+                    type_j = var_types_new[j]
                     bound_j = b_new[i] / A_V[row_slck_count[i]]
 
                     if (spec == :NonNeg) && (A_V[row_slck_count[i]] > 0) || (spec == :NonPos) && (A_V[row_slck_count[i]] < 0)
                         # Upper bound: b_i/a_ij >= x_j
-                        if (type_j == :Bin) && (bound_j >= 1.)
+                        if type_j == :Bin
                             # Tighten binary upper bound to 1
                             if spec == :NonNeg
                                 # 1 >= x_j
@@ -817,9 +812,8 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
                             end
 
                             bin_set_upper[j] = true
-                        elseif type_j != :Cont
+                        elseif type_j == :Int
                             # Tighten binary or integer upper bound by rounding down
-                            # TODO this may cause either fixing or infeasibility: detect this and remove variable (at least for binary)
                             if spec == :NonNeg
                                 # floor >= x_j
                                 b_new[i] = floor(bound_j)
@@ -829,16 +823,11 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
                                 b_new[i] = -floor(bound_j)
                                 A_V[row_slck_count[i]] = -1.
                             end
-
-                            if type_j == :Bin
-                                bin_set_upper[j] = true
-                            end
                         end
                     else
                         # Lower bound: b_i/a_ij <= x_j
                         if type_j != :Cont
                             # Tighten binary or integer lower bound by rounding up
-                            # TODO this may cause either fixing or infeasibility: detect this and remove variable (at least for binary)
                             if spec == :NonPos
                                 # ceil <= x_j
                                 b_new[i] = ceil(bound_j)
@@ -856,11 +845,11 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
 
         # For any binary variables without upper bound set, add 1 >= x_j to constraint cones
         num_con_prev = num_con_new
-        for ind in 1:length(bin_vars_new)
-            if !bin_set_upper[ind]
+        for (j, j_type) in enumerate(var_types_new)
+            if (j_type == :Bin) && !bin_set_upper[j]
                 num_con_new += 1
                 push!(A_I, num_con_new)
-                push!(A_J, bin_vars_new[ind])
+                push!(A_J, j)
                 push!(A_V, 1.)
                 push!(b_new, 1.)
             end

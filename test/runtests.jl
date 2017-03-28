@@ -96,22 +96,22 @@ println()
     alg = (msd ? "MSD" : "Iter")
 
     @testset "MILP solver - $mipname" for (mipname, mip) in solvers["MILP"]
-        @testset "NLP models - $conname" for (conname, con) in solvers["NLP"]
-            println("\nNLP models: $alg, $mipname, $conname")
-            runnlp(msd, mip, con, ll, redirect)
-        end
-
-        @testset "NLP solver - $conname" for (conname, con) in solvers["NLP"]
-            println("\nNLP solver: $alg, $mipname, $conname")
-            runsocnlpconic(msd, mip, con, ll, redirect)
-            runexpsocnlpconic(msd, mip, con, ll, redirect)
-        end
-
-        @testset "SOC solver - $conname" for (conname, con) in solvers["SOC"]
-            println("\nSOC solver: $alg, $mipname, $conname")
-            runsocnlpconic(msd, mip, con, ll, redirect)
-            runsocconic(msd, mip, con, ll, redirect)
-        end
+        # # @testset "NLP models - $conname" for (conname, con) in solvers["NLP"]
+        # #     println("\nNLP models: $alg, $mipname, $conname")
+        # #     runnlp(msd, mip, con, ll, redirect)
+        # # end
+        #
+        # @testset "NLP solver - $conname" for (conname, con) in solvers["NLP"]
+        #     println("\nNLP solver: $alg, $mipname, $conname")
+        #     runsocnlpconic(msd, mip, con, ll, redirect)
+        #     runexpsocnlpconic(msd, mip, con, ll, redirect)
+        # end
+        #
+        # @testset "SOC solver - $conname" for (conname, con) in solvers["SOC"]
+        #     println("\nSOC solver: $alg, $mipname, $conname")
+        #     runsocnlpconic(msd, mip, con, ll, redirect)
+        #     runsocconic(msd, mip, con, ll, redirect)
+        # end
 
         @testset "Exp+SOC solver - $conname" for (conname, con) in solvers["Exp+SOC"]
             println("\nExp+SOC solver: $alg, $mipname, $conname")
@@ -119,43 +119,43 @@ println()
             runexpsocconic(msd, mip, con, ll, redirect)
         end
 
-        @testset "PSD+SOC solver - $conname" for (conname, con) in solvers["PSD+SOC"]
-            println("\nPSD+SOC solver: $alg, $mipname, $conname")
-            runsdpsocconic(msd, mip, con, ll, redirect)
-        end
-
-        @testset "PSD+Exp solver - $conname" for (conname, con) in solvers["PSD+Exp"]
-            println("\nPSD+Exp solver: $alg, $mipname, $conname")
-            runsdpexpconic(msd, mip, con, ll, redirect)
-        end
-
-        flush(STDOUT)
-        flush(STDERR)
-    end
-
-    @testset "MISOCP solver - $mipname" for (mipname, mip) in solvers["MISOCP"]
-        if msd && !applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip), _ -> _)
-            # Only test MSD on lazy callback solvers
-            continue
-        end
-
-        @testset "Exp+SOC solver - $conname" for (conname, con) in solvers["Exp+SOC"]
-            println("\nExp+SOC solver: $alg, $mipname, $conname")
-            runexpsocconicmisocp(msd, mip, con, ll, redirect)
-        end
-
-        @testset "PSD+SOC solver - $conname" for (conname, con) in solvers["PSD+SOC"]
-            println("\nPSD+SOC solver: $alg, $mipname, $conname")
-            runsdpsocconicmisocp(msd, mip, con, ll, redirect)
-        end
-
-        @testset "PSD+Exp solver - $conname" for (conname, con) in solvers["PSD+Exp"]
-            println("\nPSD+Exp solver: $alg, $mipname, $conname")
-            runsdpexpconicmisocp(msd, mip, con, ll, redirect)
-        end
+        # @testset "PSD+SOC solver - $conname" for (conname, con) in solvers["PSD+SOC"]
+        #     println("\nPSD+SOC solver: $alg, $mipname, $conname")
+        #     runsdpsocconic(msd, mip, con, ll, redirect)
+        # end
+        #
+        # @testset "PSD+Exp solver - $conname" for (conname, con) in solvers["PSD+Exp"]
+        #     println("\nPSD+Exp solver: $alg, $mipname, $conname")
+        #     runsdpexpconic(msd, mip, con, ll, redirect)
+        # end
 
         flush(STDOUT)
         flush(STDERR)
     end
-    println()
+
+    # @testset "MISOCP solver - $mipname" for (mipname, mip) in solvers["MISOCP"]
+    #     if msd && !applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip), _ -> _)
+    #         # Only test MSD on lazy callback solvers
+    #         continue
+    #     end
+    #
+    #     @testset "Exp+SOC solver - $conname" for (conname, con) in solvers["Exp+SOC"]
+    #         println("\nExp+SOC solver: $alg, $mipname, $conname")
+    #         runexpsocconicmisocp(msd, mip, con, ll, redirect)
+    #     end
+    #
+    #     @testset "PSD+SOC solver - $conname" for (conname, con) in solvers["PSD+SOC"]
+    #         println("\nPSD+SOC solver: $alg, $mipname, $conname")
+    #         runsdpsocconicmisocp(msd, mip, con, ll, redirect)
+    #     end
+    #
+    #     @testset "PSD+Exp solver - $conname" for (conname, con) in solvers["PSD+Exp"]
+    #         println("\nPSD+Exp solver: $alg, $mipname, $conname")
+    #         runsdpexpconicmisocp(msd, mip, con, ll, redirect)
+    #     end
+    #
+    #     flush(STDOUT)
+    #     flush(STDERR)
+    # end
+    # println()
 end
