@@ -178,7 +178,7 @@ function MathProgBase.NonlinearModel(s::PajaritoSolver)
 end
 
 
-# If input is in LinearQuadratic format, dispatch to conic or nonlinear algorithm
+# If input is in LinearQuadratic format, dispatch to conic or nonlinear algorithm depending on continuous solver
 function MathProgBase.LinearQuadraticModel(s::PajaritoSolver)
     if applicable(MathProgBase.ConicModel, s.cont_solver) || (s.cont_solver == UnsetSolver())
         MathProgBase.ConicToLPQPBridge(MathProgBase.ConicModel(s))
