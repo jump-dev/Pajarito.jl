@@ -178,8 +178,14 @@ function MathProgBase.NonlinearModel(s::PajaritoSolver)
 end
 
 
-# Create Pajarito linear-quadratic model: can solve with nonlinear algorithm wrapped with NonlinearToLPQPBridge
-MathProgBase.LinearQuadraticModel(s::PajaritoSolver) = MathProgBase.NonlinearToLPQPBridge(MathProgBase.NonlinearModel(s))
+# If input is in LinearQuadratic format, dispatch to conic or nonlinear algorithm
+function MathProgBase.LinearQuadraticModel(s::PajaritoSolver)
+    if applicable(MathProgBase.ConicModel, s.cont_solver) || (s.cont_solver == UnsetSolver())
+        MathProgBase.ConicToLPQPBridge(MathProgBase.ConicModel(s))
+    else
+        MathProgBase.NonlinearToLPQPBridge(MathProgBase.NonlinearModel(s))
+    end
+end
 
 
 # Return a vector of the supported cone types, for conic algorithm only
