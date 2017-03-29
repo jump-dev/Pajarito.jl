@@ -23,18 +23,19 @@ The second is the **conic** algorithm which is the new approach proposed in the 
 
 There are several different ways to model MICPs in Julia and access these two algorithms in Pajarito:
 
-|       | [JuMP][JuMP-url]            | [Convex.jl][convex-url]  | [MathProgBase][mpb-url] |
-|-------|-----------------------------|--------------------------|-------------------------|
-| NLP   | X (e.g., `@NLconstraint`)   |                          | [X][mpb-nlp-url]        |
-| Conic | X (no automatic conversion) | X (automatic conversion) | [X][mpb-conic-url]      |
+|       | [JuMP][JuMP-url]  | [Convex.jl][convex-url]  | [MathProgBase][mpb-url]  |
+|-------|-------------------|--------------------------|--------------------------|
+| NLP   | [X][JuMP-nlp-url] |                          | [X][mpb-nlp-url]         |
+| Conic | X                 | X                        | [X][mpb-conic-url]       |
 
 [mpb-nlp-url]: http://mathprogbasejl.readthedocs.io/en/latest/nlp.html
 [mpb-conic-url]: http://mathprogbasejl.readthedocs.io/en/latest/conic.html
 [JuMP-url]: https://github.com/JuliaOpt/JuMP.jl
+[JuMP-nlp-url]: http://jump.readthedocs.io/en/latest/nlp.html
 [convex-url]: https://github.com/JuliaOpt/Convex.jl
 [mpb-url]: https://github.com/JuliaOpt/MathProgBase.jl
 
-JuMP and Convex.jl are algebraic modeling interfaces, while MathProgBase is a lower-level interface for providing input in raw callback or matrix form. Convex.jl is perhaps the most user-friendly way to provide input in conic form, since it transparently handles conversion of algebraic expressions. JuMP supports conic modeling but requires cones to be explicitly specified, e.g., by using `norm(x) <= t` for second-order cones and `@SDconstraint` for positive semidefinite constraints.
+JuMP and Convex.jl are algebraic modeling interfaces, while MathProgBase is a lower-level interface for providing input in raw callback or matrix form. Convex.jl is perhaps the most user-friendly way to provide input in conic form, since it transparently handles conversion of algebraic expressions. JuMP supports general nonlinear smooth functions, e.g. by using `@NLconstraint`. JuMP also supports conic modeling, but requires cones to be explicitly specified, e.g. by using `norm(x) <= t` for second-order cone constraints and `@SDconstraint` for positive semidefinite constraints.
 
 Pajarito may be accessed through MathProgBase from outside Julia by using the experimental [cmpb](https://github.com/mlubin/cmpb) interface which provides a C API to the low-level conic input format. The [ConicBenchmarkUtilities](https://github.com/mlubin/ConicBenchmarkUtilities.jl) package provides utilities to read files in the [CBF](http://cblib.zib.de/) format.
 
@@ -44,23 +45,23 @@ The algorithm implemented by Pajarito itself is relatively simple, and most of t
 
 The mixed-integer solver is specified by using the `mip_solver` option to `PajaritoSolver`, e.g., `PajaritoSolver(mip_solver=CplexSolver())`. You must first load the Julia package which provides the mixed-integer solver, e.g., with `using CPLEX`. This solver is typically a mixed-integer linear solver, but if a conic problem has both second-order cones and other nonlinear cones, or if it has PSD cones, then the MIP solver can be an MISOCP solver and Pajarito can put second-order cones in the outer-approximation model.
 
-The convex subproblem solver is specified by using the `cont_solver` option, e.g., `PajaritoSolver(cont_solver=IpoptSolver())`. When given input in derivative-based nonlinear form, Pajarito requires a derivative-based nonlinear solver, e.g., [Ipopt](https://projects.coin-or.org/Ipopt) or [KNITRO](http://www.ziena.com/knitro.htm). When given input in conic form, the convex subproblem solver can be *either* a conic solver which supports the cones used *or* a derivative-based solver like Ipopt. If a derivative-based solver is provided in this case, then Pajarito will switch to the derivative-based algorithm by using the [ConicNonlinearBridge](https://github.com/mlubin/ConicNonlinearBridge.jl) (which does not support PSD cones). Note that using derivative-based solvers for conic problems can cause numerical instability because conic problems are not always smooth.
+The continuous convex subproblem solver is specified by using the `cont_solver` option, e.g., `PajaritoSolver(cont_solver=IpoptSolver())`. When given input in derivative-based nonlinear form, Pajarito requires a derivative-based nonlinear solver, e.g., [Ipopt](https://projects.coin-or.org/Ipopt) or [KNITRO](http://www.ziena.com/knitro.htm). When given input in conic form, the convex subproblem solver can be *either* a conic solver which supports the cones used *or* a derivative-based solver like Ipopt. If a derivative-based solver is provided in this case, then Pajarito will switch to the derivative-based algorithm by using the [ConicNonlinearBridge](https://github.com/mlubin/ConicNonlinearBridge.jl) (which does not support PSD cones). Note that using derivative-based solvers for conic problems can cause numerical instability because conic problems are not always smooth.
 
-All solvers can have their parameters specified through their corresponding Julia interfaces. For example, you may wish to turn off the output of these solvers, e.g., by using `IpoptSolver(print_level=0)` for the Ipopt solver.
-
-The predefined cones are listed in the [MathProgBase](http://mathprogbasejl.readthedocs.io/en/latest/conic.html) documentation. The following conic solvers (**O** means open-source) can be used by Pajarito to solve mixed-integer conic models with any mixture of the corresponding cones: 
+For conic models, the predefined cones are listed in the [MathProgBase](http://mathprogbasejl.readthedocs.io/en/latest/conic.html) documentation. The following conic solvers (**O** means open-source) can be used by Pajarito to solve mixed-integer conic models with any mixture of the corresponding cones: 
 
 |                        | Second-order | Rotated second-order | Positive semidefinite | Primal exponential |
 |------------------------|--------------|----------------------|-----------------------|--------------------|
 | [CSDP][csdp-url] **O** |              |                      | X                     |                    | 
-| [ECOS][ecos-url] **O** | X            |                      |                       | X                  | 
-| [SCS][scs-url] **O**   | X            |                      | X                     | X                  | 
+| [ECOS][ecos-url] **O** | X            | X                    |                       | X                  | 
+| [SCS][scs-url] **O**   | X            | X                    | X                     | X                  | 
 | [Mosek][mosek-url]     | X            | X                    | X                     |                    | 
 
 [csdp-url]: https://github.com/JuliaOpt/CSDP.jl
 [ecos-url]: https://github.com/JuliaOpt/ECOS.jl
 [mosek-url]: https://github.com/JuliaOpt/Mosek.jl
 [scs-url]: https://github.com/JuliaOpt/SCS.jl
+
+MIP and continuous solver parameters must be specified through their corresponding Julia interfaces. For example, to turn off the output of Ipopt solver, use `cont_solver=IpoptSolver(print_level=0)`.
 
 ## Pajarito solver options
 
