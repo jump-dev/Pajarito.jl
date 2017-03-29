@@ -705,11 +705,13 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
         end
     end
 
-    A = sparse(A_I, A_J, A_V, num_con_new, length(c_orig))
     keep_cols = find(old_new_col)
     c_new = c_orig[keep_cols]
-    A = A[:, keep_cols]
     var_types_new = var_types[keep_cols]
+    A_full = sparse(A_I, A_J, A_V, num_con_new, length(c_orig))
+    A_keep = A_full[:, keep_cols]
+    dropzeros!(A_keep)
+    (A_I, A_J, A_V) = findnz(A_keep)
 
     # Convert SOCRotated cones to SOC cones (MathProgBase definitions)
     has_rsoc = false
@@ -724,7 +726,6 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
     end
 
     if has_rsoc
-        (A_I, A_J, A_V) = findnz(A)
         row_to_nzind = map(_ -> Int[], 1:num_con_new)
         for (ind, i) in enumerate(A_I)
             push!(row_to_nzind[i], ind)

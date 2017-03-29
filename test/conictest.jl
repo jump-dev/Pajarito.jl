@@ -5,7 +5,7 @@
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
-# Take a solver and a CBF file basename and solve the problem and return important solve information
+# Take a CBF file and conic solver and solve, redirecting output
 function solve_cbf(testname, probname, solver, redirect)
     flush(STDOUT)
     flush(STDERR)

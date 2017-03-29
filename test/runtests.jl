@@ -13,7 +13,7 @@ using Base.Test
 # Tests absolute tolerance and Pajarito printing level
 TOL = 1e-3
 ll = 3
-redirect = false
+redirect = true
 
 # Define dictionary of solvers, using JuMP list of available solvers
 include(Pkg.dir("JuMP", "test", "solvers.jl"))
