@@ -96,66 +96,72 @@ println()
     alg = (msd ? "MSD" : "Iter")
 
     @testset "MILP solver - $mipname" for (mipname, mip) in solvers["MILP"]
-        # # @testset "NLP models - $conname" for (conname, con) in solvers["NLP"]
-        # #     println("\nNLP models: $alg, $mipname, $conname")
-        # #     runnlp(msd, mip, con, ll, redirect)
-        # # end
-        #
-        # @testset "NLP solver - $conname" for (conname, con) in solvers["NLP"]
-        #     println("\nNLP solver: $alg, $mipname, $conname")
-        #     runsocnlpconic(msd, mip, con, ll, redirect)
-        #     runexpsocnlpconic(msd, mip, con, ll, redirect)
-        # end
-        #
-        # @testset "SOC solver - $conname" for (conname, con) in solvers["SOC"]
-        #     println("\nSOC solver: $alg, $mipname, $conname")
-        #     runsocnlpconic(msd, mip, con, ll, redirect)
-        #     runsocconic(msd, mip, con, ll, redirect)
-        # end
-
-        @testset "Exp+SOC solver - $conname" for (conname, con) in solvers["Exp+SOC"]
-            println("\nExp+SOC solver: $alg, $mipname, $conname")
-            runexpsocnlpconic(msd, mip, con, ll, redirect)
-            runexpsocconic(msd, mip, con, ll, redirect)
+        @testset "NLP models, NLP solver - $conname" for (conname, con) in solvers["NLP"]
+            println("\nNLP models, NLP solver: $alg, $mipname, $conname")
+            run_qp(msd, mip, con, ll, redirect)
+            run_nlp(msd, mip, con, ll, redirect)
         end
 
-        # @testset "PSD+SOC solver - $conname" for (conname, con) in solvers["PSD+SOC"]
-        #     println("\nPSD+SOC solver: $alg, $mipname, $conname")
-        #     runsdpsocconic(msd, mip, con, ll, redirect)
-        # end
-        #
-        # @testset "PSD+Exp solver - $conname" for (conname, con) in solvers["PSD+Exp"]
-        #     println("\nPSD+Exp solver: $alg, $mipname, $conname")
-        #     runsdpexpconic(msd, mip, con, ll, redirect)
-        # end
+        @testset "LPQP models, SOC solver - $conname" for (conname, con) in solvers["SOC"]
+            println("\nLPQP models, SOC solver: $alg, $mipname, $conname")
+            run_qp(msd, mip, con, ll, redirect)
+        end
+
+        @testset "Exp+SOC models, NLP solver - $conname" for (conname, con) in solvers["NLP"]
+            println("\nExp+SOC models, NLP solver: $alg, $mipname, $conname")
+            run_soc(msd, mip, con, ll, redirect)
+            run_expsoc(msd, mip, con, ll, redirect)
+        end
+
+        @testset "SOC models/solver - $conname" for (conname, con) in solvers["SOC"]
+            println("\nSOC models/solver: $alg, $mipname, $conname")
+            run_soc(msd, mip, con, ll, redirect)
+            run_soc_conic(msd, mip, con, ll, redirect)
+        end
+
+        @testset "Exp+SOC models/solver - $conname" for (conname, con) in solvers["Exp+SOC"]
+            println("\nExp+SOC models/solver: $alg, $mipname, $conname")
+            run_expsoc(msd, mip, con, ll, redirect)
+            run_expsoc_conic(msd, mip, con, ll, redirect)
+        end
+
+        @testset "PSD+SOC models/solver - $conname" for (conname, con) in solvers["PSD+SOC"]
+            println("\nPSD+SOC models/solver: $alg, $mipname, $conname")
+            run_sdpsoc_conic(msd, mip, con, ll, redirect)
+        end
+
+        @testset "PSD+Exp models/solver - $conname" for (conname, con) in solvers["PSD+Exp"]
+            println("\nPSD+Exp models/solver: $alg, $mipname, $conname")
+            run_sdpexp_conic(msd, mip, con, ll, redirect)
+        end
 
         flush(STDOUT)
         flush(STDERR)
     end
 
-    # @testset "MISOCP solver - $mipname" for (mipname, mip) in solvers["MISOCP"]
-    #     if msd && !applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip), _ -> _)
-    #         # Only test MSD on lazy callback solvers
-    #         continue
-    #     end
-    #
-    #     @testset "Exp+SOC solver - $conname" for (conname, con) in solvers["Exp+SOC"]
-    #         println("\nExp+SOC solver: $alg, $mipname, $conname")
-    #         runexpsocconicmisocp(msd, mip, con, ll, redirect)
-    #     end
-    #
-    #     @testset "PSD+SOC solver - $conname" for (conname, con) in solvers["PSD+SOC"]
-    #         println("\nPSD+SOC solver: $alg, $mipname, $conname")
-    #         runsdpsocconicmisocp(msd, mip, con, ll, redirect)
-    #     end
-    #
-    #     @testset "PSD+Exp solver - $conname" for (conname, con) in solvers["PSD+Exp"]
-    #         println("\nPSD+Exp solver: $alg, $mipname, $conname")
-    #         runsdpexpconicmisocp(msd, mip, con, ll, redirect)
-    #     end
-    #
-    #     flush(STDOUT)
-    #     flush(STDERR)
-    # end
-    # println()
+    @testset "MISOCP solver - $mipname" for (mipname, mip) in solvers["MISOCP"]
+        if msd && !applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip), _ -> _)
+            # Only test MSD on lazy callback solvers
+            continue
+        end
+
+        @testset "MISOCP: Exp+SOC models/solver - $conname" for (conname, con) in solvers["Exp+SOC"]
+            println("\nMISOCP: Exp+SOC models/solver: $alg, $mipname, $conname")
+            run_expsoc_misocp(msd, mip, con, ll, redirect)
+        end
+
+        @testset "MISOCP: PSD+SOC solver - $conname" for (conname, con) in solvers["PSD+SOC"]
+            println("\nMISOCP: PSD+SOC models/solver: $alg, $mipname, $conname")
+            run_sdpsoc_misocp(msd, mip, con, ll, redirect)
+        end
+
+        @testset "MISOCP: PSD+Exp solver - $conname" for (conname, con) in solvers["PSD+Exp"]
+            println("\nMISOCP: PSD+Exp models/solver: $alg, $mipname, $conname")
+            run_sdpexp_misocp(msd, mip, con, ll, redirect)
+        end
+
+        flush(STDOUT)
+        flush(STDERR)
+    end
+    println()
 end

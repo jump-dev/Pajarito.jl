@@ -13,7 +13,7 @@ using JuMP, Pajarito
 # Set up QP JuMP model, solve, print solution
 # xB is a bound on the absolute values of the estimate variables x_j
 # Solver can be either MIQP/MINLP or MICP
-# Model is a bit "low level" in order to be compatibile with MathProgBase ConicToLPQPBridge
+# Model is a bit "low level" in order to be compatible with MathProgBase ConicToLPQPBridge
 function miqp_cardls(m, d, A, b, k, rho, xB, solver)
     mod = Model(solver=solver)
     @variable(mod, x[1:d])
@@ -105,8 +105,8 @@ minlp_solver = PajaritoSolver(
 Specify/generate data
 =========================================================#
 
-d = 10  # Dimension of feature space
-m = 30  # Number of samples
+d = 6  # Dimension of feature space
+m = 20  # Number of samples
 
 srand(100)       # Change or comment random seed to get different data
 A = randn(m, d)  # Sample point matrix (rows are samples)
