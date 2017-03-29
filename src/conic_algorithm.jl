@@ -606,7 +606,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             soln_new[cols_int] = m.best_int
             soln_new[cols_cont] = m.best_cont
             m.final_soln = zeros(m.num_var_orig)
-            m.final_soln[keep_cols] = soln_new[1:length(keep_cols)]
+            m.final_soln[keep_cols] = soln_new
         end
     end
 

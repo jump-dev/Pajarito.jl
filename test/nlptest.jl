@@ -25,7 +25,7 @@ function run_qp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
 
         @test status == :Optimal
         @test isapprox(getobjectivevalue(m), -12.162277, atol=TOL)
-        # @test isapprox(getobjbound(m), -12.162277, atol=TOL)
+        @test isapprox(getobjbound(m), -12.162277, atol=TOL)
         @test isapprox(getvalue(x), 3, atol=TOL)
         @test isapprox(getvalue(y), 3.162277, atol=TOL)
     end
@@ -47,7 +47,7 @@ function run_qp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
 
         @test status == :Optimal
         @test isapprox(getobjectivevalue(m), 9.5, atol=TOL)
-        # @test isapprox(getobjbound(m), 9.5, atol=TOL)
+        @test isapprox(getobjbound(m), 9.5, atol=TOL)
         @test isapprox(getvalue(x), 3, atol=TOL)
         @test isapprox(getvalue(y), 0.5, atol=TOL)
     end
@@ -79,8 +79,8 @@ function run_qp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
         status = solve(m, suppress_warnings=true)
 
         @test status == :Optimal
-        @test isapprox(getobjectivevalue(m), 16.045564, atol=TOL)
-        # @test isapprox(getobjbound(m), 16.045564, atol=TOL)
+        @test isapprox(getobjectivevalue(m), 8.022766, atol=TOL)
+        @test isapprox(getobjbound(m), 8.022766, atol=TOL)
         @test isapprox(getvalue(z), [0, 1, 1, 1, 0, 0], atol=TOL)
     end
 end
