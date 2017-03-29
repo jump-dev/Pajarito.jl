@@ -1,6 +1,14 @@
 Pajarito release notes
 ======================
 
+Version 0.4.0 (March 29, 2017)
+---------------------------------
+
+  * Major rewrite of conic algorithm and breaking changes in option names.
+  * K^star cuts theory put into practice.
+  * Many new tests, including for LPQP problems.
+  * New examples folder, with a number of MI-exp, MI-psd, MI-qp, MI-soc problems.
+
 Version 0.3.0 (November 29, 2016)
 ---------------------------------
 
@@ -10,4 +18,4 @@ Version 0.3.0 (November 29, 2016)
 Version 0.1.0 (March 25, 2016)
 ------------------------------
 
-  * Initial public release
+  * Initial public release.
