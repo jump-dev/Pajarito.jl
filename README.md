@@ -2,9 +2,9 @@
 
 Pajarito (**P**olyhedral **A**pproximation in **J**ulia: **A**utomatic **R**eformulations for **I**n**T**eger **O**ptimization) is a mixed-integer convex programming (MICP) solver package written in [Julia](http://julialang.org/).
 
-MICPs are optimization problems which are convex except for integer or binary constraints on some variables. Pajarito supports both **mixed-integer conic programming**, which encodes problems using a small number of predefined cones, and **mixed-integer (smooth) nonlinear programming**, which encodes problems with smooth functions and their derivatives.
+MICP problems are convex except for restrictions that some variables take binary or integer values. Pajarito supports both **mixed-integer conic programming**, which encodes nonlinearities using a small number of predefined cones, and more traditional **convex mixed-integer nonlinear programming**, which encodes nonlinearities with smooth functions uses their derivatives.
 
-Pajarito solves MICPs with finite-time convergence (under minimal assumptions) by constructing sequential lifted polyhedral outer-approximations of the convex feasible set to leverage the power of MILP solvers. Pajarito accesses state-of-the-art MILP solvers and continuous conic or nonlinear programming (NLP) solvers through the MathProgBase interface.  
+Pajarito solves MICP problems with finite-time convergence (under minimal assumptions) by constructing sequential lifted polyhedral outer-approximations of the convex feasible set to leverage the power of MILP solvers. Pajarito accesses state-of-the-art MILP solvers and continuous conic or nonlinear programming (NLP) solvers through the MathProgBase interface.  
 
 [![Build Status](https://travis-ci.org/JuliaOpt/Pajarito.jl.svg?branch=master)](https://travis-ci.org/JuliaOpt/Pajarito.jl) [![codecov.io](https://codecov.io/github/JuliaOpt/Pajarito.jl/coverage.svg?branch=master)](https://codecov.io/github/JuliaOpt/Pajarito.jl?branch=master) [![Pajarito](http://pkg.julialang.org/badges/Pajarito_0.5.svg)](http://pkg.julialang.org/?pkg=Pajarito&ver=0.5)
 
