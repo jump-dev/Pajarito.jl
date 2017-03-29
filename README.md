@@ -17,7 +17,9 @@ julia> Pkg.add("Pajarito")
 
 ## Usage
 
-Pajarito has two entirely separate algorithms depending on the form in which the input is provided. The first is the **derivative-based nonlinear** algorithm, where the approach used is analogous to that of [Bonmin](https://projects.coin-or.org/Bonmin) and will perform similarly, with the primary advantage of being able to easily swap-in various mixed-integer and convex subproblem solvers which Bonmin does not support. The second is the **conic** algorithm which is the new approach proposed in the publications describing Pajarito. The conic algorithm currently supports second-order cones, exponential cones, and positive semidefinite cones. A problem provided in conic form may solve faster than an identical problem encoded in derivative-based nonlinear form because conic form naturally encodes extended formulations; however, [Hijazi et al.](http://www.optimization-online.org/DB_FILE/2011/06/3050.pdf) suggest manual reformulation techniques which achieve many of the algorithmic benefits of conic form.
+Pajarito has two entirely separate algorithms depending on the form in which the input is provided. The first is the **derivative-based nonlinear** algorithm, where the approach used is analogous to that of [Bonmin](https://projects.coin-or.org/Bonmin) and will perform similarly, with the primary advantage of being able to easily swap-in various mixed-integer and convex subproblem solvers which Bonmin does not support. 
+
+The second is the **conic** algorithm which is the new approach proposed in the publications describing Pajarito. The conic algorithm currently supports second-order cones, exponential cones, and positive semidefinite cones. Thus Pajarito can solve MISOCP and MISDP problems. A problem provided in conic form may solve faster than an identical problem encoded in derivative-based nonlinear form because conic form naturally encodes extended formulations; however, [Hijazi et al.](http://www.optimization-online.org/DB_FILE/2011/06/3050.pdf) suggest manual reformulation techniques which achieve many of the algorithmic benefits of conic form.
 
 There are several different ways to model MICPs in Julia and access these two algorithms in Pajarito:
 
@@ -36,7 +38,7 @@ JuMP and Convex.jl are algebraic modeling interfaces, while MathProgBase is a lo
 
 Pajarito may be accessed through MathProgBase from outside Julia by using the experimental [cmpb](https://github.com/mlubin/cmpb) interface which provides a C API to the low-level conic input format. The [ConicBenchmarkUtilities](https://github.com/mlubin/ConicBenchmarkUtilities.jl) package provides utilities to read files in the [CBF](http://cblib.zib.de/) format.
 
-## MILP and continuous solvers
+## MIP and continuous solvers
 
 The algorithm implemented by Pajarito itself is relatively simple, and most of the hard work is performed by the MIP outer-approximation model solver and the continuous convex subproblem models solver. **The performance of Pajarito depends on these two types of solvers.** For best performance, use commercial solvers.
 
@@ -46,7 +48,7 @@ The convex subproblem solver is specified by using the `cont_solver` option, e.g
 
 All solvers can have their parameters specified through their corresponding Julia interfaces. For example, you may wish to turn off the output of these solvers, e.g., by using `IpoptSolver(print_level=0)` for the Ipopt solver.
 
-The possible cones are listed in the [MathProgBase](http://mathprogbasejl.readthedocs.io/en/latest/conic.html) documentation. Some commonly-used conic solvers and the nonlinear cones they support are (**O** indicates the solver is released under an open-source license):
+The predefined cones are listed in the [MathProgBase](http://mathprogbasejl.readthedocs.io/en/latest/conic.html) documentation. The following conic solvers (**O** means open-source) can be used by Pajarito to solve mixed-integer conic models with any mixture of the corresponding cones: 
 
 |                        | Second-order | Rotated second-order | Positive semidefinite | Primal exponential |
 |------------------------|--------------|----------------------|-----------------------|--------------------|
@@ -55,7 +57,6 @@ The possible cones are listed in the [MathProgBase](http://mathprogbasejl.readth
 | [SCS][scs-url] **O**   | X            |                      | X                     | X                  | 
 | [Mosek][mosek-url]     | X            | X                    | X                     |                    | 
 
-`*` indicates 
 [csdp-url]: https://github.com/JuliaOpt/CSDP.jl
 [ecos-url]: https://github.com/JuliaOpt/ECOS.jl
 [mosek-url]: https://github.com/JuliaOpt/Mosek.jl
