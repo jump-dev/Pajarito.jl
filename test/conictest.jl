@@ -47,7 +47,7 @@ function solve_cbf(testname, probname, solver, redirect)
     objval = MathProgBase.getobjval(m)
     objbound = MathProgBase.getobjbound(m)
     sol = MathProgBase.getsolution(m)
-    @printf ":%-12s %5.2f s\n" status toq()
+    @printf ":%-16s %5.2f s\n" status toq()
     flush(STDOUT)
     flush(STDERR)
 

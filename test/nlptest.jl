@@ -39,9 +39,9 @@ function solve_jump(testname, m, redirect)
     flush(STDERR)
 
     if isa(status, ErrorException)
-        @printf ":%-12s %5.2f s\n" "ErrorException" toq()
+        @printf ":%-16s %5.2f s\n" "ErrorException" toq()
     else
-        @printf ":%-12s %5.2f s\n" status toq()
+        @printf ":%-16s %5.2f s\n" status toq()
     end
 
     flush(STDOUT)
