@@ -17,7 +17,12 @@ function miqp_cardls(m, d, A, b, k, rho, xB, solver)
     mod = Model(solver=solver)
     @variable(mod, x[j in 1:d])
     @variable(mod, z[j in 1:d], Bin)
-    @objective(mod, Min, 1/2*sum((A*x - b).^2) + rho/2*sum(x.^2))
+    @variable(mod, u)
+    @variable(mod, v)
+    @variable(mod, w == 2)
+    @objective(mod, Min, u + rho*v)
+    @constraint(mod, sum((A*x - b).^2) <= u*w)
+    @constraint(mod, sum(x.^2) <= v*w)
     @constraint(mod, x .<= xB.*z)
     @constraint(mod, x .>= -xB.*z)
     @constraint(mod, sum(z) <= k)
@@ -48,7 +53,6 @@ Choose solvers and options
 =========================================================#
 
 mip_solver_drives = false
-log_level = 3
 rel_gap = 1e-5
 
 
@@ -75,7 +79,7 @@ conic_solver = MosekSolver(LOG=0)
 
 micp_solver = PajaritoSolver(
     mip_solver_drives=mip_solver_drives,
-    log_level=log_level,
+    log_level=3,
     rel_gap=rel_gap,
 	mip_solver=mip_solver,
 	cont_solver=conic_solver,
@@ -89,7 +93,7 @@ nlp_solver = IpoptSolver(print_level=0)
 
 minlp_solver = PajaritoSolver(
     mip_solver_drives=mip_solver_drives,
-    log_level=log_level,
+    log_level=1,
     rel_gap=rel_gap,
 	mip_solver=mip_solver,
 	cont_solver=nlp_solver,
@@ -106,8 +110,8 @@ m = 30  # Number of samples
 srand(100)       # Change or comment random seed to get different data
 A = randn(m, d)  # Sample point matrix (rows are samples)
 b = randn(m)     # Sample measurement vector
-@show A
-@show b
+# @show A
+# @show b
 
 k = floor(Int, d/2)  # Number of features to select (||x||_0 <= k)
 
