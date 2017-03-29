@@ -13,15 +13,18 @@ using JuMP, Pajarito
 # Set up QP JuMP model, solve, print solution
 # xB is a bound on the absolute values of the estimate variables x_j
 # Solver can be either MIQP/MINLP or MICP
+# Model is a bit "low level" in order to be compatibile with MathProgBase ConicToLPQPBridge
 function miqp_cardls(m, d, A, b, k, rho, xB, solver)
     mod = Model(solver=solver)
-    @variable(mod, x[j in 1:d])
-    @variable(mod, z[j in 1:d], Bin)
+    @variable(mod, x[1:d])
+    @variable(mod, z[1:d], Bin)
     @variable(mod, u)
     @variable(mod, v)
-    @variable(mod, w == 2)
     @objective(mod, Min, u + rho*v)
-    @constraint(mod, sum((A*x - b).^2) <= u*w)
+    @variable(mod, t[1:d])
+    @constraint(mod, t .== A*x - b)
+    @variable(mod, w == 2)
+    @constraint(mod, sum(t.^2) <= u*w)
     @constraint(mod, sum(x.^2) <= v*w)
     @constraint(mod, x .<= xB.*z)
     @constraint(mod, x .>= -xB.*z)
@@ -36,7 +39,7 @@ end
 function misdp_cardls(m, d, A, b, k, rho, solver)
     mod = Model(solver=solver)
     @variable(mod, tau)
-    @variable(mod, z[j in 1:d], Bin)
+    @variable(mod, z[1:d], Bin)
     @objective(mod, Min, tau)
     @constraint(mod, sum(z) <= k)
     @SDconstraint(mod, [(eye(m) + 1/rho*A*diagm(z)*A') b ; b' tau] >= 0)
@@ -85,17 +88,17 @@ micp_solver = PajaritoSolver(
 
 
 # Specify mixed-integer NLP solver (Pajarito nonlinear algorithm)
-
-using Ipopt
-nlp_solver = IpoptSolver(print_level=0)
-
-minlp_solver = PajaritoSolver(
-    mip_solver_drives=mip_solver_drives,
-    log_level=1,
-    rel_gap=rel_gap,
-	mip_solver=mip_solver,
-	cont_solver=nlp_solver,
-)
+#
+# using Ipopt
+# nlp_solver = IpoptSolver(print_level=0)
+#
+# minlp_solver = PajaritoSolver(
+#     mip_solver_drives=mip_solver_drives,
+#     log_level=1,
+#     rel_gap=rel_gap,
+# 	mip_solver=mip_solver,
+# 	cont_solver=nlp_solver,
+# )
 
 
 #=========================================================
@@ -123,7 +126,7 @@ Solve JuMP models
 =========================================================#
 
 println("\n\n****MIQP model with MINLP solver****\n")
-miqp_cardls(m, d, A, b, k, rho, xB, minlp_solver)
+# miqp_cardls(m, d, A, b, k, rho, xB, minlp_solver)
 
 println("\n\n****MIQP model with conic solver****\n")
 miqp_cardls(m, d, A, b, k, rho, xB, micp_solver)
