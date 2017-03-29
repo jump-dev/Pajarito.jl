@@ -89,16 +89,16 @@ micp_solver = PajaritoSolver(
 
 # Specify mixed-integer NLP solver (Pajarito nonlinear algorithm)
 
-# using Ipopt
-# nlp_solver = IpoptSolver(print_level=0)
-#
-# minlp_solver = PajaritoSolver(
-#     mip_solver_drives=mip_solver_drives,
-#     log_level=1,
-#     rel_gap=rel_gap,
-# 	mip_solver=mip_solver,
-# 	cont_solver=nlp_solver,
-# )
+using Ipopt
+nlp_solver = IpoptSolver(print_level=0)
+
+minlp_solver = PajaritoSolver(
+    mip_solver_drives=mip_solver_drives,
+    log_level=1,
+    rel_gap=rel_gap,
+	mip_solver=mip_solver,
+	cont_solver=nlp_solver,
+)
 
 
 #=========================================================
@@ -126,7 +126,7 @@ Solve JuMP models
 =========================================================#
 
 println("\n\n****MIQP model with MINLP solver****\n")
-# miqp_cardls(m, d, A, b, k, rho, xB, minlp_solver)
+miqp_cardls(m, d, A, b, k, rho, xB, minlp_solver)
 
 println("\n\n****MIQP model with conic solver****\n")
 miqp_cardls(m, d, A, b, k, rho, xB, micp_solver)
