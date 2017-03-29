@@ -28,8 +28,7 @@ function miqp_cardls(m, d, A, b, k, rho, xB, solver)
     @constraint(mod, sum(z) <= k)
 
     solve(mod)
-    println("\n  objective $(getobjectivevalue(mod))")
-    println("  solution\n$(getvalue(x))\n")
+    println("  selected features (z) = \n$(getvalue(z))\n")
 end
 
 # Set up MISDP JuMP model, solve, print solution
@@ -43,8 +42,7 @@ function misdp_cardls(m, d, A, b, k, rho, solver)
     @SDconstraint(mod, [(eye(m) + 1/rho*A*diagm(z)*A') b ; b' tau] >= 0)
 
     solve(mod)
-    println("\n  objective $(getobjectivevalue(mod))")
-    println("  solution\n$(getvalue(z))\n")
+    println("  selected features (z) = \n$(getvalue(z))\n")
 end
 
 
