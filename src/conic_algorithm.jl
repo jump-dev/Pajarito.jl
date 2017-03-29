@@ -712,62 +712,66 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
     var_types_new = var_types[keep_cols]
 
     # Convert SOCRotated cones to SOC cones (MathProgBase definitions)
+    has_rsoc = false
     socr_rows = Vector{Int}[]
     for n_cone in 1:length(cone_con_new)
         (spec, rows) = cone_con_new[n_cone]
         if spec == :SOCRotated
             cone_con_new[n_cone] = (:SOC, rows)
             push!(socr_rows, rows)
+            has_rsoc = true
         end
     end
 
-    (A_I, A_J, A_V) = findnz(A)
-    row_to_nzind = map(_ -> Int[], 1:num_con_new)
-    for (ind, i) in enumerate(A_I)
-        push!(row_to_nzind[i], ind)
-    end
-
-    for rows in socr_rows
-        inds_1 = row_to_nzind[rows[1]]
-        inds_2 = row_to_nzind[rows[2]]
-
-        # Add new constraint cones for y >= 0, z >= 0
-        push!(cone_con_new, (:NonNeg, collect((num_con_new + 1):(num_con_new + 2))))
-
-        append!(A_I, fill((num_con_new + 1), length(inds_1)))
-        append!(A_J, A_J[inds_1])
-        append!(A_V, A_V[inds_1])
-        push!(b_new, b_new[rows[1]])
-
-        append!(A_I, fill((num_con_new + 2), length(inds_2)))
-        append!(A_J, A_J[inds_2])
-        append!(A_V, A_V[inds_2])
-        push!(b_new, b_new[rows[2]])
-
-        num_con_new += 2
-
-        # Use old constraint cone SOCRotated for (sqrt2inv*(y+z),sqrt2inv*(-y+z),x) in SOC
-        for ind in inds_1
-            A_V[ind] *= sqrt2inv
-        end
-        for ind in inds_2
-            A_V[ind] *= sqrt2inv
+    if has_rsoc
+        (A_I, A_J, A_V) = findnz(A)
+        row_to_nzind = map(_ -> Int[], 1:num_con_new)
+        for (ind, i) in enumerate(A_I)
+            push!(row_to_nzind[i], ind)
         end
 
-        append!(A_I, fill(rows[1], length(inds_2)))
-        append!(A_J, A_J[inds_2])
-        append!(A_V, A_V[inds_2])
+        for rows in socr_rows
+            inds_1 = row_to_nzind[rows[1]]
+            inds_2 = row_to_nzind[rows[2]]
 
-        append!(A_I, fill(rows[2], length(inds_1)))
-        append!(A_J, A_J[inds_1])
-        append!(A_V, -A_V[inds_1])
+            # Add new constraint cones for y >= 0, z >= 0
+            push!(cone_con_new, (:NonNeg, collect((num_con_new + 1):(num_con_new + 2))))
 
-        b1 = b_new[rows[1]]
-        b2 = b_new[rows[2]]
-        b_new[rows[1]] = sqrt2inv*(b1 + b2)
-        b_new[rows[2]] = sqrt2inv*(-b1 + b2)
+            append!(A_I, fill((num_con_new + 1), length(inds_1)))
+            append!(A_J, A_J[inds_1])
+            append!(A_V, A_V[inds_1])
+            push!(b_new, b_new[rows[1]])
+
+            append!(A_I, fill((num_con_new + 2), length(inds_2)))
+            append!(A_J, A_J[inds_2])
+            append!(A_V, A_V[inds_2])
+            push!(b_new, b_new[rows[2]])
+
+            num_con_new += 2
+
+            # Use old constraint cone SOCRotated for (sqrt2inv*(y+z),sqrt2inv*(-y+z),x) in SOC
+            for ind in inds_1
+                A_V[ind] *= sqrt2inv
+            end
+            for ind in inds_2
+                A_V[ind] *= sqrt2inv
+            end
+
+            append!(A_I, fill(rows[1], length(inds_2)))
+            append!(A_J, A_J[inds_2])
+            append!(A_V, A_V[inds_2])
+
+            append!(A_I, fill(rows[2], length(inds_1)))
+            append!(A_J, A_J[inds_1])
+            append!(A_V, -A_V[inds_1])
+
+            b1 = b_new[rows[1]]
+            b2 = b_new[rows[2]]
+            b_new[rows[1]] = sqrt2inv*(b1 + b2)
+            b_new[rows[2]] = sqrt2inv*(-b1 + b2)
+        end
     end
-
+    
     if solve_relax
         # Preprocess to tighten bounds on binary and integer variables in conic relaxation
         # Detect isolated row nonzeros with nonzero b
