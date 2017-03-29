@@ -1,6 +1,6 @@
 # Pajarito
 
-Pajarito (**P**olyhedral **A**pproximation in **J**ulia: **A**utomatic **R**eformulations for **I**n**T**eger **O**ptimization) is a mixed-integer convex programming (MICP) solver package written in [Julia](http://julialang.org/).
+Pajarito (**P**olyhedral **A**pproximation in **J**ulia: **A**utomatic **R**eformulations for **I**n**T**eger **O**ptimization) is a **mixed-integer convex programming** (MICP) solver package written in [Julia](http://julialang.org/).
 
 MICP problems are convex except for restrictions that some variables take binary or integer values. Pajarito supports both **mixed-integer conic programming**, which encodes nonlinearities using a small number of predefined cones, and more traditional **convex mixed-integer nonlinear programming**, which encodes nonlinearities with smooth functions and uses their derivatives.
 
