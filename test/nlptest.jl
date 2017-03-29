@@ -18,14 +18,22 @@ function solve_jump(testname, m, redirect)
             redirect_stdout(io)
             redirect_stderr(io)
 
-            status = solve(m)
+            try
+                status = solve(m)
+            catch e
+                status = e
+            end
 
             flush(io)
             redirect_stdout(out)
             redirect_stderr(err)
         end
     else
-        status = solve(m)
+        try
+            status = solve(m)
+        catch e
+            status = e
+        end
     end
     flush(STDOUT)
     flush(STDERR)
@@ -138,7 +146,9 @@ function run_nlp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
         @constraint(m, 3x + 2y + 10 <= 20)
         @NLconstraint(m, 8 <= x^2 <= 10)
 
-        @test_throws ErrorException solve_jump(testname, m, redirect)
+        status = solve_jump(testname, m, redirect)
+
+        @test isa(status, ErrorException)
     end
 
     testname = "Optimal"
@@ -213,7 +223,9 @@ function run_nlp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
         @NLconstraint(m, x^2 <= 5)
         @NLconstraint(m, exp(y) + x <= 7)
 
-        @test_throws ErrorException solve_jump(testname, m, redirect)
+        status = solve_jump(testname, m, redirect)
+
+        @test isa(status, ErrorException)
     end
 
     testname = "Maximization"
