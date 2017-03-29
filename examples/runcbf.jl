@@ -25,9 +25,7 @@ solver = PajaritoSolver(
     mip_solver_drives=mip_solver_drives,
     mip_solver=mip_solver,
     cont_solver=cont_solver,
-    log_level=3,
-    soc_in_mip=true,
-    solve_relax=false,
+    log_level=3
     )
 
 dat = readcbfdata(ARGS[1])
@@ -38,5 +36,5 @@ MathProgBase.setvartype!(m, vartypes)
 MathProgBase.optimize!(m)
 
 @show MathProgBase.getsolvetime(m)
-# @show MathProgBase.getsolution(m)
+@show MathProgBase.getsolution(m)
 @show MathProgBase.getobjval(m)
