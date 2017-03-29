@@ -18,10 +18,10 @@ function solve_jump(testname, m, redirect)
             redirect_stdout(io)
             redirect_stderr(io)
 
-            try
-                status = solve(m)
+            status = try
+                solve(m)
             catch e
-                status = e
+                e
             end
 
             flush(io)
@@ -29,10 +29,10 @@ function solve_jump(testname, m, redirect)
             redirect_stderr(err)
         end
     else
-        try
-            status = solve(m)
+        status = try
+            solve(m)
         catch e
-            status = e
+            e
         end
     end
     flush(STDOUT)
