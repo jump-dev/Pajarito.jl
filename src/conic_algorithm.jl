@@ -642,7 +642,7 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
 
     num_con_new = length(b_orig)
     b_new = b_orig
-    cone_con_new = Tuple{Symbol,Vector{Int}}[(spec, collect(inds)) for (spec, inds) in cone_con_orig]
+    cone_con_new = Tuple{Symbol,Vector{Int}}[(spec, vec(collect(inds))) for (spec, inds) in cone_con_orig]
 
     num_var_new = 0
     cone_var_new = Tuple{Symbol,Vector{Int}}[]
@@ -771,7 +771,7 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
             b_new[rows[2]] = sqrt2inv*(-b1 + b2)
         end
     end
-    
+
     if solve_relax
         # Preprocess to tighten bounds on binary and integer variables in conic relaxation
         # Detect isolated row nonzeros with nonzero b
