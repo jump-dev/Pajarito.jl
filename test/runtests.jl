@@ -28,7 +28,7 @@ solvers["MISOCP"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 
 tol_int = 1e-8
 tol_feas = 1e-7
-tol_gap = 1e-7
+tol_gap = 0.0
 
 if grb
     solvers["MILP"]["Gurobi"] = solvers["MISOCP"]["Gurobi"] = Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=tol_int, FeasibilityTol=tol_feas, MIPGap=tol_gap)
@@ -40,9 +40,9 @@ if cpx
     end
 end
 if glp
-    solvers["MILP"]["GLPK"] = GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, tol_obj=tol_gap)
+    solvers["MILP"]["GLPK"] = GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, mip_gap=tol_gap)
     if eco
-        solvers["MISOCP"]["Paj(GLPK+ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=1e-8, tol_bnd=1e-8, tol_obj=1e-10), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-6)
+        solvers["MISOCP"]["Paj(GLPK+ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=1e-8, tol_bnd=1e-8, mip_gap=1e-10), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-6)
     end
 end
 if cbc
