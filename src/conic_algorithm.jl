@@ -1389,11 +1389,8 @@ function solve_iterative!(m)
             set_best_soln!(m, m.best_int, m.best_cont)
         else
             # For MIP solvers that accept warm starts without checking feasibility, set all variables to NaN
-            for var in m.x_int
-                setvalue(var, NaN)
-            end
-            for var in m.x_cont
-                setvalue(var, NaN)
+            for i in 1:MathProgBase.numvar(m.model_mip)
+                setvalue(JuMP.Variable(m.model_mip,i), NaN)
             end
         end
     end
