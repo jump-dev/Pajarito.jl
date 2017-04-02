@@ -36,19 +36,19 @@ end
 if cpx
     solvers["MILP"]["CPLEX"] = solvers["MISOCP"]["CPLEX"] = CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=tol_int, CPX_PARAM_EPRHS=tol_feas, CPX_PARAM_EPGAP=tol_gap)
     if mos
-        solvers["MISOCP"]["Paj(CPLEX+MOSEK)"] = PajaritoSolver(mip_solver=CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-8, CPX_PARAM_EPGAP=1e-10), cont_solver=Mosek.MosekSolver(LOG=0), log_level=0, rel_gap=1e-6)
+        solvers["MISOCP"]["Paj(CPLEX+MOSEK)"] = PajaritoSolver(mip_solver=CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=1e-8, CPX_PARAM_EPRHS=1e-8, CPX_PARAM_EPGAP=tol_gap), cont_solver=Mosek.MosekSolver(LOG=0), log_level=0, rel_gap=1e-6)
     end
 end
 if glp
     solvers["MILP"]["GLPK"] = GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, mip_gap=tol_gap)
     if eco
-        solvers["MISOCP"]["Paj(GLPK+ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=1e-8, tol_bnd=1e-8, mip_gap=1e-10), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-6)
+        solvers["MISOCP"]["Paj(GLPK+ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=1e-8, tol_bnd=1e-8, mip_gap=tol_gap), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-6)
     end
 end
 if cbc
     solvers["MILP"]["CBC"] = Cbc.CbcSolver(logLevel=0, integerTolerance=tol_int, primalTolerance=tol_feas, ratioGap=tol_gap, check_warmstart=false)
     if eco
-        solvers["MISOCP"]["Paj(CBC+ECOS)"] = PajaritoSolver(mip_solver=Cbc.CbcSolver(logLevel=0, integerTolerance=1e-8, primalTolerance=1e-8, ratioGap=1e-10, check_warmstart=false), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-6)
+        solvers["MISOCP"]["Paj(CBC+ECOS)"] = PajaritoSolver(mip_solver=Cbc.CbcSolver(logLevel=0, integerTolerance=1e-8, primalTolerance=1e-8, ratioGap=tol_gap, check_warmstart=false), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-6)
     end
 end
 # if try_import(:SCIP)
