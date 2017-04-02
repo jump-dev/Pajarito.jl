@@ -726,7 +726,7 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
     end
 
     if has_rsoc
-        row_to_nzind = map(_ -> Int[], 1:num_con_new)
+        row_to_nzind = map(t -> Int[], 1:num_con_new)
         for (ind, i) in enumerate(A_I)
             push!(row_to_nzind[i], ind)
         end
@@ -734,21 +734,6 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
         for rows in socr_rows
             inds_1 = row_to_nzind[rows[1]]
             inds_2 = row_to_nzind[rows[2]]
-
-            # Add new constraint cones for y >= 0, z >= 0
-            push!(cone_con_new, (:NonNeg, collect((num_con_new + 1):(num_con_new + 2))))
-
-            append!(A_I, fill((num_con_new + 1), length(inds_1)))
-            append!(A_J, A_J[inds_1])
-            append!(A_V, A_V[inds_1])
-            push!(b_new, b_new[rows[1]])
-
-            append!(A_I, fill((num_con_new + 2), length(inds_2)))
-            append!(A_J, A_J[inds_2])
-            append!(A_V, A_V[inds_2])
-            push!(b_new, b_new[rows[2]])
-
-            num_con_new += 2
 
             # Use old constraint cone SOCRotated for (sqrt2inv*(y+z),sqrt2inv*(-y+z),x) in SOC
             for ind in inds_1
@@ -2236,11 +2221,11 @@ function print_finish(m::PajaritoConicModel)
             @printf "\n%-16s | %-9s | %-10s\n" "Cone" "Variable" "Constraint"
             for (v, c, name) in zip(var_inf, con_inf, ("Linear", "Second order", "Rotated S.O.", "Primal expon.", "Pos. semidef."))
                 if isfinite(v) && isfinite(c)
-                    @printf "%16s | %9.2e | %9.2e\n" name -v -c
+                    @printf "%16s | %9.2e | %9.2e\n" name v c
                 elseif isfinite(v)
-                    @printf "%16s | %9.2e | %9s\n" name -v "NA"
+                    @printf "%16s | %9.2e | %9s\n" name v "NA"
                 elseif isfinite(c)
-                    @printf "%16s | %9s | %9.2e\n" name "NA" -c
+                    @printf "%16s | %9s | %9.2e\n" name "NA" c
                 end
             end
 
@@ -2291,8 +2276,10 @@ function calc_infeas(cones, vals)
         elseif cone == :SOC
             viol_soc = max(viol_soc, vecnorm(vals[idx[j]] for j in 2:length(idx)) - vals[idx[1]])
         elseif cone == :SOCRotated
-            # (y,z,x) in RSOC <=> (y+z,-y+z,sqrt2*x) in SOC, y >= 0, z >= 0
-            viol_rot = max(viol_rot, sqrt((vals[idx[1]] - vals[idx[2]])^2 + 2. * sumabs2(vals[idx[j]] for j in 3:length(idx))) - (vals[idx[1]] + vals[idx[2]]))
+            # (y,z,x) in RSOC <=> (sqrt2inv*(y+z),sqrt2inv*(-y+z),x) in SOC, y >= 0, z >= 0
+            t = sqrt2inv*(vals[idx[1]] + vals[idx[2]])
+            usqr = 1/2*(-vals[idx[1]] + vals[idx[2]])^2 + sumabs2(vals[idx[j]] for j in 3:length(idx))
+            viol_rot = max(viol_rot, sqrt(usqr) - t)
         elseif cone == :ExpPrimal
             viol_exp = max(viol_exp, vals[idx[2]]*exp(vals[idx[1]]/vals[idx[2]]) - vals[idx[3]])
         elseif cone == :SDP
