@@ -2221,11 +2221,11 @@ function print_finish(m::PajaritoConicModel)
             @printf "\n%-16s | %-9s | %-10s\n" "Cone" "Variable" "Constraint"
             for (v, c, name) in zip(var_inf, con_inf, ("Linear", "Second order", "Rotated S.O.", "Primal expon.", "Pos. semidef."))
                 if isfinite(v) && isfinite(c)
-                    @printf "%16s | %9.2e | %9.2e\n" name -v -c
+                    @printf "%16s | %9.2e | %9.2e\n" name v c
                 elseif isfinite(v)
-                    @printf "%16s | %9.2e | %9s\n" name -v "NA"
+                    @printf "%16s | %9.2e | %9s\n" name v "NA"
                 elseif isfinite(c)
-                    @printf "%16s | %9s | %9.2e\n" name "NA" -c
+                    @printf "%16s | %9s | %9.2e\n" name "NA" c
                 end
             end
 
