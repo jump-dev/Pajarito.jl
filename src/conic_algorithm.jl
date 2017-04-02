@@ -1879,7 +1879,10 @@ function clean_zeros!{N}(m, data::Array{Float64,N})
 
     if max_nz > m.cut_zero_tol
         if max_nz/min_nz > 1e7
-            warn("Numerically unstable dual vector encountered (maxabs = $max_nz, minabs = $min_nz)\n")
+            if logs[:n_unst_dual] == 0
+                warn("The conic solver is returning numerically unstable conic duals\n")
+            end
+            logs[:n_unst_dual] += 1
         end
         return true
     else
@@ -2103,6 +2106,7 @@ function create_logs!(m)
     logs[:n_feas_mip] = 0   # Number of times get a new feasible solution from MIP solver
     logs[:n_heur] = 0       # Number of times heuristic is called in MSD
     logs[:n_add] = 0        # Number of times add new solution to MIP solver
+    logs[:n_unst_dual] = 0  # Number of numerically unstable cone duals encountered
 
     # Cuts counters
     for cone in (:SOC, :ExpPrimal, :SDP)
@@ -2211,7 +2215,8 @@ function print_finish(m::PajaritoConicModel)
             @printf " - Heuristic callbacks  = %5d\n" m.logs[:n_heur]
             @printf " -- Solutions passed    = %5d\n" m.logs[:n_add]
         end
-        @printf "Solution returned by %s solver\n" (m.is_best_conic ? "conic" : "MIP")
+
+        @printf "\nSolution returned by %s solver\n" (m.is_best_conic ? "conic" : "MIP")
     end
 
     if ll >= 2
@@ -2223,6 +2228,8 @@ function print_finish(m::PajaritoConicModel)
                 @printf "%16s | %9d | %9d | %9d\n" name log[:n_relax] log[:n_viol_total] log[:n_nonviol_total]
             end
         end
+
+        @printf "\n%d numerically unstable cone duals encountered\n" m.logs[:n_unst_dual]
 
         if isfinite(m.best_obj) && !any(isnan, m.final_soln)
             var_inf = calc_infeas(m.cone_var_orig, m.final_soln)
