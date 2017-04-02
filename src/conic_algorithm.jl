@@ -1879,10 +1879,10 @@ function clean_zeros!{N}(m, data::Array{Float64,N})
 
     if max_nz > m.cut_zero_tol
         if max_nz/min_nz > 1e7
-            if logs[:n_unst_dual] == 0
+            if m.logs[:n_unst_dual] == 0
                 warn("Encountering numerically unstable cone dual vectors\n")
             end
-            logs[:n_unst_dual] += 1
+            m.logs[:n_unst_dual] += 1
         end
         return true
     else
