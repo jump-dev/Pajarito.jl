@@ -305,6 +305,32 @@ function run_expsoc(mip_solver_drives, mip_solver, cont_solver, log_level, redir
         @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 
+    testname = "ExpSOC optimal 2"
+    probname = "expsoc_optimal2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, -18, atol=TOL)
+        @test isapprox(objbound, -18, atol=TOL)
+        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
+    end
+
+    testname = "ExpSOC optimal 3"
+    probname = "expsoc_optimal3"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, -7, atol=TOL)
+        @test isapprox(objbound, -7, atol=TOL)
+        @test isapprox(sol[1:2], [1, 2], atol=TOL)
+    end
+
     testname = "No disagg, no L1"
     probname = "expsoc_optimal"
     @testset "$testname" begin
@@ -317,19 +343,6 @@ function run_expsoc(mip_solver_drives, mip_solver, cont_solver, log_level, redir
         @test isapprox(objval, -7.609438, atol=TOL)
         @test isapprox(objbound, -7.609438, atol=TOL)
         @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
-    end
-
-    testname = "Cone composition"
-    probname = "expsoc_optimal2"
-    @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
-
-        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-
-        @test status == :Optimal
-        @test isapprox(objval, -18, atol=TOL)
-        @test isapprox(objbound, -18, atol=TOL)
-        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
     end
 
     testname = "Exp large (gate sizing)"
