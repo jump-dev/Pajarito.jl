@@ -1624,7 +1624,7 @@ function solve_subp_add_subp_cuts!(m)
             if ray_value < -m.cut_zero_tol
                 if m.scale_subp_cuts
                     # Rescale by number of cones / value of ray
-                    scale!(dual_conic, m.new_scale_subp_factor/ray_value)
+                    scale!(dual_conic, -m.new_scale_subp_factor/ray_value)
                 end
             else
                 warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (please submit an issue)\n")
