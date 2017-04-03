@@ -98,28 +98,28 @@ println()
     alg = (msd ? "MSD" : "Iter")
 
     @testset "MILP solver - $mipname" for (mipname, mip) in solvers["MILP"]
-        # @testset "NLP models, NLP solver - $conname" for (conname, con) in solvers["NLP"]
-        #     println("\nNLP models, NLP solver: $alg, $mipname, $conname")
-        #     run_qp(msd, mip, con, ll, redirect)
-        #     run_nlp(msd, mip, con, ll, redirect)
-        # end
-        #
-        # @testset "LPQP models, SOC solver - $conname" for (conname, con) in solvers["SOC"]
-        #     println("\nLPQP models, SOC solver: $alg, $mipname, $conname")
-        #     run_qp(msd, mip, con, ll, redirect)
-        # end
-        #
-        # @testset "Exp+SOC models, NLP solver - $conname" for (conname, con) in solvers["NLP"]
-        #     println("\nExp+SOC models, NLP solver: $alg, $mipname, $conname")
-        #     run_soc(msd, mip, con, ll, redirect)
-        #     run_expsoc(msd, mip, con, ll, redirect)
-        # end
-        #
-        # @testset "SOC models/solver - $conname" for (conname, con) in solvers["SOC"]
-        #     println("\nSOC models/solver: $alg, $mipname, $conname")
-        #     run_soc(msd, mip, con, ll, redirect)
-        #     run_soc_conic(msd, mip, con, ll, redirect)
-        # end
+        @testset "NLP models, NLP solver - $conname" for (conname, con) in solvers["NLP"]
+            println("\nNLP models, NLP solver: $alg, $mipname, $conname")
+            run_qp(msd, mip, con, ll, redirect)
+            run_nlp(msd, mip, con, ll, redirect)
+        end
+
+        @testset "LPQP models, SOC solver - $conname" for (conname, con) in solvers["SOC"]
+            println("\nLPQP models, SOC solver: $alg, $mipname, $conname")
+            run_qp(msd, mip, con, ll, redirect)
+        end
+
+        @testset "Exp+SOC models, NLP solver - $conname" for (conname, con) in solvers["NLP"]
+            println("\nExp+SOC models, NLP solver: $alg, $mipname, $conname")
+            run_soc(msd, mip, con, ll, redirect)
+            run_expsoc(msd, mip, con, ll, redirect)
+        end
+
+        @testset "SOC models/solver - $conname" for (conname, con) in solvers["SOC"]
+            println("\nSOC models/solver: $alg, $mipname, $conname")
+            run_soc(msd, mip, con, ll, redirect)
+            run_soc_conic(msd, mip, con, ll, redirect)
+        end
 
         @testset "Exp+SOC models/solver - $conname" for (conname, con) in solvers["Exp+SOC"]
             println("\nExp+SOC models/solver: $alg, $mipname, $conname")
