@@ -62,6 +62,14 @@ P = minimize(-3x - y,
 ConicBenchmarkUtilities.convex_to_cbf(P, name, joinpath(pwd(), "$name.cbf"))
 
 
+name = "expsoc_optimal3"
+x = Variable(1, :Int)
+y = Variable(1, Positive())
+P = minimize(-3x - y,
+    x + exp((y+1)^2 - 2x) <= 3)
+ConicBenchmarkUtilities.convex_to_cbf(P, name, joinpath(pwd(), "$name.cbf"))
+
+
 name = "sdpsoc_optimal"
 x = Variable(1, :Int)
 y = Variable(1, Positive())
