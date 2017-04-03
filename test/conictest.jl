@@ -14,6 +14,9 @@ function solve_cbf(testname, probname, solver, redirect)
 
     dat = ConicBenchmarkUtilities.readcbfdata("cbf/$(probname).cbf")
     (c, A, b, con_cones, var_cones, vartypes, sense, objoffset) = ConicBenchmarkUtilities.cbftompb(dat)
+    if sense == :Max
+        c = -c
+    end
     flush(STDOUT)
     flush(STDERR)
 
@@ -44,8 +47,13 @@ function solve_cbf(testname, probname, solver, redirect)
 
     status = MathProgBase.status(m)
     time = MathProgBase.getsolvetime(m)
-    objval = MathProgBase.getobjval(m)
-    objbound = MathProgBase.getobjbound(m)
+    if sense == :Max
+        objval = -MathProgBase.getobjval(m)
+        objbound = -MathProgBase.getobjbound(m)
+    else
+        objval = MathProgBase.getobjval(m)
+        objbound = MathProgBase.getobjbound(m)
+    end
     sol = MathProgBase.getsolution(m)
     @printf ":%-16s %5.2f s\n" status toq()
     flush(STDOUT)
@@ -439,6 +447,20 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
     end
 
+    testname = "No primal cuts assist"
+    probname = "expsoc_optimal2"
+    @testset "$testname" begin
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
+            prim_cuts_assist=false, init_exp=false, init_soc_one=false, init_soc_inf=false)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, -18, atol=TOL)
+        @test isapprox(objbound, -18, atol=TOL)
+        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
+    end
+
     testname = "Primal cuts always"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
@@ -595,11 +617,11 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    testname = "Primal cuts assist"
+    testname = "No primal cuts assist"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            prim_cuts_assist=true)
+            prim_cuts_assist=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
