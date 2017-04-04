@@ -1310,8 +1310,8 @@ function solve_iterative!(m)
             m.best_bound = mip_obj_bound
         end
 
-        # If solver doesn't have a feasible solution, proceed to next optimal solve
-        if !isfinite(getobjectivevalue(m.model_mip))
+        # If solve was not an optimal solve and MIP solver doesn't have a feasible solution, proceed to next optimal solve
+        if (count_subopt > 0) && !isfinite(getobjectivevalue(m.model_mip))
             count_subopt = m.mip_subopt_count
             warn("MIP objective is NaN, proceeding to next optimal MIP solve\n")
             continue
@@ -1355,8 +1355,6 @@ function solve_mip_driven!(m)
         setsolver(m.model_mip, m.mip_solver)
     end
 
-    is_optimal = false
-
     # Add lazy cuts callback to add dual and primal conic cuts
     function callback_lazy(cb)
         m.cb_lazy = cb
@@ -1371,7 +1369,7 @@ function solve_mip_driven!(m)
         # Solve new conic subproblem, update incumbent solution if feasible
         (is_repeat, is_viol_subp) = solve_subp_add_subp_cuts!(m)
 
-        if !is_viol_subp || !m.prim_cuts_always
+        if !is_viol_subp || m.prim_cuts_always
             # Check feasibility of current solution, try to add violated primal cuts if using primal cuts for convergence assistance
             check_feas_add_prim_cuts!(m, m.prim_cuts_assist)
         end
@@ -1381,7 +1379,6 @@ function solve_mip_driven!(m)
             m.gap_rel_opt = (m.best_obj - m.best_bound) / (abs(m.best_obj) + 1e-5)
             if m.gap_rel_opt < m.rel_gap
                 # Gap condition satisfied, stop MIP solve
-                is_optimal = true
                 return JuMP.StopTheSolver
             end
         end
@@ -1419,7 +1416,7 @@ function solve_mip_driven!(m)
     check_feas_add_prim_cuts!(m, false)
 
     # Check why MIP solver stopped and return appropriate OA status
-    if is_optimal || check_gap!(m)
+    if check_gap!(m)
         return :Optimal
     elseif status_mip == :UserLimit
         return :UserLimit
