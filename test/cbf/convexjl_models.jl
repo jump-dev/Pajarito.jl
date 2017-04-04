@@ -19,16 +19,6 @@ P = minimize(-3x,
 ConicBenchmarkUtilities.convex_to_cbf(P, name, joinpath(pwd(), "$name.cbf"))
 
 
-name = "soc_unbounded"
-x = Variable(1, :Int)
-t = Variable(1, :Int)
-P = minimize(3x - t,
-    x <= 10,
-    x^2 <= 2t,
-    t >= 5)
-ConicBenchmarkUtilities.convex_to_cbf(P, name, joinpath(pwd(), "$name.cbf"))
-
-
 name = "exp_optimal"
 x = Variable(1, :Int)
 y = Variable(1, Positive())
@@ -79,18 +69,6 @@ P = maximize(3x + y - z[1,1],
     3x + 2y <= 10,
     x^2 <= 4,
     z[1,2] >= 1,
-    y >= z[2,2])
-ConicBenchmarkUtilities.convex_to_cbf(P, name, joinpath(pwd(), "$name.cbf"))
-
-
-name = "sdpsoc_unbounded"
-x = Variable(1, :Int)
-y = Variable(1, Positive())
-z = Semidefinite(2)
-P = maximize(z[1,1] - x,
-    x >= 0,
-    3x + 2y <= 10,
-    x^2 <= 4,
     y >= z[2,2])
 ConicBenchmarkUtilities.convex_to_cbf(P, name, joinpath(pwd(), "$name.cbf"))
 
