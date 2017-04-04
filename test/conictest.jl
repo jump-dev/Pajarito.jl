@@ -164,7 +164,7 @@ function run_soc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, re
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        @test time < 30.
+        @test time < 80.
         @test status == :UserLimit
     end
 
