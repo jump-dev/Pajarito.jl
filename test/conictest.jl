@@ -87,16 +87,6 @@ function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
         @test status == :Infeasible
     end
 
-    testname = "Unbounded"
-    probname = "soc_unbounded"
-    @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
-
-        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-
-        @test status == :Unbounded
-    end
-
     testname = "Optimal SOCRot"
     probname = "socrot_optimal"
     @testset "$testname" begin
@@ -174,7 +164,7 @@ function run_soc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, re
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        @test time < 60.
+        @test time < 30.
         @test status == :UserLimit
     end
 
@@ -540,16 +530,6 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
-    testname = "Unbounded"
-    probname = "sdpsoc_unbounded"
-    @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
-
-        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-
-        @test status == :Unbounded
-    end
-
     testname = "Infeasible"
     probname = "sdpsoc_infeasible"
     @testset "$testname" begin
@@ -775,7 +755,7 @@ function run_expsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
     end
 
     testname = "SOC in MIP, suboptimal MIP"
-    probname = "expsoc_optimal2"
+    probname = "expsoc_optimal"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
             soc_in_mip=true, mip_subopt_count=3, mip_subopt_solver=mip_solver)
@@ -783,9 +763,9 @@ function run_expsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
-        @test isapprox(objval, -18, atol=TOL)
-        @test isapprox(objbound, -18, atol=TOL)
-        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
+        @test isapprox(objval, -7.609438, atol=TOL)
+        @test isapprox(objbound, -7.609438, atol=TOL)
+        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 
     testname = "SOC in MIP, primal only"
@@ -803,7 +783,7 @@ function run_expsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
     end
 
     testname = "SOC in MIP, no conic"
-    probname = "expsoc_optimal2"
+    probname = "expsoc_optimal"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
             soc_in_mip=true, prim_cuts_only=true, solve_relax=false, solve_subp=false)
@@ -811,9 +791,9 @@ function run_expsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
-        @test isapprox(objval, -18, atol=TOL)
-        @test isapprox(objbound, -18, atol=TOL)
-        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
+        @test isapprox(objval, -7.609438, atol=TOL)
+        @test isapprox(objbound, -7.609438, atol=TOL)
+        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 end
 
@@ -839,17 +819,6 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
         @test isapprox(objval, -7.5, atol=TOL)
         @test isapprox(objbound, -7.5, atol=TOL)
         @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
-    end
-
-    testname = "SOC in MIP unbounded"
-    probname = "sdpsoc_unbounded"
-    @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            soc_in_mip=true)
-
-        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-
-        @test status == :Unbounded
     end
 
     testname = "SOC in MIP infeasible"
