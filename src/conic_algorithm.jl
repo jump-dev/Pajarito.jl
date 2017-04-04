@@ -593,15 +593,15 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         status_oa = m.mip_solver_drives ? solve_mip_driven!(m) : solve_iterative!(m)
 
         if (status_oa == :Infeasible) || (status_oa == :InfeasibleOrUnbounded)
-            warn("MIP solver returned status $status_mip\n")
+            warn("MIP solver returned status $status_oa\n")
             m.status = :Infeasible
         elseif status_oa == :Unbounded
             if !m.solve_relax
-                warn("MIP solver returned status $status_mip; try using the conic relaxation cuts (set solve_relax = true)\n")
+                warn("MIP solver returned status $status_oa; try using the conic relaxation cuts (set solve_relax = true)\n")
             elseif m.status == :SolvedRelax
-                warn("MIP solver returned status $status_mip but the conic relaxation solve succeeded; try tightening the conic solver tolerances (or submit an issue)\n")
+                warn("MIP solver returned status $status_oa but the conic relaxation solve succeeded; try tightening the conic solver tolerances (or submit an issue)\n")
             else
-                warn("MIP solver returned status $status_mip and the conic relaxation solve failed; use a conic solver that succeeds on the relaxation (or submit an issue)\n")
+                warn("MIP solver returned status $status_oa and the conic relaxation solve failed; use a conic solver that succeeds on the relaxation (or submit an issue)\n")
             end
             m.status = :UnboundedOA
         elseif (status_oa == :UserLimit) || (status_oa == :Optimal)
@@ -616,7 +616,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 m.final_soln[keep_cols] = soln_new
             end
         else
-            warn("MIP solver returned status $status_mip, which Pajarito does not handle\n")
+            warn("MIP solver returned status $status_oa, which Pajarito does not handle\n")
             m.status = :MIPFailure
         end
     end
