@@ -1310,11 +1310,16 @@ function solve_iterative!(m)
             m.best_bound = mip_obj_bound
         end
 
-        # If solve was not an optimal solve and MIP solver doesn't have a feasible solution, finish iteration and make next solve optimal
-        if (count_subopt > 0) && !isfinite(getobjectivevalue(m.model_mip))
-            count_subopt = m.mip_subopt_count
-            warn("MIP objective is NaN, proceeding to next optimal MIP solve\n")
-            continue
+        if !isfinite(getobjectivevalue(m.model_mip))
+            if count_subopt > 0
+                # Solve was not an optimal solve and MIP solver doesn't have a feasible solution, finish iteration and make next solve optimal
+                count_subopt = m.mip_subopt_count
+                warn("MIP objective is NaN, proceeding to next optimal MIP solve\n")
+                continue
+            else
+                # Hit user limit, must end
+                return status_mip
+            end
         end
 
         # Try to solve new conic subproblem and add subproblem cuts, update incumbent solution if feasible conic solution
@@ -1404,9 +1409,19 @@ function solve_mip_driven!(m)
         m.best_bound = mip_obj_bound
     end
 
-    # Update incumbent if MIP solution is conic feasible (with relaxed tolerance, as MIP solver may accept near-feasible solutions)
-    m.prim_cut_feas_tol *= 10.
-    check_feas_add_prim_cuts!(m, false)
+    if status_mip == :Optimal
+        # Update incumbent if MIP solution is conic feasible (with relaxed tolerance, as MIP solver may accept near-feasible solutions)
+        soln_int = getvalue(m.x_int)
+        soln_cont = getvalue(m.x_cont)
+        obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_cont)
+        if obj_full < m.best_obj
+            # Save new incumbent info
+            m.best_obj = obj_full
+            m.best_int = soln_int
+            m.best_cont = soln_cont
+            m.is_best_conic = false
+        end
+    end
 
     # Check why MIP solver stopped and return appropriate OA status
     if check_gap!(m)
