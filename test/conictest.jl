@@ -379,7 +379,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test :SOCRotated in cones
         @test :ExpPrimal in cones
     end
-
+    
     testname = "ExpSOC no init cuts"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
@@ -426,7 +426,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     probname = "expsoc_optimal2"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            viol_cuts_only=true, init_exp=false, init_soc_one=false, init_soc_inf=false)
+            viol_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -440,7 +440,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     probname = "expsoc_optimal2"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            scale_subp_cuts=false, init_exp=false, init_soc_one=false, init_soc_inf=false)
+            scale_subp_cuts=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -454,7 +454,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     probname = "expsoc_optimal2"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            prim_cuts_assist=false, init_exp=false, init_soc_one=false, init_soc_inf=false)
+            prim_cuts_assist=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -468,7 +468,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     probname = "expsoc_optimal2"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            prim_cuts_always=true, init_exp=false, init_soc_one=false, init_soc_inf=false)
+            prim_cuts_always=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -482,7 +482,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     probname = "expsoc_optimal2"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            prim_cuts_only=true, init_exp=false, init_soc_one=false, init_soc_inf=false)
+            prim_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
