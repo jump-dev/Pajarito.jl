@@ -1404,6 +1404,9 @@ function solve_mip_driven!(m)
         m.best_bound = mip_obj_bound
     end
 
+    # Update incumbent if MIP solution is conic feasible
+    check_feas_add_prim_cuts!(m, false)
+
     # Check why MIP solver stopped and return appropriate OA status
     if check_gap!(m)
         return :Optimal
