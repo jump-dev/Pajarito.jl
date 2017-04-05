@@ -1317,13 +1317,11 @@ function solve_iterative!(m)
             continue
         end
 
-        # Solve new conic subproblem, add subproblem cuts, update incumbent solution if feasible conic solution
+        # Try to solve new conic subproblem and add subproblem cuts, update incumbent solution if feasible conic solution
         is_viol_subp = solve_subp_add_subp_cuts!(m)
 
-        if (m.prim_cuts_assist && !is_viol_subp) || m.prim_cuts_always
-            # Add violated primal cuts or update incumbent solution if feasible MIP solution
-            is_viol_prim = check_feas_add_prim_cuts!(m)
-        end
+        # Try to add primal cuts on MIP solution, update incumbent if feasible
+        is_viol_prim = check_feas_add_prim_cuts!(m, (m.prim_cuts_assist && !is_viol_subp) || m.prim_cuts_always)
 
         if is_viol_subp || is_viol_prim
             # Violated cuts added, so finish iteration
@@ -1362,13 +1360,11 @@ function solve_mip_driven!(m)
             m.best_bound = mip_obj_bound
         end
 
-        # Solve new conic subproblem, add subproblem cuts, update incumbent solution if feasible conic solution
+        # Try to solve new conic subproblem and add subproblem cuts, update incumbent solution if feasible conic solution
         is_viol_subp = solve_subp_add_subp_cuts!(m)
 
-        if (m.prim_cuts_assist && !is_viol_subp) || m.prim_cuts_always
-            # Add violated primal cuts or update incumbent solution if feasible MIP solution
-            check_feas_add_prim_cuts!(m)
-        end
+        # Try to add primal cuts on MIP solution, update incumbent if feasible
+        is_viol_prim = check_feas_add_prim_cuts!(m, (m.prim_cuts_assist && !is_viol_subp) || m.prim_cuts_always)
 
         # Update gap if best bound and best objective are finite
         if isfinite(m.best_obj) && isfinite(m.best_bound)
@@ -1692,9 +1688,10 @@ function add_subp_cuts!(m, dual_conic, v_idxs_soc, r_idx_exp, s_idx_exp, v_idxs_
     return is_viol_subp
 end
 
-# Check cone infeasibilities of current solution, add K* cuts from current solution for infeasible cones
-function check_feas_add_prim_cuts!(m)
+# Check cone infeasibilities of current solution, add K* cuts from current solution for infeasible cones, if feasible check new incumbent
+function check_feas_add_prim_cuts!(m, add_cuts::Bool)
     tic()
+    is_infeas = false
     is_viol_prim = false
 
     for n in 1:m.num_soc
@@ -1702,7 +1699,8 @@ function check_feas_add_prim_cuts!(m)
         # Dual is (1, -1/norm(v)*v)
         v_vals = getvalue(m.v_soc[n])
         if (vecnorm(v_vals) - getvalue(m.t_soc[n])) > m.prim_cut_feas_tol
-            if add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], -1/vecnorm(v_vals)*v_vals)
+            is_infeas = true
+            if add_cuts && add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], -1/vecnorm(v_vals)*v_vals)
                 is_viol_prim = true
             end
         end
@@ -1714,8 +1712,9 @@ function check_feas_add_prim_cuts!(m)
         r_val = getvalue(m.r_exp[n])
         s_val = getvalue(m.s_exp[n])
         if (s_val*exp(r_val/s_val) - getvalue(m.t_exp[n])) > m.prim_cut_feas_tol
+            is_infeas = true
             ers = exp(r_val/s_val)
-            if add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], -ers, ers*(r_val/s_val-1))
+            if add_cuts && add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], -ers, ers*(r_val/s_val-1))
                 is_viol_prim = true
             end
         end
@@ -1726,7 +1725,8 @@ function check_feas_add_prim_cuts!(m)
         # Dual is sum_{j: lambda_j < 0} lamda_j V_j V_j'
         V_eig = eigfact!(Symmetric(getvalue(m.V_sdp[n])), -Inf, -m.prim_cut_feas_tol)
         if !isempty(V_eig[:values])
-            if add_cut_sdp!(m, m.V_sdp[n], V_eig[:vectors])
+            is_infeas = true
+            if add_cuts && add_cut_sdp!(m, m.V_sdp[n], V_eig[:vectors])
                 is_viol_prim = true
             end
         end
@@ -1734,8 +1734,8 @@ function check_feas_add_prim_cuts!(m)
 
     m.logs[:prim_cuts] += toq()
 
-    if !is_viol_prim
-        # No violated cuts added, but tried to add primal cuts, so accept MIP solution as feasible and check if new incumbent
+    if (add_cuts && !is_viol_prim) || (!add_cuts && !is_infeas)
+        # Accept MIP solution as feasible and check if new incumbent
         m.logs[:n_feas_mip] += 1
         soln_int = getvalue(m.x_int)
         soln_cont = getvalue(m.x_cont)

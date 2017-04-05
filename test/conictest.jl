@@ -379,7 +379,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test :SOCRotated in cones
         @test :ExpPrimal in cones
     end
-
+    
     testname = "ExpSOC no init cuts"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
