@@ -1299,7 +1299,7 @@ function solve_iterative!(m)
         m.logs[:mip_solve] += toq()
         m.logs[:n_iter] += 1
 
-        # Finish if MIP didn't stop because of optimal or user limit
+        # End if MIP didn't stop because of optimal or user limit
         if (status_mip != :UserLimit) && (status_mip != :Optimal)
             return status_mip
         end
@@ -1310,40 +1310,36 @@ function solve_iterative!(m)
             m.best_bound = mip_obj_bound
         end
 
-        # If solve was not an optimal solve and MIP solver doesn't have a feasible solution, proceed to next optimal solve
+        # If solve was not an optimal solve and MIP solver doesn't have a feasible solution, finish iteration and make next solve optimal
         if (count_subopt > 0) && !isfinite(getobjectivevalue(m.model_mip))
             count_subopt = m.mip_subopt_count
             warn("MIP objective is NaN, proceeding to next optimal MIP solve\n")
             continue
         end
 
-        # Solve new conic subproblem, update incumbent solution if feasible
-        (is_repeat, is_viol_subp) = solve_subp_add_subp_cuts!(m)
+        # Solve new conic subproblem, add subproblem cuts, update incumbent solution if feasible conic solution
+        is_viol_subp = solve_subp_add_subp_cuts!(m)
 
-        # Finish iteration if any violated subproblem cuts were added and not using primal cuts always
-        if is_viol_subp && !m.prim_cuts_always
-            continue
+        if (m.prim_cuts_assist && !is_viol_subp) || m.prim_cuts_always
+            # Add violated primal cuts or update incumbent solution if feasible MIP solution
+            is_viol_prim = check_feas_add_prim_cuts!(m)
         end
 
-        # Check feasibility of current solution, try to add violated primal cuts if using primal cuts for convergence assistance
-        (is_infeas, is_viol_prim) = check_feas_add_prim_cuts!(m, m.prim_cuts_assist)
-
-        if !is_repeat || is_viol_subp || is_viol_prim
-            # Finish iteration if not a repeat integer solution or if any violated cuts have been added
+        if is_viol_subp || is_viol_prim
+            # Violated cuts added, so finish iteration
             continue
         elseif count_subopt > 0
-            # Try solving next MIP to optimality, if that doesn't help then we will fail next iteration
+            # MIP solve was suboptimal, try solving next MIP to optimality, if that doesn't help then we will end on next iteration
             count_subopt = m.mip_subopt_count
             continue
+        elseif check_gap!(m)
+            return :Optimal
+        elseif status_mip == :UserLimit
+            return :UserLimit
+        elseif isfinite(m.gap_rel_opt)
+            return :Suboptimal
         else
-            # Solve was an optimal solve, integer solution has repeated and no violated cuts were added: must finish
-            if check_gap!(m)
-                return :Optimal
-            elseif isfinite(m.gap_rel_opt)
-                return :Suboptimal
-            else
-                return :FailedOA
-            end
+            return :FailedOA
         end
     end
 end
@@ -1366,12 +1362,12 @@ function solve_mip_driven!(m)
             m.best_bound = mip_obj_bound
         end
 
-        # Solve new conic subproblem, update incumbent solution if feasible
-        (is_repeat, is_viol_subp) = solve_subp_add_subp_cuts!(m)
+        # Solve new conic subproblem, add subproblem cuts, update incumbent solution if feasible conic solution
+        is_viol_subp = solve_subp_add_subp_cuts!(m)
 
-        if !is_viol_subp || m.prim_cuts_always
-            # Check feasibility of current solution, try to add violated primal cuts if using primal cuts for convergence assistance
-            check_feas_add_prim_cuts!(m, m.prim_cuts_assist)
+        if (m.prim_cuts_assist && !is_viol_subp) || m.prim_cuts_always
+            # Add violated primal cuts or update incumbent solution if feasible MIP solution
+            check_feas_add_prim_cuts!(m)
         end
 
         # Update gap if best bound and best objective are finite
@@ -1411,9 +1407,6 @@ function solve_mip_driven!(m)
     if isfinite(mip_obj_bound) && (mip_obj_bound > m.best_bound)
         m.best_bound = mip_obj_bound
     end
-
-    # Check feasibility of MIP solver solution and if feasible add new incumbent
-    check_feas_add_prim_cuts!(m, false)
 
     # Check why MIP solver stopped and return appropriate OA status
     if check_gap!(m)
@@ -1529,17 +1522,17 @@ function solve_subp_add_subp_cuts!(m)
 
         if !m.mip_solver_drives || m.prim_cuts_only || !m.solve_subp
             # Nothing to do if using iterative, or if not using subproblem cuts
-            return (true, false)
+            return false
         else
             # In MSD, re-add subproblem cuts from existing conic dual
             dual_conic = m.cache_dual[soln_int]
             if isempty(dual_conic)
                 # Don't have a conic dual due to conic failure, nothing to do
-                return (true, false)
+                return false
             end
         end
     elseif !m.solve_subp
-        return (false, false)
+        return false
     else
         # Integer solution is new, save it
         m.cache_dual[soln_int] = Float64[]
@@ -1559,7 +1552,7 @@ function solve_subp_add_subp_cuts!(m)
                 end
             else
                 warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (please submit an issue)\n")
-                return (false, false)
+                return false
             end
         elseif (status_conic == :Optimal) && !isempty(dual_conic)
             # Subproblem feasible: first calculate full objective value
@@ -1588,12 +1581,12 @@ function solve_subp_add_subp_cuts!(m)
         else
             # Status not handled, cannot add subproblem cuts
             warn("Conic solver failure: returned status $status_conic\n")
-            return (false, false)
+            return false
         end
 
         # If not using subproblem cuts, return
         if m.prim_cuts_only
-            return (false, false)
+            return false
         end
 
         # In MSD, save the dual so can re-add subproblem cuts later
@@ -1606,7 +1599,7 @@ function solve_subp_add_subp_cuts!(m)
     is_viol_subp = add_subp_cuts!(m, dual_conic, m.v_idxs_soc_subp, m.r_idx_exp_subp, m.s_idx_exp_subp, m.v_idxs_sdp_subp)
     m.logs[:subp_cuts] += toq()
 
-    return (false, is_viol_subp)
+    return is_viol_subp
 end
 
 # Solve conic subproblem given some solution to the integer variables, update incumbent
@@ -1699,73 +1692,56 @@ function add_subp_cuts!(m, dual_conic, v_idxs_soc, r_idx_exp, s_idx_exp, v_idxs_
     return is_viol_subp
 end
 
-# Check cone infeasibilities of current solution, optionally add K* cuts from current solution for infeasible cones
-function check_feas_add_prim_cuts!(m, add_cuts::Bool)
+# Check cone infeasibilities of current solution, add K* cuts from current solution for infeasible cones
+function check_feas_add_prim_cuts!(m)
     tic()
-    is_infeas = false
     is_viol_prim = false
 
     for n in 1:m.num_soc
-        # Get cone current solution, check infeasibility
-        v_vals = getvalue(m.v_soc[n])
-        if (vecnorm(v_vals) - getvalue(m.t_soc[n])) < m.prim_cut_feas_tol
-            continue
-        end
-        is_infeas = true
-        if !add_cuts
-            continue
-        end
-
+        # Check SOC feasibility and add primal cut if infeas
         # Dual is (1, -1/norm(v)*v)
-        if add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], -1/vecnorm(v_vals)*v_vals)
-            is_viol_prim = true
+        v_vals = getvalue(m.v_soc[n])
+        if (vecnorm(v_vals) - getvalue(m.t_soc[n])) > m.prim_cut_feas_tol
+            if add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], -1/vecnorm(v_vals)*v_vals)
+                is_viol_prim = true
+            end
         end
     end
 
     for n in 1:m.num_exp
+        # Check ExpPrimal feasibility and add primal cut if infeas
+        # Dual is (-exp(r/s), exp(r/s)(r/s-1), 1)
         r_val = getvalue(m.r_exp[n])
         s_val = getvalue(m.s_exp[n])
-        if (s_val*exp(r_val/s_val) - getvalue(m.t_exp[n])) < m.prim_cut_feas_tol
-            continue
-        end
-        is_infeas = true
-        if !add_cuts
-            continue
-        end
-
-        # Dual is (-exp(r/s), exp(r/s)(r/s-1), 1)
-        ers = exp(r_val/s_val)
-        if add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], -ers, ers*(r_val/s_val-1))
-            is_viol_prim = true
+        if (s_val*exp(r_val/s_val) - getvalue(m.t_exp[n])) > m.prim_cut_feas_tol
+            ers = exp(r_val/s_val)
+            if add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], -ers, ers*(r_val/s_val-1))
+                is_viol_prim = true
+            end
         end
     end
 
     for n in 1:m.num_sdp
-        V_eig = eigfact!(Symmetric(getvalue(m.V_sdp[n])), -Inf, -m.prim_cut_feas_tol)
-        if isempty(V_eig[:values])
-            continue
-        end
-        is_infeas = true
-        if !add_cuts
-            continue
-        end
-
+        # Check PSD feasibility and add primal cut if infeas
         # Dual is sum_{j: lambda_j < 0} lamda_j V_j V_j'
-        if add_cut_sdp!(m, m.V_sdp[n], V_eig[:vectors])
-            is_viol_prim = true
+        V_eig = eigfact!(Symmetric(getvalue(m.V_sdp[n])), -Inf, -m.prim_cut_feas_tol)
+        if !isempty(V_eig[:values])
+            if add_cut_sdp!(m, m.V_sdp[n], V_eig[:vectors])
+                is_viol_prim = true
+            end
         end
     end
 
     m.logs[:prim_cuts] += toq()
 
-    if !is_infeas
-        # MIP solver solution is conic-feasible, check if it is a new incumbent
+    if !is_viol_prim
+        # No violated cuts added, but tried to add primal cuts, so accept MIP solution as feasible and check if new incumbent
         m.logs[:n_feas_mip] += 1
         soln_int = getvalue(m.x_int)
         soln_cont = getvalue(m.x_cont)
         obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_cont)
 
-        if obj_full < (m.best_obj - 1e-10)
+        if obj_full < m.best_obj
             # Save new incumbent info
             m.best_obj = obj_full
             m.best_int = soln_int
@@ -1774,7 +1750,7 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
         end
     end
 
-    return (is_infeas, is_viol_prim)
+    return is_viol_prim
 end
 
 # Remove near-zeros from data, return false if all values are near-zeros, warn if bad conditioning on vector
