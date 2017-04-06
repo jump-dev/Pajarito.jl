@@ -1411,16 +1411,7 @@ function solve_mip_driven!(m)
 
     if status_mip == :Optimal
         # Update incumbent if MIP solution is conic feasible (with relaxed tolerance, as MIP solver may accept near-feasible solutions)
-        soln_int = getvalue(m.x_int)
-        soln_cont = getvalue(m.x_cont)
-        obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_cont)
-        if obj_full < m.best_obj
-            # Save new incumbent info
-            m.best_obj = obj_full
-            m.best_int = soln_int
-            m.best_cont = soln_cont
-            m.is_best_conic = false
-        end
+        check_feas_add_prim_cuts!(m, false)
     end
 
     # Check why MIP solver stopped and return appropriate OA status
@@ -1710,15 +1701,17 @@ end
 # Check cone infeasibilities of current solution, add K* cuts from current solution for infeasible cones, if feasible check new incumbent
 function check_feas_add_prim_cuts!(m, add_cuts::Bool)
     tic()
-    is_infeas = false
+    max_viol = 0.
     is_viol_prim = false
 
     for n in 1:m.num_soc
         # Check SOC feasibility and add primal cut if infeas
-        # Dual is (1, -1/norm(v)*v)
         v_vals = getvalue(m.v_soc[n])
-        if (vecnorm(v_vals) - getvalue(m.t_soc[n])) > m.prim_cut_feas_tol
-            is_infeas = true
+        viol = vecnorm(v_vals) - getvalue(m.t_soc[n])
+        max_viol = max(viol, max_viol)
+
+        if viol > m.prim_cut_feas_tol
+            # Dual is (1, -1/norm(v)*v)
             if add_cuts && add_cut_soc!(m, m.t_soc[n], m.v_soc[n], m.d_soc[n], m.a_soc[n], -1/vecnorm(v_vals)*v_vals)
                 is_viol_prim = true
             end
@@ -1727,11 +1720,13 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
 
     for n in 1:m.num_exp
         # Check ExpPrimal feasibility and add primal cut if infeas
-        # Dual is (-exp(r/s), exp(r/s)(r/s-1), 1)
         r_val = getvalue(m.r_exp[n])
         s_val = getvalue(m.s_exp[n])
-        if (s_val*exp(r_val/s_val) - getvalue(m.t_exp[n])) > m.prim_cut_feas_tol
-            is_infeas = true
+        viol = s_val*exp(r_val/s_val) - getvalue(m.t_exp[n])
+        max_viol = max(viol, max_viol)
+
+        if viol > m.prim_cut_feas_tol
+            # Dual is (-exp(r/s), exp(r/s)(r/s-1), 1)
             ers = exp(r_val/s_val)
             if add_cuts && add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], -ers, ers*(r_val/s_val-1))
                 is_viol_prim = true
@@ -1741,10 +1736,12 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
 
     for n in 1:m.num_sdp
         # Check PSD feasibility and add primal cut if infeas
-        # Dual is sum_{j: lambda_j < 0} lamda_j V_j V_j'
         V_eig = eigfact!(Symmetric(getvalue(m.V_sdp[n])), -Inf, -m.prim_cut_feas_tol)
-        if !isempty(V_eig[:values])
-            is_infeas = true
+        viol = (isempty(V_eig[:values]) ? 0. : -minimum(V_eig[:values]))
+        max_viol = max(viol, max_viol)
+
+        if viol > m.prim_cut_feas_tol
+            # Dual is sum_{j: lambda_j < 0} lamda_j V_j V_j'
             if add_cuts && add_cut_sdp!(m, m.V_sdp[n], V_eig[:vectors])
                 is_viol_prim = true
             end
@@ -1753,7 +1750,7 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
 
     m.logs[:prim_cuts] += toq()
 
-    if (add_cuts && !is_viol_prim) || (!add_cuts && !is_infeas)
+    if max_viol < 10.*m.prim_cut_feas_tol
         # Accept MIP solution as feasible and check if new incumbent
         m.logs[:n_feas_mip] += 1
         soln_int = getvalue(m.x_int)
