@@ -379,7 +379,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test :SOCRotated in cones
         @test :ExpPrimal in cones
     end
-    
+
     testname = "ExpSOC no init cuts"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
@@ -479,7 +479,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     end
 
     testname = "Primal cuts only"
-    probname = "expsoc_optimal2"
+    probname = "expsoc_optimal"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
             prim_cuts_only=true)
@@ -487,13 +487,13 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
-        @test isapprox(objval, -18, atol=TOL)
-        @test isapprox(objbound, -18, atol=TOL)
-        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
+        @test isapprox(objval, -7.609438, atol=TOL)
+        @test isapprox(objbound, -7.609438, atol=TOL)
+        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 
     testname = "No conic solver"
-    probname = "expsoc_optimal2"
+    probname = "expsoc_optimal"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
             solve_relax=false, solve_subp=false, prim_cuts_only=true)
@@ -501,9 +501,9 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
-        @test isapprox(objval, -18, atol=TOL)
-        @test isapprox(objbound, -18, atol=TOL)
-        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
+        @test isapprox(objval, -7.609438, atol=TOL)
+        @test isapprox(objbound, -7.609438, atol=TOL)
+        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 end
 
