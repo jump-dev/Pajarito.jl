@@ -1107,14 +1107,14 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
                 # t >= |v_j|, all j
                 if m.soc_disagg && m.soc_abslift
                     # Using disaggregation and absvalue lifting
-                    # t + d_j >= 2*a_j, all j
+                    # t + 2*d_j >= 2*a_j, all j
                     # Scale by 2*dim
                     for j in 1:dim
                         @constraint(model_mip, 2*dim*(t + 2*d[j] - 2*a[j]) >= 0)
                     end
                 elseif m.soc_disagg
                     # Using disaggregation only
-                    # t + d_j >= 2*|v_j|, all j
+                    # t + 2*d_j >= 2*|v_j|, all j
                     # Scale by 2*dim
                     for j in 1:dim
                         @constraint(model_mip, 2*dim*(t + 2*d[j] - 2*v[j]) >= 0)
