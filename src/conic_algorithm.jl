@@ -1322,6 +1322,10 @@ function solve_iterative!(m)
             end
         end
 
+        if check_gap!(m)
+            return :Optimal
+        end
+
         # Try to solve new conic subproblem and add subproblem cuts, update incumbent solution if feasible conic solution
         is_viol_subp = solve_subp_add_subp_cuts!(m)
 
