@@ -601,7 +601,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             end
             m.status = :UnboundedOA
         elseif (status_oa == :UserLimit) || (status_oa == :Optimal) || (status_oa == :Suboptimal) || (status_oa == :FailedOA)
-            m.status = status_oa
+            if (status_oa == :Suboptimal) || (status_oa == :FailedOA)
+                warn("Pajarito failed to converge to the desired relative gap; try turning off the MIP solver's presolve functionality\n")
+            end
 
             if isfinite(m.best_obj)
                 # Have a best feasible solution, update final solution on original variables
@@ -611,6 +613,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 m.final_soln = zeros(m.num_var_orig)
                 m.final_soln[keep_cols] = soln_new
             end
+
+            m.status = status_oa
         else
             warn("MIP solver returned status $status_oa, which Pajarito does not handle\n")
             m.status = :FailedMIP
