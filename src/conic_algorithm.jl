@@ -640,6 +640,14 @@ MathProgBase.getobjbound(m::PajaritoConicModel) = m.best_bound
 
 MathProgBase.getsolution(m::PajaritoConicModel) = m.final_soln
 
+function MathProgBase.getnodecount(m::PajaritoConicModel)
+    if !m.mip_solver_drives
+        error("Node count not defined unless mip_solver_drives=true")
+    else
+        return MathProgBase.getnodecount(m.model_mip)
+    end
+end
+
 
 #=========================================================
  Data functions
