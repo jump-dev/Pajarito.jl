@@ -601,7 +601,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             end
             m.status = :UnboundedOA
         elseif (status_oa == :UserLimit) || (status_oa == :Optimal) || (status_oa == :Suboptimal) || (status_oa == :FailedOA)
-            m.status = status_oa
+            if (status_oa == :Suboptimal) || (status_oa == :FailedOA)
+                warn("Pajarito failed to converge to the desired relative gap; try turning off the MIP solver's presolve functionality\n")
+            end
 
             if isfinite(m.best_obj)
                 # Have a best feasible solution, update final solution on original variables
@@ -611,6 +613,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 m.final_soln = zeros(m.num_var_orig)
                 m.final_soln[keep_cols] = soln_new
             end
+
+            m.status = status_oa
         else
             warn("MIP solver returned status $status_oa, which Pajarito does not handle\n")
             m.status = :FailedMIP
@@ -1250,29 +1254,11 @@ end
  Algorithms
 =========================================================#
 
-# Calculate relative outer approximation gap, print gap, return true if satisfy optimality gap condition
-function check_gap!(m)
-    # Update gap if best bound and best objective are finite
-    if isfinite(m.best_obj) && isfinite(m.best_bound)
-        m.gap_rel_opt = (m.best_obj - m.best_bound) / (abs(m.best_obj) + 1e-5)
-    end
-
-    if !m.mip_solver_drives
-        print_gap(m)
-    end
-
-    return (m.gap_rel_opt < m.rel_gap)
-end
-
 # Solve the MIP model using iterative outer approximation algorithm
 function solve_iterative!(m)
     count_subopt = 0
 
     while true
-        if check_gap!(m)
-            return :Optimal
-        end
-
         if (time() - m.logs[:total]) > m.timeout
             return :UserLimit
         end
@@ -1330,31 +1316,35 @@ function solve_iterative!(m)
             end
         end
 
-        if check_gap!(m)
-            return :Optimal
-        end
-
         # Try to solve new conic subproblem and add subproblem cuts, update incumbent solution if feasible conic solution
         is_viol_subp = solve_subp_add_subp_cuts!(m)
 
         # Try to add primal cuts on MIP solution, update incumbent if feasible
         is_viol_prim = check_feas_add_prim_cuts!(m, (m.prim_cuts_assist && !is_viol_subp) || m.prim_cuts_always)
 
-        if is_viol_subp || is_viol_prim
-            # Violated cuts added, so finish iteration
-            continue
+        # Update gap if best bound and best objective are finite
+        if isfinite(m.best_obj) && isfinite(m.best_bound)
+            m.gap_rel_opt = (m.best_obj - m.best_bound) / (abs(m.best_obj) + 1e-5)
+        end
+
+        # Print iteration information
+        print_gap(m)
+
+        if m.gap_rel_opt <= m.rel_gap
+            # Opt gap condition satisfied
+            return :Optimal
         elseif count_subopt > 0
             # MIP solve was suboptimal, try solving next MIP to optimality, if that doesn't help then we will end on next iteration
             count_subopt = m.mip_subopt_count
-            continue
-        elseif check_gap!(m)
-            return :Optimal
-        elseif status_mip == :UserLimit
-            return :UserLimit
-        elseif isfinite(m.gap_rel_opt)
-            return :Suboptimal
-        else
-            return :FailedOA
+        elseif !is_viol_subp && !is_viol_prim
+            # MIP solve was optimal, no violated cuts were added, so must finish
+            if status_mip == :UserLimit
+                return :UserLimit
+            elseif isfinite(m.gap_rel_opt)
+                return :Suboptimal
+            else
+                return :FailedOA
+            end
         end
     end
 end
@@ -1415,6 +1405,11 @@ function solve_mip_driven!(m)
     status_mip = solve(m.model_mip, suppress_warnings=true)
     m.logs[:mip_solve] = time() - m.logs[:mip_solve]
 
+    # End if MIP didn't stop because of optimal or user limit
+    if (status_mip != :UserLimit) && (status_mip != :Optimal)
+        return status_mip
+    end
+
     # Update best bound from MIP bound
     mip_obj_bound = MathProgBase.getobjbound(m.model_mip)
     if isfinite(mip_obj_bound) && (mip_obj_bound > m.best_bound)
@@ -1422,19 +1417,24 @@ function solve_mip_driven!(m)
     end
 
     if status_mip == :Optimal
-        # Update incumbent if MIP solution is conic feasible (with relaxed tolerance, as MIP solver may accept near-feasible solutions)
+        # Check MIP final solution and update incumbent
         check_feas_add_prim_cuts!(m, false)
     end
 
-    # Check why MIP solver stopped and return appropriate OA status
-    if check_gap!(m)
+    # Update gap if best bound and best objective are finite
+    if isfinite(m.best_obj) && isfinite(m.best_bound)
+        m.gap_rel_opt = (m.best_obj - m.best_bound) / (abs(m.best_obj) + 1e-5)
+    end
+
+    if m.gap_rel_opt <= m.rel_gap
+        # Opt gap condition satisfied
         return :Optimal
     elseif status_mip == :UserLimit
         return :UserLimit
     elseif isfinite(m.gap_rel_opt)
         return :Suboptimal
     else
-        return status_mip
+        return :FailedOA
     end
 end
 
