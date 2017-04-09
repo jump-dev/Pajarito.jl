@@ -1527,6 +1527,9 @@ function solve_subp_add_subp_cuts!(m)
         m.logs[:n_repeat] += 1
 
         if !m.mip_solver_drives || m.prim_cuts_only || !m.solve_subp
+            if !m.mip_solver_drives && !m.prim_cuts_only
+                warn("Repeated integer solution without converging\n")
+            end
             # Nothing to do if using iterative, or if not using subproblem cuts
             return false
         else
