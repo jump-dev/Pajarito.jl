@@ -18,7 +18,7 @@ function gatesizing(yUB)
     Cout6 = 10
     Cout7 = 10
 
-    y = Variable(7)
+    y = Variable(7, Positive())
     z = Variable(yUB, 7, Positive(), :Bin)
 
     D1 = exp(-y[1]) + exp(-y[1] + y[4])
@@ -31,7 +31,6 @@ function gatesizing(yUB)
 
     P = minimize(
         maximum([(D1+D4+D6), (D1+D4+D7), (D2+D4+D6), (D2+D4+D7), (D2+D5+D7), (D3+D5+D6), (D3+D7)]),
-        y >= 0,
         sum(fe .* exp(y)) <= 20,
         sum(exp(y)) <= 100)
 
