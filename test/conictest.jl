@@ -944,7 +944,7 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
         probname = "sdp_cardls"
         @testset "$testname" begin
             solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-                sdp_eig=true, sdp_soc=true)
+                sdp_eig=false, sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -958,7 +958,7 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
         probname = "sdpsoc_infeasible"
         @testset "$testname" begin
             solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-                sdp_eig=true, sdp_soc=true)
+                sdp_eig=false, sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -1041,7 +1041,7 @@ function run_sdpexp_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
         probname = "expsdp_optimalD"
         @testset "$testname" begin
             solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-                sdp_eig=false, sdp_soc=true, init_sdp_soc=true, 
+                sdp_eig=false, sdp_soc=true, init_sdp_soc=true,
                 rel_gap=1e-6, prim_cut_feas_tol=1e-7)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
