@@ -1322,7 +1322,7 @@ function solve_iterative!(m)
         is_viol_subp = solve_subp_add_subp_cuts!(m)
 
         # Try to add primal cuts on MIP solution, update incumbent if feasible
-        is_viol_prim = check_feas_add_prim_cuts!(m, (m.prim_cuts_assist && !is_viol_subp) || m.prim_cuts_always)
+        (is_feas, is_viol_prim) = check_feas_add_prim_cuts!(m, (m.prim_cuts_assist && !is_viol_subp) || m.prim_cuts_always)
 
         # Update gap if best bound and best objective are finite
         if isfinite(m.best_obj) && isfinite(m.best_bound)
@@ -1373,7 +1373,7 @@ function solve_mip_driven!(m)
         is_viol_subp = solve_subp_add_subp_cuts!(m)
 
         # Try to add primal cuts on MIP solution, update incumbent if feasible
-        is_viol_prim = check_feas_add_prim_cuts!(m, (m.prim_cuts_assist && !is_viol_subp) || m.prim_cuts_always)
+        (is_feas, is_viol_prim) = check_feas_add_prim_cuts!(m, (m.prim_cuts_assist && !is_viol_subp) || m.prim_cuts_always)
 
         # Update gap if best bound and best objective are finite
         if isfinite(m.best_obj) && isfinite(m.best_bound)
@@ -1384,7 +1384,10 @@ function solve_mip_driven!(m)
             end
         end
 
-        # If solution is infeasible but we added no cuts, have to finish
+        # If solution is infeasible but we added no cuts, have to finish or the MIP solver could accept a bad solution
+        if !is_feas && !is_viol_subp && !is_viol_prim
+            return JuMP.StopTheSolver
+        end
     end
     addlazycallback(m.model_mip, callback_lazy)
 
@@ -1769,6 +1772,7 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
 
     m.logs[:prim_cuts] += toq()
 
+    # Check feasibility of solution (via worst cone violation) and return whether feasible and whether added violated cut
     if max_viol < 10.*m.prim_cut_feas_tol
         # Accept MIP solution as feasible and check if new incumbent
         m.logs[:n_feas_mip] += 1
@@ -1783,9 +1787,11 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
             m.best_cont = soln_cont
             m.is_best_conic = false
         end
-    end
 
-    return is_viol_prim
+        return (true, is_viol_prim)
+    else
+        return (false, is_viol_prim)
+    end
 end
 
 # Remove near-zeros from data, return false if all values are near-zeros, warn if bad conditioning on vector
