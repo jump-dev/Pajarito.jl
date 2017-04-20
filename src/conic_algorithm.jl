@@ -111,7 +111,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     V_sdp::Vector{Array{JuMP.AffExpr,2}} # smat V variables in SDPs
 
     # Miscellaneous for algorithms
-    new_scale_subp_factor::Float64   # Calculated value for subproblem cuts scaling
+    inf_subp_scale::Float64     # Calculated infeasible subproblem cuts scaling factor
+    opt_subp_scale::Float64     # Calculated optimal subproblem cuts scaling factor
     update_conicsub::Bool       # Indicates whether to use setbvec! to update an existing conic subproblem model
     model_conic::MathProgBase.AbstractConicModel # Conic subproblem model: persists when the conic solver implements MathProgBase.setbvec!
     oa_started::Bool            # Indicator for Iterative or MIP-solver-driven algorithms started
@@ -507,8 +508,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     flush(STDOUT)
     flush(STDERR)
 
-    # Calculate subproblem cuts scaling factor
-    m.new_scale_subp_factor = m.scale_subp_factor*m.prim_cut_feas_tol/m.rel_gap*(m.num_soc + m.num_exp + m.num_sdp)
+    # Calculate infeasible and optimal subproblem K* cuts scaling factors
+    m.inf_subp_scale = m.scale_subp_factor*(m.num_soc + m.num_exp + m.num_sdp)
+    m.opt_subp_scale = m.inf_subp_scale*m.prim_cut_feas_tol/m.rel_gap
 
     if m.solve_relax
         # Solve relaxed conic problem, proceed with algorithm if optimal or suboptimal, else finish
@@ -557,7 +559,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 # Optionally scale dual
                 if m.scale_subp_cuts
                     # Rescale by number of cones / absval of full conic objective
-                    scale!(dual_conic, m.new_scale_subp_factor/(abs(obj_relax) + 1e-5))
+                    scale!(dual_conic, m.opt_subp_scale/(abs(obj_relax) + 1e-5))
                 end
 
                 # Add relaxation cuts
@@ -1564,12 +1566,12 @@ function solve_subp_add_subp_cuts!(m)
 
         # Determine cut scaling factors and check if have new feasible incumbent solution
         if (status_conic == :Infeasible) && !isempty(dual_conic)
-            # Subproblem infeasible: first check infeasible ray has negative value
+            # Subproblem infeasible: first check infeasible ray has negative value, and scale
             ray_value = vecdot(dual_conic, b_sub_int)
             if ray_value < -m.cut_zero_tol
                 if m.scale_subp_cuts
-                    # Rescale by number of cones / value of ray
-                    scale!(dual_conic, -m.new_scale_subp_factor/ray_value)
+                    # Rescale by infeasible scale factor / negative value of ray
+                    scale!(dual_conic, -m.inf_subp_scale/ray_value)
                 end
             else
                 warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (please submit an issue)\n")
@@ -1580,8 +1582,8 @@ function solve_subp_add_subp_cuts!(m)
             obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_conic)
 
             if m.scale_subp_cuts
-                # Rescale by number of cones / abs(objective + 1e-5)
-                scale!(dual_conic, m.new_scale_subp_factor/(abs(obj_full) + 1e-5))
+                # Rescale by optimal scale factor / abs(objective + 1e-5)
+                scale!(dual_conic, m.opt_subp_scale/(abs(obj_full) + 1e-5))
             end
 
             m.logs[:n_feas_conic] += 1
@@ -1594,10 +1596,10 @@ function solve_subp_add_subp_cuts!(m)
                 m.is_best_conic = true
             end
         elseif !isempty(dual_conic)
-            # We have a dual but don't know the status, so we can't use subproblem scaling
+            # We have a dual but don't handle the status - try adding cuts anyway (always valid, as projected onto dual cones)
             if m.scale_subp_cuts
-                # Rescale by number of cones
-                scale!(dual_conic, m.new_scale_subp_factor)
+                # Rescale by infeasible scale factor
+                scale!(dual_conic, m.inf_subp_scale)
             end
         else
             # Status not handled, cannot add subproblem cuts
