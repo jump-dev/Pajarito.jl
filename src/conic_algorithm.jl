@@ -1974,9 +1974,9 @@ function add_cut_exp!(m, r, s, t, r_dual, s_dual)
     # (u,v,w) in ExpDual <-> w >= -u*exp(v/u-1), w >= 0, u < 0
     t_dual = -r_dual*exp(s_dual/r_dual - 1)
     if t_dual < m.cut_zero_tol
-        return false
+        t_dual = 0.
     end
-    
+
     # Cut is (u,v,w)'(r,s,t) >= 0
     @expression(m.model_mip, cut_expr, r_dual*r + s_dual*s + t_dual*t)
 
