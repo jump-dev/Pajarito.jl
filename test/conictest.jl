@@ -1036,20 +1036,5 @@ function run_sdpexp_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
             @test isapprox(objbound, 1.868872, atol=TOL)
             @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
         end
-
-        testname = "SOC full cuts (Dopt)"
-        probname = "expsdp_optimalD"
-        @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-                sdp_eig=false, sdp_soc=true, init_sdp_soc=true, 
-                rel_gap=1e-6, prim_cut_feas_tol=1e-7)
-
-            (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-
-            @test status == :Optimal
-            @test isapprox(objval, 1.868872, atol=TOL)
-            @test isapprox(objbound, 1.868872, atol=TOL)
-            @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
-        end
     end
 end

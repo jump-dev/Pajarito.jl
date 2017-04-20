@@ -8,6 +8,9 @@ using Convex, Pajarito
 # Sa is allowed number of stocks over all portfolios
 # r is return on stocks
 function portfoliorisk(S)
+
+    # Add variables by portfolio
+
     x = Variable(S, Positive())         # Proportion to invest in each stock
     y = Variable(S, Positive(), :Bin)   # Indicators for nonzero investment in each stock
 
