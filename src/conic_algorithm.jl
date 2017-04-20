@@ -1729,7 +1729,7 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
     for n in 1:m.num_soc
         # Check SOC feasibility and add primal cut if infeas
         v_vals = getvalue(m.v_soc[n])
-        viol = vecnorm(v_vals) - getvalue(m.t_soc[n])
+        viol = calc_viol_soc(getvalue(m.t_soc[n]), v_vals)
         max_viol = max(viol, max_viol)
 
         if viol > m.prim_cut_feas_tol
@@ -1827,6 +1827,49 @@ function clean_zeros!{N}(m, data::Array{Float64,N})
         return false
     end
 end
+
+# Check and record violation and add cut, return true if violated
+function add_cut!(m, cut_expr, cone_logs)
+    if !m.oa_started
+        @constraint(m.model_mip, cut_expr >= 0)
+        cone_logs[:n_relax] += 1
+        return false
+    end
+
+    if -getvalue(cut_expr) > m.prim_cut_feas_tol
+        if m.mip_solver_drives
+            @lazyconstraint(m.cb_lazy, cut_expr >= 0)
+        else
+            @constraint(m.model_mip, cut_expr >= 0)
+        end
+        cone_logs[:n_viol_total] += 1
+        return true
+    elseif !m.viol_cuts_only
+        if m.mip_solver_drives
+            @lazyconstraint(m.cb_lazy, cut_expr >= 0)
+        else
+            @constraint(m.model_mip, cut_expr >= 0)
+        end
+        cone_logs[:n_nonviol_total] += 1
+    end
+
+    return false
+end
+
+
+#=========================================================
+ Cone feasibility functions
+=========================================================#
+
+# Calculate the SOC violation for a vector
+function calc_viol_soc(t_val::Float64, v_vals::Vector{Float64})
+    return vecnorm(v_vals) - t_val
+end
+
+
+#=========================================================
+ Cone K* cuts functions
+=========================================================#
 
 # Add K* cuts for a SOC, where (t,v) is the vector of slacks, return true if a cut is violated by current solution
 function add_cut_soc!(m, t, v, d, a, v_dual)
@@ -1980,34 +2023,6 @@ function add_cut_sdp!(m, V, eig_dual)
     return is_viol
 end
 
-# Check and record violation and add cut, return true if violated
-function add_cut!(m, cut_expr, cone_logs)
-    if !m.oa_started
-        @constraint(m.model_mip, cut_expr >= 0)
-        cone_logs[:n_relax] += 1
-        return false
-    end
-
-    if -getvalue(cut_expr) > m.prim_cut_feas_tol
-        if m.mip_solver_drives
-            @lazyconstraint(m.cb_lazy, cut_expr >= 0)
-        else
-            @constraint(m.model_mip, cut_expr >= 0)
-        end
-        cone_logs[:n_viol_total] += 1
-        return true
-    elseif !m.viol_cuts_only
-        if m.mip_solver_drives
-            @lazyconstraint(m.cb_lazy, cut_expr >= 0)
-        else
-            @constraint(m.model_mip, cut_expr >= 0)
-        end
-        cone_logs[:n_nonviol_total] += 1
-    end
-
-    return false
-end
-
 
 #=========================================================
  Logging and printing functions
@@ -2083,6 +2098,7 @@ function print_finish(m::PajaritoConicModel)
         # m.status = :Error
         if ll > 0
             # Print more
+            println("Pajarito will print diagnostic information")
             ll = 3
         end
     end
@@ -2230,12 +2246,13 @@ function calc_infeas(cones, vals)
         elseif cone == :NonPos
             viol_lin = max(viol_lin, maximum(vals[idx]))
         elseif cone == :SOC
-            viol_soc = max(viol_soc, vecnorm(vals[idx[j]] for j in 2:length(idx)) - vals[idx[1]])
+            viol_soc = max(viol_soc, calc_viol_soc(vals[idx[1]], vals[idx[2:end]]))
         elseif cone == :SOCRotated
-            # (y,z,x) in RSOC <=> (sqrt2inv*(y+z),sqrt2inv*(-y+z),x) in SOC, y >= 0, z >= 0
-            t = sqrt2inv*(vals[idx[1]] + vals[idx[2]])
-            usqr = 1/2*(-vals[idx[1]] + vals[idx[2]])^2 + sumabs2(vals[idx[j]] for j in 3:length(idx))
-            viol_rot = max(viol_rot, sqrt(usqr) - t)
+            # Convert to SOC and calculate using SOC violation function
+            # (y,z,x) in RSOC <=> (sqrt2inv*(y+z),sqrt2inv*(-y+z),x) in SOC
+            t_val = sqrt2inv*(vals[idx[1]] + vals[idx[2]])
+            v_vals = push!(vals[idx[3:end]], sqrt2inv*(-vals[idx[1]] + vals[idx[2]]))
+            viol_rot = max(viol_rot, calc_viol_soc(t_val, v_vals))
         elseif cone == :ExpPrimal
             viol_exp = max(viol_exp, vals[idx[2]]*exp(vals[idx[1]]/vals[idx[2]]) - vals[idx[3]])
         elseif cone == :SDP
