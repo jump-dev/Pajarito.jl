@@ -1383,6 +1383,8 @@ function solve_mip_driven!(m)
                 return JuMP.StopTheSolver
             end
         end
+
+        # If solution is infeasible but we added no cuts, have to finish
     end
     addlazycallback(m.model_mip, callback_lazy)
 
