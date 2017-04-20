@@ -13,13 +13,31 @@ This mixed-integer conic programming algorithm is described in:
 Model MICP with JuMP.jl conic format or Convex.jl DCP format
 http://mathprogbasejl.readthedocs.org/en/latest/conic.html
 
-
 TODO features
 - implement warm-starting: use set_best_soln!
 
 =========================================================#
 
 using JuMP
+
+
+#=========================================================
+ Constants
+=========================================================#
+
+const sqrt2 = sqrt(2)
+const sqrt2inv = 1/sqrt2
+
+const exp_s_zero_tol = 1e-6 # For checking whether perspective variable of exp cone is 0
+
+const unstable_dual_tol = 1e7 # For checking if a dual vector is numerically unstable
+
+const feas_factor = 10. # For checking if solution is considered feasible from its maximum conic violation
+
+
+#=========================================================
+ Conic model object
+=========================================================#
 
 type PajaritoConicModel <: MathProgBase.AbstractConicModel
     # Solver parameters
@@ -188,9 +206,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     end
 end
 
-# Used a lot for scaling PSD cone elements (converting between smat and svec)
-const sqrt2 = sqrt(2)
-const sqrt2inv = 1/sqrt2
 
 #=========================================================
  MathProgBase functions
@@ -1445,11 +1460,6 @@ function solve_mip_driven!(m)
     end
 end
 
-
-#=========================================================
- Warm-starting / heuristic functions
-=========================================================#
-
 # Construct and warm-start MIP solution using given solution
 function set_best_soln!(m, soln_int, soln_cont)
     if m.mip_solver_drives && m.oa_started
@@ -1509,22 +1519,6 @@ function set_best_soln!(m, soln_int, soln_cont)
             end
         end
     end
-end
-
-# Transform svec vector into symmetric smat matrix
-function make_smat!(smat::Symmetric{Float64,Array{Float64,2}}, svec::Vector{Float64})
-    # smat is uplo U Symmetric
-    dim = size(smat, 1)
-    kSD = 1
-    for iSD in 1:dim, jSD in iSD:dim
-        if iSD == jSD
-            smat.data[iSD, jSD] = svec[kSD]
-        else
-            smat.data[iSD, jSD] = sqrt2inv*svec[kSD]
-        end
-        kSD += 1
-    end
-    return smat
 end
 
 
@@ -1728,8 +1722,8 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
 
     for n in 1:m.num_soc
         # Check SOC feasibility and add primal cut if infeas
-        v_vals = getvalue(m.v_soc[n])
-        viol = vecnorm(v_vals) - getvalue(m.t_soc[n])
+        (t_val, v_vals) = (getvalue(m.t_soc[n]), getvalue(m.v_soc[n]))
+        viol = calc_viol_soc(t_val, v_vals)
         max_viol = max(viol, max_viol)
 
         if viol > m.prim_cut_feas_tol
@@ -1741,10 +1735,9 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
     end
 
     for n in 1:m.num_exp
-        # Check ExpPrimal feasibility and add primal cut if infeas
-        r_val = getvalue(m.r_exp[n])
-        s_val = getvalue(m.s_exp[n])
-        viol = s_val*exp(r_val/s_val) - getvalue(m.t_exp[n])
+        # Check exp feasibility and add primal cut if infeas
+        (r_val, s_val, t_val) = (getvalue(m.r_exp[n]), getvalue(m.s_exp[n]), getvalue(m.t_exp[n]))
+        viol = calc_viol_exp(r_val, s_val, t_val)
         max_viol = max(viol, max_viol)
 
         if viol > m.prim_cut_feas_tol
@@ -1758,13 +1751,12 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
 
     for n in 1:m.num_sdp
         # Check PSD feasibility and add primal cut if infeas
-        V_eig = eigfact!(Symmetric(getvalue(m.V_sdp[n])), -Inf, -m.prim_cut_feas_tol)
-        viol = (isempty(V_eig[:values]) ? 0. : -minimum(V_eig[:values]))
+        (viol, V_eigvecs) = calc_viol_sdp(Symmetric(getvalue(m.V_sdp[n])))
         max_viol = max(viol, max_viol)
 
         if viol > m.prim_cut_feas_tol
             # Dual is sum_{j: lambda_j < 0} lamda_j V_j V_j'
-            if add_cuts && add_cut_sdp!(m, m.V_sdp[n], V_eig[:vectors])
+            if add_cuts && add_cut_sdp!(m, m.V_sdp[n], V_eigvecs)
                 is_viol_prim = true
             end
         end
@@ -1773,7 +1765,7 @@ function check_feas_add_prim_cuts!(m, add_cuts::Bool)
     m.logs[:prim_cuts] += toq()
 
     # Check feasibility of solution (via worst cone violation) and return whether feasible and whether added violated cut
-    if max_viol < 10.*m.prim_cut_feas_tol
+    if max_viol < feas_factor*m.prim_cut_feas_tol
         # Accept MIP solution as feasible and check if new incumbent
         m.logs[:n_feas_mip] += 1
         soln_int = getvalue(m.x_int)
@@ -1816,7 +1808,7 @@ function clean_zeros!{N}(m, data::Array{Float64,N})
     end
 
     if max_nz > m.cut_zero_tol
-        if max_nz/min_nz > 1e7
+        if max_nz/min_nz > unstable_dual_tol
             if m.logs[:n_unst_dual] == 0
                 warn("Encountering numerically unstable cone dual vectors\n")
             end
@@ -1827,6 +1819,81 @@ function clean_zeros!{N}(m, data::Array{Float64,N})
         return false
     end
 end
+
+# Check and record violation and add cut, return true if violated
+function add_cut!(m, cut_expr, cone_logs)
+    if !m.oa_started
+        @constraint(m.model_mip, cut_expr >= 0)
+        cone_logs[:n_relax] += 1
+        return false
+    end
+
+    if -getvalue(cut_expr) > m.prim_cut_feas_tol
+        if m.mip_solver_drives
+            @lazyconstraint(m.cb_lazy, cut_expr >= 0)
+        else
+            @constraint(m.model_mip, cut_expr >= 0)
+        end
+        cone_logs[:n_viol_total] += 1
+        return true
+    elseif !m.viol_cuts_only
+        if m.mip_solver_drives
+            @lazyconstraint(m.cb_lazy, cut_expr >= 0)
+        else
+            @constraint(m.model_mip, cut_expr >= 0)
+        end
+        cone_logs[:n_nonviol_total] += 1
+    end
+
+    return false
+end
+
+
+#=========================================================
+ Cone feasibility functions
+=========================================================#
+
+# Calculate the SOC violation for a vector
+function calc_viol_soc(t_val::Float64, v_vals::Vector{Float64})
+    return vecnorm(v_vals) - t_val
+end
+
+# Calculate the ExpPrimal violation for a vector
+function calc_viol_exp(r_val::Float64, s_val::Float64, t_val::Float64)
+    if s_val <= exp_s_zero_tol
+        return r_val
+    else
+        return s_val*exp(r_val/s_val) - t_val
+    end
+end
+
+# Calculate the eigendecomp and PSD violation for a svec vector
+function calc_viol_sdp(V_vals::Symmetric{Float64})
+    V_eig = eigfact!(V_vals, -Inf, 0.)
+    viol = (isempty(V_eig[:values]) ? 0. : -minimum(V_eig[:values]))
+    return (viol, V_eig[:vectors])
+end
+
+# Transform svec vector into symmetric smat matrix
+function make_smat!(smat::Symmetric{Float64,Array{Float64,2}}, svec::Vector{Float64})
+    # smat is uplo U Symmetric
+    dim = size(smat, 1)
+    kSD = 1
+    for iSD in 1:dim, jSD in iSD:dim
+        if iSD == jSD
+            smat.data[iSD, jSD] = svec[kSD]
+        else
+            smat.data[iSD, jSD] = sqrt2inv*svec[kSD]
+        end
+        kSD += 1
+    end
+    return smat
+end
+
+
+#=========================================================
+ Cone K* cuts functions
+=========================================================#
 
 # Add K* cuts for a SOC, where (t,v) is the vector of slacks, return true if a cut is violated by current solution
 function add_cut_soc!(m, t, v, d, a, v_dual)
@@ -1904,12 +1971,14 @@ function add_cut_exp!(m, r, s, t, r_dual, s_dual)
     end
 
     # Calculate t_dual according to dual exp cone definition
-    # (u,v,w) in ExpDual <-> exp(1)*w >= -u*exp(v/u), w >= 0, u < 0
+    # (u,v,w) in ExpDual <-> w >= -u*exp(v/u-1), w >= 0, u < 0
     t_dual = -r_dual*exp(s_dual/r_dual - 1)
     if t_dual < m.cut_zero_tol
         return false
     end
 
+    @show r_dual, s_dual, t_dual
+    
     # Cut is (u,v,w)'(r,s,t) >= 0
     @expression(m.model_mip, cut_expr, r_dual*r + s_dual*s + t_dual*t)
 
@@ -1978,34 +2047,6 @@ function add_cut_sdp!(m, V, eig_dual)
     end
 
     return is_viol
-end
-
-# Check and record violation and add cut, return true if violated
-function add_cut!(m, cut_expr, cone_logs)
-    if !m.oa_started
-        @constraint(m.model_mip, cut_expr >= 0)
-        cone_logs[:n_relax] += 1
-        return false
-    end
-
-    if -getvalue(cut_expr) > m.prim_cut_feas_tol
-        if m.mip_solver_drives
-            @lazyconstraint(m.cb_lazy, cut_expr >= 0)
-        else
-            @constraint(m.model_mip, cut_expr >= 0)
-        end
-        cone_logs[:n_viol_total] += 1
-        return true
-    elseif !m.viol_cuts_only
-        if m.mip_solver_drives
-            @lazyconstraint(m.cb_lazy, cut_expr >= 0)
-        else
-            @constraint(m.model_mip, cut_expr >= 0)
-        end
-        cone_logs[:n_nonviol_total] += 1
-    end
-
-    return false
 end
 
 
@@ -2083,6 +2124,7 @@ function print_finish(m::PajaritoConicModel)
         # m.status = :Error
         if ll > 0
             # Print more
+            println("Pajarito will print diagnostic information")
             ll = 3
         end
     end
@@ -2230,19 +2272,19 @@ function calc_infeas(cones, vals)
         elseif cone == :NonPos
             viol_lin = max(viol_lin, maximum(vals[idx]))
         elseif cone == :SOC
-            viol_soc = max(viol_soc, vecnorm(vals[idx[j]] for j in 2:length(idx)) - vals[idx[1]])
+            viol_soc = max(viol_soc, calc_viol_soc(vals[idx[1]], vals[idx[2:end]]))
         elseif cone == :SOCRotated
-            # (y,z,x) in RSOC <=> (sqrt2inv*(y+z),sqrt2inv*(-y+z),x) in SOC, y >= 0, z >= 0
-            t = sqrt2inv*(vals[idx[1]] + vals[idx[2]])
-            usqr = 1/2*(-vals[idx[1]] + vals[idx[2]])^2 + sumabs2(vals[idx[j]] for j in 3:length(idx))
-            viol_rot = max(viol_rot, sqrt(usqr) - t)
+            # Convert to SOC and calculate using SOC violation function
+            # (y,z,x) in RSOC <=> (sqrt2inv*(y+z),sqrt2inv*(-y+z),x) in SOC
+            t_val = sqrt2inv*(vals[idx[1]] + vals[idx[2]])
+            v_vals = push!(vals[idx[3:end]], sqrt2inv*(-vals[idx[1]] + vals[idx[2]]))
+            viol_rot = max(viol_rot, calc_viol_soc(t_val, v_vals))
         elseif cone == :ExpPrimal
-            viol_exp = max(viol_exp, vals[idx[2]]*exp(vals[idx[1]]/vals[idx[2]]) - vals[idx[3]])
+            viol_exp = max(viol_exp, calc_viol_exp(vals[idx]...))
         elseif cone == :SDP
-            dim = round(Int, sqrt(1/4+2*length(idx))-1/2) # smat space dimension
-            vals_smat = Symmetric(zeros(dim, dim))
-            make_smat!(vals_smat, vals[idx])
-            viol_sdp = max(viol_sdp, -eigmin(vals_smat))
+            dim = round(Int, sqrt(1/4+2*length(idx))-1/2)
+            V_vals = make_smat!(Symmetric(zeros(dim, dim)), vals[idx])
+            viol_sdp = max(viol_sdp, calc_viol_sdp(V_vals)[1])
         end
     end
 
