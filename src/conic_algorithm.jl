@@ -35,6 +35,7 @@ const feas_factor = 10. # For checking if solution is considered feasible from i
 const r_soc_zero_tol = 1e-8 # For deciding whether to set disaggregated variable values to 0
 const s_exp_zero_tol = 1e-6 # For checking whether primal variable s of exp cone is 0
 const w_exp_zero_tol = 1e-6 # For checking whether dual variable w of exp cone is 0
+const unstable_soc_disagg_tol = 1e-5 # For checking if a disaggregated SOC cut is numerically unstable
 
 
 #=========================================================
@@ -581,7 +582,26 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
 
                 # Add relaxation cuts
                 tic()
-                add_subp_cuts!(m, dual_conic, r_idx_soc_relx, t_idx_soc_relx, r_idx_exp_relx, s_idx_exp_relx, t_idx_exp_relx, t_idx_sdp_relx)
+
+                for n in 1:m.num_soc
+                    u_val = dual_conic[r_idx_soc_relx[n]]
+                    w_val = dual_conic[t_idx_soc_relx[n]]
+                    add_subp_cut_soc!(m, m.r_soc[n], m.t_soc[n], m.pi_soc[n], m.rho_soc[n], u_val, w_val)
+                end
+
+                for n in 1:m.num_exp
+                    u_val = dual_conic[r_idx_exp_relx[n]]
+                    v_val = dual_conic[s_idx_exp_relx[n]]
+                    w_val = dual_conic[t_idx_exp_relx[n]]
+                    add_subp_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], u_val, v_val, w_val)
+                end
+
+                for n in 1:m.num_sdp
+                    # Get smat space dual
+                    W_val = make_smat!(m.smat_sdp[n], dual_conic[t_idx_sdp_relx[n]])
+                    add_subp_cut_sdp!(m, m.T_sdp[n], W_val)
+                end
+
                 m.logs[:relax_cuts] += toq()
             end
         end
@@ -673,7 +693,7 @@ end
 
 
 #=========================================================
- Data functions
+ Data and model functions
 =========================================================#
 
 # Transform/preprocess data
@@ -1272,7 +1292,7 @@ end
 
 
 #=========================================================
- Algorithms
+ Iterative and MSD algorithm functions
 =========================================================#
 
 # Solve the MIP model using iterative outer approximation algorithm
@@ -1536,6 +1556,7 @@ function make_smat!(smat::Symmetric{Float64,Array{Float64,2}}, svec::Vector{Floa
     # smat is uplo U Symmetric
     dim = size(smat, 1)
     k = 1
+
     for i in 1:dim, j in i:dim
         if i == j
             smat.data[i,j] = svec[k]
@@ -1544,6 +1565,7 @@ function make_smat!(smat::Symmetric{Float64,Array{Float64,2}}, svec::Vector{Floa
         end
         k += 1
     end
+
     return smat
 end
 
@@ -1611,7 +1633,7 @@ end
 
 
 #=========================================================
- Subproblem solve and subproblem cut functions
+ Subproblem functions
 =========================================================#
 
 # Solve the subproblem for the current integer solution, add new incumbent conic solution if feasible and best, add K* cuts from subproblem dual solution
@@ -1705,11 +1727,35 @@ function solve_subp_add_subp_cuts!(m)
         end
     end
 
+    # Add K* cuts from subproblem dual solution dual_conic
     tic()
-    is_viol_subp = add_subp_cuts!(m, dual_conic, m.r_idx_soc_subp, m.t_idx_soc_subp, m.r_idx_exp_subp, m.s_idx_exp_subp, m.t_idx_exp_subp, m.t_idx_sdp_subp)
+    is_viol_any = false
+
+    for n in 1:m.num_soc
+        u_val = dual_conic[m.r_idx_soc_subp[n]]
+        w_val = dual_conic[m.t_idx_soc_subp[n]]
+        is_viol_cut = add_subp_cut_soc!(m, m.r_soc[n], m.t_soc[n], m.pi_soc[n], m.rho_soc[n], u_val, w_val)
+        is_viol_any = (is_viol_any || is_viol_cut)
+    end
+
+    for n in 1:m.num_exp
+        u_val = dual_conic[m.r_idx_exp_subp[n]]
+        v_val = dual_conic[m.s_idx_exp_subp[n]]
+        w_val = dual_conic[m.t_idx_exp_subp[n]]
+        is_viol_cut = add_subp_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], u_val, v_val, w_val)
+        is_viol_any = (is_viol_any || is_viol_cut)
+    end
+
+    for n in 1:m.num_sdp
+        # Get smat space dual
+        W_val = make_smat!(m.smat_sdp[n], dual_conic[m.t_idx_sdp_subp[n]])
+        is_viol_cut = add_subp_cut_sdp!(m, m.T_sdp[n], W_val)
+        is_viol_any = (is_viol_any || is_viol_cut)
+    end
+
     m.logs[:subp_cuts] += toq()
 
-    return is_viol_subp
+    return is_viol_any
 end
 
 # Solve conic subproblem given some solution to the integer variables, update incumbent
@@ -1774,67 +1820,67 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
     return (status_conic, soln_conic, dual_conic)
 end
 
-# Add K* cuts from conic relaxation or subproblem dual solution
-function add_subp_cuts!(m, dual_conic, r_idx_soc, t_idx_soc, r_idx_exp, s_idx_exp, t_idx_exp, t_idx_sdp)
-    is_viol_any = false
 
-    for n in 1:m.num_soc
-        # (u,w) in SOC* = SOC <-> u >= norm2(w) >= 0
-        u_val = dual_conic[r_idx_soc[n]]
-        w_val = dual_conic[t_idx_soc[n]]
+#=========================================================
+ Subproblem K* cut functions
+=========================================================#
 
-        # If epigraph u is significantly positive, clean zeros on w and add cut
-        if (u_val > m.cut_zero_tol) && clean_zeros!(w_val)
-            # K* projected subproblem cut is (norm2(w), w)
-            u_val = vecnorm(w_val)
-            is_viol_cut = add_cut_soc!(m, m.r_soc[n], m.t_soc[n], m.pi_soc[n], m.rho_soc[n], u_val, w_val)
-            is_viol_any = (is_viol_any || is_viol_cut)
+# Add a SOC subproblem cut
+function add_subp_cut_soc!(m, r, t, pi, rho, u_val, w_val)
+    is_viol_cut = false
+
+    # (u,w) in SOC* = SOC <-> u >= norm2(w) >= 0
+    # If epigraph u is significantly positive, clean zeros on w and add cut
+    if (u_val > m.cut_zero_tol) && clean_zeros!(w_val)
+        # K* projected subproblem cut is (norm2(w), w)
+        u_val = vecnorm(w_val)
+        is_viol_cut = add_cut_soc!(m, m.r_soc[n], m.t_soc[n], m.pi_soc[n], m.rho_soc[n], u_val, w_val)
+    end
+
+    return is_viol_cut
+end
+
+# Add an Exp subproblem cut
+function add_subp_cut_exp!(m, r, s, t, u_val, v_val, w_val)
+    is_viol_cut = false
+
+    # (w,v,u) in ExpDual <-> (w < 0 && u >= -w*exp(v/w - 1) > 0) || (w = 0 && u >= 0 && v >= 0)
+    if w_val > -w_exp_zero_tol
+        # w is (near) zero: K* projected subproblem cut on (r,s,t) is (max(u, 0), max(v, 0), 0)
+        if (u_val > m.cut_zero_tol) && (v_val > m.cut_zero_tol)
+            is_viol_cut = add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], u_val, v_val, 0.)
+        end
+    else
+        # w is significantly negative: K* projected subproblem cut on (r,s,t) is (-w*exp(v/w - 1), v, w)
+        u_val = -w_val*exp(v_val/w_val - 1)
+        is_viol_cut = add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], u_val, v_val, w_val)
+    end
+
+    return is_viol_cut
+end
+
+# Add a PSD subproblem cut
+function add_subp_cut_sdp!(m, T, W_val)
+    is_viol_cut = false
+
+    # W in SDP* = SDP <-> sum_{j: lambda_j < 0} lambda_j(W) = 0
+    W_eig_obj = eigfact!(W_val, sqrt(m.cut_zero_tol), Inf)
+
+    # If have significantly positive eigenvalues, clean zeros on scaled eigenvectors and add cut
+    if !isempty(W_eig_obj[:values])
+        # K* projected (scaled) subproblem cut is sum_{j: lambda_j > 0} lambda_j W_eig_j W_eig_j'
+        W_eig = W_eig_obj[:vectors]*Diagonal(sqrt.(W_eig_obj[:values]))
+        if clean_zeros!(W_eig)
+            is_viol_cut = add_cut_sdp!(m, m.T_sdp[n], W_eig)
         end
     end
 
-    for n in 1:m.num_exp
-        # (w,v,u) in ExpDual <-> (w < 0 && u >= -w*exp(v/w - 1) > 0) || (w = 0 && u >= 0 && v >= 0)
-        u_val = dual_conic[r_idx_exp[n]]
-        v_val = dual_conic[s_idx_exp[n]]
-        w_val = dual_conic[t_idx_exp[n]]
-
-        if w_val > -w_exp_zero_tol
-            # w is (near) zero: K* projected subproblem cut on (r,s,t) is (max(u, 0), max(v, 0), 0)
-            if (u_val > m.cut_zero_tol) && (v_val > m.cut_zero_tol)
-                is_viol_cut = add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], u_val, v_val, 0.)
-                is_viol_any = (is_viol_any || is_viol_cut)
-            end
-        else
-            # w is significantly negative: K* projected subproblem cut on (r,s,t) is (-w*exp(v/w - 1), v, w)
-            u_val = -w_val*exp(v_val/w_val - 1)
-            is_viol_cut = add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], u_val, v_val, w_val)
-            is_viol_any = (is_viol_any || is_viol_cut)
-        end
-    end
-
-    for n in 1:m.num_sdp
-        # W in SDP* = SDP <-> sum_{j: lambda_j < 0} lambda_j(W) = 0
-        # Get smat space dual
-        W_val = make_smat!(m.smat_sdp[n], dual_conic[t_idx_sdp[n]])
-
-        # If have significantly positive eigenvalues, clean zeros on scaled eigenvectors and add cut
-        W_eig_obj = eigfact!(W_val, sqrt(m.cut_zero_tol), Inf)
-        if !isempty(W_eig_obj[:values])
-            # K* projected (scaled) subproblem cut is sum_{j: lambda_j > 0} lambda_j W_eig_j W_eig_j'
-            W_eig = W_eig_obj[:vectors]*Diagonal(sqrt.(W_eig_obj[:values]))
-            if clean_zeros!(W_eig)
-                is_viol_cut = add_cut_sdp!(m, m.T_sdp[n], W_eig)
-                is_viol_any = (is_viol_any || is_viol_cut)
-            end
-        end
-    end
-
-    return is_viol_any
+    return is_viol_cut
 end
 
 
 #=========================================================
- Conic feasibility check and separation cut functions
+ Conic feasibility and separation K* cut functions
 =========================================================#
 
 # Check cone infeasibilities of current solution, add K* cuts from current solution for infeasible cones, if feasible check new incumbent
@@ -1850,7 +1896,7 @@ function check_feas_add_sep_cuts!(m, add_cuts::Bool)
     end
 
     for n in 1:m.num_exp
-        (is_viol_cut, viol) = add_sep_cut_exp!(m, add_cuts, m.t_exp[n], m.s_exp[n], m.r_exp[n])
+        (is_viol_cut, viol) = add_sep_cut_exp!(m, add_cuts, m.r_exp[n], m.s_exp[n], m.t_exp[n])
         is_viol_any = (is_viol_any || is_viol_cut)
         max_viol = max(viol, max_viol)
     end
@@ -1887,6 +1933,9 @@ end
 
 # Calculate the SOC violation and possibly add a separation cut
 function add_sep_cut_soc!(m, add_cuts::Bool, r, t, pi, rho)
+    is_viol_cut = false
+    viol = 0.
+
     r_val = getvalue(r)
     t_val = getvalue(t)
 
@@ -1907,6 +1956,9 @@ end
 
 # Calculate the Exp violation and possibly add a separation cut
 function add_sep_cut_exp!(m, add_cuts::Bool, r, s, t)
+    is_viol_cut = false
+    viol = 0.
+
     r_val = getvalue(r)
     s_val = getvalue(s)
     t_val = getvalue(t)
@@ -1938,14 +1990,15 @@ end
 
 # Calculate the PSD violation and possibly add a separation cut
 function add_sep_cut_sdp!(m, add_cuts::Bool, T)
+    is_viol_cut = false
+    viol = 0.
+
     T_val = Symmetric(getvalue(T))
     T_eig_obj = eigfact!(T_val, -Inf, -m.prim_cut_feas_tol)
 
     # Violation is negative min eigenvalue
     if !isempty(T_eig_obj[:values])
-        viol = -minimum(T_eig_obj[:values]))
-    else
-        viol = 0.
+        viol = -minimum(T_eig_obj[:values])
     end
 
     # If violation is significant and using separation cuts, clean zeros and get cut
@@ -1965,31 +2018,24 @@ end
  Specific cone K* cut functions
 =========================================================#
 
-# Add K* cuts for SOC
+# Add K* cuts for SOC: (u,w) in SOC* = SOC <-> u >= norm2(w) >= 0
 function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
-    # # Remove near-zeros, return false if all near zero
-    # if !clean_zeros!(m, v_dual)
-    #     return false
-    # end
-    #
-    # # Calculate t_dual according to SOC definition
-    # t_dual = vecnorm(v_dual)
+    is_viol_cut = false
 
     dim = length(w_val)
-    is_viol = false
     add_full = false
 
     if m.soc_disagg
         # Using SOC disaggregation
         for j in 1:dim
-            if v_dual[j] == 0.
+            if w_val[j] == 0.
                 # Zero cut, don't add
                 continue
-            elseif dim*v_dual[j]^2/t_dual < m.cut_zero_tol
+            elseif dim*w_val[j]^2/u_val < m.cut_zero_tol
                 # Coefficient is too small, don't add, add full cut later
                 add_full = true
                 continue
-            elseif (v_dual[j]/t_dual)^2 < 1e-5
+            elseif (w_val[j]/u_val)^2 < unstable_soc_disagg_tol
                 # Cut is poorly conditioned, add it but also add full cut
                 add_full = true
             end
@@ -1998,12 +2044,12 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
                 # Using SOC absvalue lifting, so add two-sided cut
                 # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j - 2*|v'_j|*a_j >= 0
                 # Scale by 2*dim
-                @expression(m.model_mip, cut_expr, 2*dim*(v_dual[j]^2/t_dual*t + 2*t_dual*d[j] - 2*abs(v_dual[j])*a[j]))
+                @expression(m.model_mip, cut_expr, 2*dim*(w_val[j]^2/u_val*t + 2*u_val*d[j] - 2*abs(w_val[j])*a[j]))
             else
                 # Not using SOC absvalue lifting, so add a single one-sided cut
                 # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j + 2*v'_j*v_j >= 0
                 # Scale by 2*dim
-                @expression(m.model_mip, cut_expr, 2*dim*(v_dual[j]^2/t_dual*t + 2*t_dual*d[j] + 2*v_dual[j]*v[j]))
+                @expression(m.model_mip, cut_expr, 2*dim*(w_val[j]^2/u_val*t + 2*u_val*d[j] + 2*w_val[j]*v[j]))
             end
             if add_cut!(m, cut_expr, m.logs[:SOC])
                 is_viol = true
@@ -2017,60 +2063,57 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
             # Using SOC absvalue lifting, so add many-sided cut
             # norm(v')*t - dot(|v'|,a) >= 0
             # Scale by 2
-            @expression(m.model_mip, cut_expr, 2*(t_dual*t - vecdot(abs.(v_dual), a)))
+            @expression(m.model_mip, cut_expr, 2*(u_val*t - vecdot(abs.(w_val), a)))
         else
             # Not using SOC absvalue lifting, so add a single one-sided cut
             # norm(v')*t + dot(v',v) >= 0
-            @expression(m.model_mip, cut_expr, t_dual*t + vecdot(v_dual, v))
+            @expression(m.model_mip, cut_expr, u_val*t + vecdot(w_val, v))
         end
         if add_cut!(m, cut_expr, m.logs[:SOC])
             is_viol = true
         end
     end
 
-    return is_viol
+    return is_viol_cut
 end
 
-# Add K* cuts for exp
+# Add K* cut for Exp: (w,v,u) in ExpDual <-> (w < 0 && u >= -w*exp(v/w - 1) > 0) || (w = 0 && u >= 0 && v >= 0)
 function add_cut_exp!(m, r, s, t, u_val, v_val, w_val)
-    # Cut is (u,v,w)'(r,s,t) >= 0
     @expression(m.model_mip, cut_expr, u_val*r + v_val*s + w_val*t)
 
-    return add_cut!(m, cut_expr, m.logs[:ExpPrimal])
+    is_viol_cut = add_cut!(m, cut_expr, m.logs[:ExpPrimal])
+
+    return is_viol_cut
 end
 
-# Add K* cuts for PSD
-function add_cut_sdp!(m, T, eig_dual)
-    # # Remove near-zeros, return false if all near zero
-    # if !clean_zeros!(m, eig_dual)
-    #     return false
-    # end
+# Add K* cuts for PSD: W in SDP* = SDP <-> sum_{j: lambda_j < 0} lambda_j(W) = 0
+function add_cut_sdp!(m, T, W_eig)
+    is_viol_cut = false
 
-    (dim, num_eig) = size(eig_dual)
-    is_viol = false
+    (dim, num_eig) = size(W_eig)
 
     if m.sdp_eig
         # Using PSD eigenvector cuts
         for j in 1:num_eig
-            eig_j = eig_dual[:, j]
+            W_eig_j = W_eig[:,j]
 
             if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
                 # Using SDP SOC eig cuts
                 # Over all diagonal entries i, exclude the largest one
-                i = findmax(abs.(eig_j))[2]
+                i = findmax(abs.(W_eig_j))[2]
 
                 # yz >= ||x||^2, y,z >= 0 <-> norm2(y-z, 2x) <= y + z, y,z >= 0
                 y = V[i,i]
-                z = sum(V[k,l]*eig_j[k]*eig_j[l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
+                z = sum(V[k,l]*Symmetric(W_eig_j[k]*W_eig_j[l]) for k in 1:dim, l in 1:dim if (k!=i && l!=i))
                 @constraint(m.model_mip, z >= 0)
-                x = sum(V[k,i]*eig_j[k] for k in 1:dim if k!=i)
+                x = sum(V[k,i]*W_eig_j[k] for k in 1:dim if k!=i)
                 @expression(m.model_mip, cut_expr, y + z - norm([(y - z), 2*x]))
                 if add_cut!(m, cut_expr, m.logs[:SDP])
                     is_viol = true
                 end
             else
                 # Not using SDP SOC cuts
-                @expression(m.model_mip, cut_expr, num_eig*vecdot(eig_j*eig_j', V))
+                @expression(m.model_mip, cut_expr, num_eig*vecdot(Symmetric(W_eig_j*W_eig_j'), V))
                 if add_cut!(m, cut_expr, m.logs[:SDP])
                     is_viol = true
                 end
@@ -2080,20 +2123,20 @@ function add_cut_sdp!(m, T, eig_dual)
         # Using full PSD cut
         if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
             # Using SDP SOC full cut
-            mat_dual = eig_dual * eig_dual'
+            mat_dual = Symmetric(W_eig*W_eig')
             i = findmax(abs.(diag(mat_dual)))[2]
 
             y = V[i,i]
             z = sum(V[k,l]*mat_dual[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
             @constraint(m.model_mip, z >= 0)
-            @expression(m.model_mip, x[j in 1:num_eig], sum((V[k,i]*eig_dual[k,j]) for k in 1:dim if k!=i))
+            @expression(m.model_mip, x[j in 1:num_eig], sum((V[k,i]*W_eig[k,j]) for k in 1:dim if k!=i))
             @expression(m.model_mip, cut_expr, y + z - norm([(y - z), (2*x)...]))
             if add_cut!(m, cut_expr, m.logs[:SDP])
                 is_viol = true
             end
         else
             # Using PSD linear cut
-            @expression(m.model_mip, cut_expr, vecdot(eig_dual*eig_dual', V))
+            @expression(m.model_mip, cut_expr, vecdot(Symmetric(W_eig*W_eig'), V))
             if add_cut!(m, cut_expr, m.logs[:SDP])
                 is_viol = true
             end
