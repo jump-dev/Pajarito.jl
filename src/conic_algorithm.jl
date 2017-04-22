@@ -1832,7 +1832,7 @@ function add_subp_cut_soc!(m, r, t, pi, rho, u_val, w_val)
 
     # (u,w) in SOC* = SOC <-> u >= norm2(w) >= 0
     # If epigraph u is significantly positive, clean zeros on w and add cut
-    if (u_val > m.cut_zero_tol) && clean_zeros!(w_val)
+    if (u_val > m.cut_zero_tol) && clean_zeros!(m, w_val)
         # K* projected subproblem cut is (norm2(w), w)
         u_val = vecnorm(w_val)
         is_viol_cut = add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
@@ -1871,7 +1871,7 @@ function add_subp_cut_sdp!(m, T, W_val)
     if !isempty(W_eig_obj[:values])
         # K* projected (scaled) subproblem cut is sum_{j: lambda_j > 0} lambda_j W_eig_j W_eig_j'
         W_eig = W_eig_obj[:vectors]*Diagonal(sqrt.(W_eig_obj[:values]))
-        # if clean_zeros!(W_eig)
+        # if clean_zeros!(m, W_eig)
             is_viol_cut = add_cut_sdp!(m, T, W_eig)
         # end
     end
@@ -1944,7 +1944,7 @@ function add_sep_cut_soc!(m, add_cuts::Bool, r, t, pi, rho)
     viol = vecnorm(t_val) - r_val
 
     # If violation is significant and using separation cuts, clean zeros and get cut
-    if (viol > m.prim_cut_feas_tol) && add_cuts && clean_zeros!(t_val)
+    if (viol > m.prim_cut_feas_tol) && add_cuts && clean_zeros!(m, t_val)
         # K* separation cut is (1, -t/norm(t))
         w_val = -t_val/vecnorm(t_val)
         is_viol_cut = add_cut_soc!(m, r, t, pi, rho, 1., w_val)
@@ -2004,7 +2004,7 @@ function add_sep_cut_sdp!(m, add_cuts::Bool, T)
     if (viol > m.prim_cut_feas_tol) && add_cuts
         # K* separation cut is sum_{j: lambda_j < 0} T_eig_j T_eig_j'
         W_eig = T_eig_obj[:vectors]
-        # if clean_zeros!(W_eig)
+        # if clean_zeros!(m, W_eig)
             is_viol_cut = add_cut_sdp!(m, T, W_eig)
         # end
     end
