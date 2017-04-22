@@ -2103,7 +2103,7 @@ function add_cut_sdp!(m, T, W_eig)
                 i = findmax(abs.(W_eig_j))[2]
 
                 y = T[i,i]
-                z = sum(T[k,l]*Symmetric(W_eig_j[k]*W_eig_j[l]) for k in 1:dim, l in 1:dim if (k!=i && l!=i))
+                z = sum(T[k,l]*W_eig_j[k]*W_eig_j[l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
                 @constraint(m.model_mip, z >= 0)
                 x = sum(T[k,i]*W_eig_j[k] for k in 1:dim if k!=i)
                 @expression(m.model_mip, cut_expr, y + z - norm([(y - z), 2*x]))
