@@ -2074,7 +2074,7 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
         end
     end
 
-    return is_viol_cut_cut
+    return is_viol_cut
 end
 
 # Add K* cut for Exp: (w,v,u) in ExpDual <-> (w < 0 && u >= -w*exp(v/w - 1) > 0) || (w = 0 && u >= 0 && v >= 0)
