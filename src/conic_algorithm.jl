@@ -2126,9 +2126,9 @@ function add_cut_sdp!(m, T, W_eig)
             # Over all diagonal entries i, exclude the largest one
             i = findmax(abs.(diag(W)))[2]
 
-            # 3-dim rotated-SOC K* constraint is (T_i,i, <T_-i,-i, W_-i,-i>, sqrt2*<T_-i,i, W_eig_1_-i>, ..., sqrt2*<T_-i,i, W_eig_L_-i>) in RSOC^{L+2}, where L is the number of eigenvectors (num_eig)
+            # (num_eig+2)-dim rotated-SOC K* constraint is (T_i,i, <T_-i,-i, W_-i,-i>, sqrt2*<T_-i,i, W_eig_1_-i>, ..., sqrt2*<T_-i,i, W_eig_num_eig_-i>) in RSOC^{num_eig+2}, where num_eig is the number of eigenvectors
             # Use norm to add SOC constraint
-            # (p1, p2, q1, ..., qL) in RSOC <-> (p1+p2, p1-p2, sqrt2*q1, ..., sqrt2*qL) in SOC
+            # (p1, p2, q) in RSOC <-> (p1+p2, p1-p2, sqrt2*q) in SOC
             p2 = sum(T[k,l]*W[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
             @expression(m.model_mip, cut_expr, T[i,i] + p2 - norm([(T[i,i] - p2), 2*[sum((T[k,i]*W_eig[k,j]) for k in 1:dim if k!=i) for j in 1:num_eig]...]))
 
