@@ -426,7 +426,8 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     probname = "expsoc_optimal2"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            viol_cuts_only=true)
+            viol_cuts_only=true,
+            rel_gap=1e-7)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 

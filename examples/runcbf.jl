@@ -2,7 +2,7 @@
 
 using Pajarito, ConicBenchmarkUtilities
 
-mip_solver_drives = true
+mip_solver_drives = false
 
 using CPLEX
 mip_solver = CplexSolver(
@@ -25,7 +25,7 @@ solver = PajaritoSolver(
     mip_solver_drives=mip_solver_drives,
     mip_solver=mip_solver,
     cont_solver=cont_solver,
-    log_level=3
+    log_level=3,
     )
 
 dat = readcbfdata(ARGS[1])
