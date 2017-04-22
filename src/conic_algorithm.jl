@@ -1233,10 +1233,10 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             k = 1
             for j in 1:dim, i in j:dim
                 if j == i
-                    @constraint(model_mip, v[k] >= 0)
-                    T[i,j] = v[k]
+                    @constraint(model_mip, t[k] >= 0)
+                    T[i,j] = t[k]
                 else
-                    T[i,j] = T[j,i] = sqrt2inv*v[k]
+                    T[i,j] = T[j,i] = sqrt2inv*t[k]
                 end
                 k += 1
             end
@@ -1569,39 +1569,39 @@ function make_smat!(smat::Symmetric{Float64,Array{Float64,2}}, svec::Vector{Floa
     return smat
 end
 
-# Remove near-zeros from data, return false if all values are near-zeros, warn if bad conditioning on vector
-function clean_zeros!{N}(m, data::Array{Float64,N})
-    min_nz = Inf
-    max_nz = 0
-
-    for j in 1:length(data)
-        absj = abs(data[j])
-
-        if absj < m.cut_zero_tol
-            data[j] = 0.
-            continue
-        end
-
-        if absj < min_nz
-            min_nz = absj
-        end
-        if absj > max_nz
-            max_nz = absj
-        end
-    end
-
-    if max_nz > m.cut_zero_tol
-        if max_nz/min_nz > unstable_dual_tol
-            if m.logs[:n_unst_dual] == 0
-                warn("Encountering numerically unstable cone dual vectors\n")
-            end
-            m.logs[:n_unst_dual] += 1
-        end
-        return true
-    else
-        return false
-    end
-end
+# # Remove near-zeros from data, return false if all values are near-zeros, warn if bad conditioning on vector
+# function clean_zeros!{N}(m, data::Array{Float64,N})
+#     min_nz = Inf
+#     max_nz = 0
+#
+#     for j in 1:length(data)
+#         absj = abs(data[j])
+#
+#         if absj < m.cut_zero_tol
+#             data[j] = 0.
+#             continue
+#         end
+#
+#         if absj < min_nz
+#             min_nz = absj
+#         end
+#         if absj > max_nz
+#             max_nz = absj
+#         end
+#     end
+#
+#     if max_nz > m.cut_zero_tol
+#         if max_nz/min_nz > unstable_dual_tol
+#             if m.logs[:n_unst_dual] == 0
+#                 warn("Encountering numerically unstable cone dual vectors\n")
+#             end
+#             m.logs[:n_unst_dual] += 1
+#         end
+#         return true
+#     else
+#         return false
+#     end
+# end
 
 # Check and record violation and add cut, return true if violated
 function add_cut!(m, cut_expr, cone_logs)
@@ -1831,10 +1831,10 @@ function add_subp_cut_soc!(m, r, t, pi, rho, u_val, w_val)
 
     # (u,w) in SOC* = SOC <-> u >= norm2(w) >= 0
     # If epigraph u is significantly positive, clean zeros on w and add cut
-    if (u_val > m.cut_zero_tol) && clean_zeros!(w_val)
+    if (u_val > m.cut_zero_tol) #&& clean_zeros!(w_val)
         # K* projected subproblem cut is (norm2(w), w)
         u_val = vecnorm(w_val)
-        is_viol_cut = add_cut_soc!(m, m.r_soc[n], m.t_soc[n], m.pi_soc[n], m.rho_soc[n], u_val, w_val)
+        is_viol_cut = add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
     end
 
     return is_viol_cut
@@ -1848,12 +1848,12 @@ function add_subp_cut_exp!(m, r, s, t, u_val, v_val, w_val)
     if w_val > -w_exp_zero_tol
         # w is (near) zero: K* projected subproblem cut on (r,s,t) is (max(u, 0), max(v, 0), 0)
         if (u_val > m.cut_zero_tol) && (v_val > m.cut_zero_tol)
-            is_viol_cut = add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], u_val, v_val, 0.)
+            is_viol_cut = add_cut_exp!(m, r, s, t, u_val, v_val, 0.)
         end
     else
         # w is significantly negative: K* projected subproblem cut on (r,s,t) is (-w*exp(v/w - 1), v, w)
         u_val = -w_val*exp(v_val/w_val - 1)
-        is_viol_cut = add_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n], u_val, v_val, w_val)
+        is_viol_cut = add_cut_exp!(m, r, s, t, u_val, v_val, w_val)
     end
 
     return is_viol_cut
@@ -1870,9 +1870,9 @@ function add_subp_cut_sdp!(m, T, W_val)
     if !isempty(W_eig_obj[:values])
         # K* projected (scaled) subproblem cut is sum_{j: lambda_j > 0} lambda_j W_eig_j W_eig_j'
         W_eig = W_eig_obj[:vectors]*Diagonal(sqrt.(W_eig_obj[:values]))
-        if clean_zeros!(W_eig)
-            is_viol_cut = add_cut_sdp!(m, m.T_sdp[n], W_eig)
-        end
+        # if clean_zeros!(W_eig)
+            is_viol_cut = add_cut_sdp!(m, T, W_eig)
+        # end
     end
 
     return is_viol_cut
@@ -1944,7 +1944,7 @@ function add_sep_cut_soc!(m, add_cuts::Bool, r, t, pi, rho)
 
     # If violation is significant and using separation cuts, clean zeros and get cut
     if (viol > m.prim_cut_feas_tol) && add_cuts
-        clean_zeros!(t_val)
+        # clean_zeros!(t_val)
 
         # K* separation cut is (1, -t/norm(t))
         w_val = -t_val/vecnorm(t_val)
@@ -2005,9 +2005,9 @@ function add_sep_cut_sdp!(m, add_cuts::Bool, T)
     if (viol > m.prim_cut_feas_tol) && add_cuts
         # K* separation cut is sum_{j: lambda_j < 0} T_eig_j T_eig_j'
         W_eig = T_eig_obj[:vectors]
-        if clean_zeros!(W_eig)
+        # if clean_zeros!(W_eig)
             is_viol_cut = add_cut_sdp!(m, T, W_eig)
-        end
+        # end
     end
 
     return (is_viol_cut, viol)
@@ -2052,7 +2052,7 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
                 @expression(m.model_mip, cut_expr, 2*dim*(w_val[j]^2/u_val*t + 2*u_val*d[j] + 2*w_val[j]*v[j]))
             end
             if add_cut!(m, cut_expr, m.logs[:SOC])
-                is_viol = true
+                is_viol_cut = true
             end
         end
     end
@@ -2070,11 +2070,11 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
             @expression(m.model_mip, cut_expr, u_val*t + vecdot(w_val, v))
         end
         if add_cut!(m, cut_expr, m.logs[:SOC])
-            is_viol = true
+            is_viol_cut = true
         end
     end
 
-    return is_viol_cut
+    return is_viol_cut_cut
 end
 
 # Add K* cut for Exp: (w,v,u) in ExpDual <-> (w < 0 && u >= -w*exp(v/w - 1) > 0) || (w = 0 && u >= 0 && v >= 0)
@@ -2102,20 +2102,19 @@ function add_cut_sdp!(m, T, W_eig)
                 # Over all diagonal entries i, exclude the largest one
                 i = findmax(abs.(W_eig_j))[2]
 
-                # yz >= ||x||^2, y,z >= 0 <-> norm2(y-z, 2x) <= y + z, y,z >= 0
-                y = V[i,i]
-                z = sum(V[k,l]*Symmetric(W_eig_j[k]*W_eig_j[l]) for k in 1:dim, l in 1:dim if (k!=i && l!=i))
+                y = T[i,i]
+                z = sum(T[k,l]*Symmetric(W_eig_j[k]*W_eig_j[l]) for k in 1:dim, l in 1:dim if (k!=i && l!=i))
                 @constraint(m.model_mip, z >= 0)
-                x = sum(V[k,i]*W_eig_j[k] for k in 1:dim if k!=i)
+                x = sum(T[k,i]*W_eig_j[k] for k in 1:dim if k!=i)
                 @expression(m.model_mip, cut_expr, y + z - norm([(y - z), 2*x]))
                 if add_cut!(m, cut_expr, m.logs[:SDP])
-                    is_viol = true
+                    is_viol_cut = true
                 end
             else
                 # Not using SDP SOC cuts
-                @expression(m.model_mip, cut_expr, num_eig*vecdot(Symmetric(W_eig_j*W_eig_j'), V))
+                @expression(m.model_mip, cut_expr, num_eig*vecdot(Symmetric(W_eig_j*W_eig_j'), T))
                 if add_cut!(m, cut_expr, m.logs[:SDP])
-                    is_viol = true
+                    is_viol_cut = true
                 end
             end
         end
@@ -2126,24 +2125,24 @@ function add_cut_sdp!(m, T, W_eig)
             mat_dual = Symmetric(W_eig*W_eig')
             i = findmax(abs.(diag(mat_dual)))[2]
 
-            y = V[i,i]
-            z = sum(V[k,l]*mat_dual[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
+            y = T[i,i]
+            z = sum(T[k,l]*mat_dual[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
             @constraint(m.model_mip, z >= 0)
-            @expression(m.model_mip, x[j in 1:num_eig], sum((V[k,i]*W_eig[k,j]) for k in 1:dim if k!=i))
+            @expression(m.model_mip, x[j in 1:num_eig], sum((T[k,i]*W_eig[k,j]) for k in 1:dim if k!=i))
             @expression(m.model_mip, cut_expr, y + z - norm([(y - z), (2*x)...]))
             if add_cut!(m, cut_expr, m.logs[:SDP])
-                is_viol = true
+                is_viol_cut = true
             end
         else
             # Using PSD linear cut
-            @expression(m.model_mip, cut_expr, vecdot(Symmetric(W_eig*W_eig'), V))
+            @expression(m.model_mip, cut_expr, vecdot(Symmetric(W_eig*W_eig'), T))
             if add_cut!(m, cut_expr, m.logs[:SDP])
-                is_viol = true
+                is_viol_cut = true
             end
         end
     end
 
-    return is_viol
+    return is_viol_cut
 end
 
 
