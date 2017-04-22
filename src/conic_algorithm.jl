@@ -1570,39 +1570,39 @@ function make_smat!(smat::Symmetric{Float64,Array{Float64,2}}, svec::Vector{Floa
     return smat
 end
 
-# Remove near-zeros from data, return false if all values are near-zeros, warn if bad conditioning on vector
-function clean_zeros!(m, data)
-    min_nz = Inf
-    max_nz = 0
-
-    for j in 1:length(data)
-        absj = abs(data[j])
-
-        if absj < m.cut_zero_tol
-            data[j] = 0.
-            continue
-        end
-
-        if absj < min_nz
-            min_nz = absj
-        end
-        if absj > max_nz
-            max_nz = absj
-        end
-    end
-
-    if max_nz > m.cut_zero_tol
-        if max_nz/min_nz > unstable_dual_tol
-            if m.logs[:n_unst_dual] == 0
-                warn("Encountering numerically unstable cone dual vectors\n")
-            end
-            m.logs[:n_unst_dual] += 1
-        end
-        return true
-    else
-        return false
-    end
-end
+# # Remove near-zeros from data, return false if all values are near-zeros, warn if bad conditioning on vector
+# function clean_zeros!(m, data)
+#     min_nz = Inf
+#     max_nz = 0
+#
+#     for j in 1:length(data)
+#         absj = abs(data[j])
+#
+#         if absj < m.cut_zero_tol
+#             data[j] = 0.
+#             continue
+#         end
+#
+#         if absj < min_nz
+#             min_nz = absj
+#         end
+#         if absj > max_nz
+#             max_nz = absj
+#         end
+#     end
+#
+#     if max_nz > m.cut_zero_tol
+#         if max_nz/min_nz > unstable_dual_tol
+#             if m.logs[:n_unst_dual] == 0
+#                 warn("Encountering numerically unstable cone dual vectors\n")
+#             end
+#             m.logs[:n_unst_dual] += 1
+#         end
+#         return true
+#     else
+#         return false
+#     end
+# end
 
 # Check and record violation and add cut, return true if violated
 function add_cut!(m, cut_expr, cone_logs)
@@ -1832,7 +1832,7 @@ function add_subp_cut_soc!(m, r, t, pi, rho, u_val, w_val)
 
     # (u,w) in SOC* = SOC <-> u >= norm2(w) >= 0
     # If epigraph u is significantly positive, clean zeros on w and add cut
-    if (u_val > m.cut_zero_tol) && clean_zeros!(m, w_val)
+    if (u_val > m.cut_zero_tol) #&& clean_zeros!(m, w_val)
         # K* projected subproblem cut is (norm2(w), w)
         u_val = vecnorm(w_val)
         is_viol_cut = add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
@@ -1944,7 +1944,7 @@ function add_sep_cut_soc!(m, add_cuts::Bool, r, t, pi, rho)
     viol = vecnorm(t_val) - r_val
 
     # If violation is significant and using separation cuts, clean zeros and get cut
-    if (viol > m.prim_cut_feas_tol) && add_cuts && clean_zeros!(m, t_val)
+    if (viol > m.prim_cut_feas_tol) && add_cuts #&& clean_zeros!(m, t_val)
         # K* separation cut is (1, -t/norm(t))
         w_val = -t_val/vecnorm(t_val)
         is_viol_cut = add_cut_soc!(m, r, t, pi, rho, 1., w_val)
@@ -2031,6 +2031,9 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
                 continue
             elseif dim*w_val[j]^2 < u_val*m.cut_zero_tol
                 # Coefficient is too small, don't add, but add full SOC cut later
+
+
+
                 add_full = true
                 continue
             elseif (w_val[j]/u_val)^2 < unstable_soc_disagg_tol
