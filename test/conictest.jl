@@ -65,7 +65,7 @@ end
 
 # SOC problems for NLP and conic algorithms
 function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
-    testname = "SOC Optimal"
+    testname = "SOC optimal"
     probname = "soc_optimal"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
@@ -77,7 +77,7 @@ function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
         @test isapprox(objval, -9, atol=TOL)
     end
 
-    testname = "Infeasible"
+    testname = "SOC infeasible"
     probname = "soc_infeasible"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
@@ -87,7 +87,7 @@ function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
         @test status == :Infeasible
     end
 
-    testname = "Optimal SOCRot"
+    testname = "SOCRot optimal"
     probname = "socrot_optimal"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
@@ -100,7 +100,7 @@ function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
         @test isapprox(sol, [1.5, 3, 3, 3], atol=TOL)
     end
 
-    testname = "Infeasible SOCRot"
+    testname = "SOCRot infeasible"
     probname = "socrot_infeasible"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
@@ -136,7 +136,7 @@ function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
         @test isapprox(sol, [1, 1/sqrt(2), 1/sqrt(2), 0, 0], atol=TOL)
     end
 
-    testname = "Infeasible all binary"
+    testname = "SOC infeasible binary"
     probname = "soc_infeasible2"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
@@ -194,7 +194,7 @@ function run_soc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, re
         @test isapprox(objval, -9, atol=TOL)
     end
 
-    testname = "Dualize SOCRot"
+    testname = "SOCRot dualize"
     probname = "socrot_optimal"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,

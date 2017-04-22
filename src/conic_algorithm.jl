@@ -2376,6 +2376,7 @@ function calc_infeas(cones, vals)
         elseif cone == :SOCRotated
             # Convert to SOC and calculate using SOC violation function, maintain original scaling
             # (p1, p2, q) in RSOC <-> (sqrt2inv*(p1+p2), sqrt2inv*(-p1+p2), q) in SOC            t = sqrt2inv*(vals[idx[1]] + vals[idx[2]])
+            t = sqrt2inv*(vals[idx[1]] + vals[idx[2]])
             usqr = 1/2*(-vals[idx[1]] + vals[idx[2]])^2 + sumabs2(vals[idx[j]] for j in 3:length(idx))
             viol_rot = max(viol_rot, sqrt(usqr) - t)
         elseif cone == :ExpPrimal
