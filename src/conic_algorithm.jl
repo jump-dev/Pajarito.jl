@@ -1252,9 +1252,10 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
             elseif m.init_sdp_soc
                 # Using SOC initial cuts: initial OA set (SOC-representable) is the dual cone of scaled diagonally dominant matrices (an important subset of the PSD cone; enforces 2x2 principal submatrix PSDness; implies the linear initial cuts)
                 for j in 1:dim, i in (j+1):dim
-                    # 3-dim rotated-SOC K* cut is (T_ii/sqrt2, T_jj/sqrt2, T_ij) in RSOC^3
-                    # 2*T_ii/sqrt2*T_jj/sqrt2 >= T_ij^2 <-> T_ii + T_jj >= norm2(2*T_ij, T_ii - T_jj)
-                    @constraint(model_mip, T[i,i] + T[j,j] >= norm(JuMP.AffExpr[2*T[i,j], (T[i,i] - T[j,j])]))
+                    # 3-dim rotated-SOC K* cut is (T_ii, T_jj, sqrt2*T_ij) in RSOC^3
+                    # Use norm to add SOC constraint
+                    # (p1, p2, q) in RSOC <-> (p1+p2, p1-p2, sqrt2*q) in SOC
+                    @constraint(model_mip, T[i,i] + T[j,j] - norm(JuMP.AffExpr[(T[i,i] - T[j,j]), 2*T[i,j]]) >= 0)
                 end
             end
         end
@@ -2026,13 +2027,12 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
     add_full = false
 
     if m.soc_disagg
-        # Using SOC disaggregation
         for j in 1:dim
             if w_val[j] == 0.
                 # Zero cut, don't add
                 continue
-            elseif dim*w_val[j]^2/u_val < m.cut_zero_tol
-                # Coefficient is too small, don't add, add full cut later
+            elseif dim*w_val[j]^2 < u_val*m.cut_zero_tol
+                # Coefficient is too small, don't add, but add full SOC cut later
                 add_full = true
                 continue
             elseif (w_val[j]/u_val)^2 < unstable_soc_disagg_tol
@@ -2041,16 +2041,15 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
             end
 
             if m.soc_abslift
-                # Using SOC absvalue lifting, so add two-sided cut
-                # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j - 2*|v'_j|*a_j >= 0
+                # Disaggregated K* cut on (r, pi_j, rho_j) is (w_j^2/2u, u, -|w_j|)
                 # Scale by 2*dim
-                @expression(m.model_mip, cut_expr, 2*dim*(w_val[j]^2/u_val*r + 2*u_val*pi[j] - 2*abs(w_val[j])*rho[j]))
+                @expression(m.model_mip, cut_expr, dim*w_val[j]^2/u_val*r + 2*dim*u_val*pi[j] - 2*dim*abs(w_val[j])*rho[j])
             else
-                # Not using SOC absvalue lifting, so add a single one-sided cut
-                # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j + 2*v'_j*v_j >= 0
+                # Disaggregated K* cut on (r, pi_j, t_j) is (w_j^2/2u, u, w_j)
                 # Scale by 2*dim
-                @expression(m.model_mip, cut_expr, 2*dim*(w_val[j]^2/u_val*r + 2*u_val*pi[j] + 2*w_val[j]*t[j]))
+                @expression(m.model_mip, cut_expr, dim*w_val[j]^2/u_val*r + 2*dim*u_val*pi[j] + 2*dim*w_val[j]*t[j])
             end
+
             if add_cut!(m, cut_expr, m.logs[:SOC])
                 is_viol_cut = true
             end
@@ -2058,17 +2057,15 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
     end
 
     if add_full || !m.soc_disagg
-        # Using full SOC cut
         if m.soc_abslift
-            # Using SOC absvalue lifting, so add many-sided cut
-            # norm(v')*t - dot(|v'|,a) >= 0
+            # Non-disaggregated K* cut on (r, rho_1, ..., rho_j, ..., rho_dim) is (u, -|w_j|)
             # Scale by 2
-            @expression(m.model_mip, cut_expr, 2*(u_val*r - vecdot(abs.(w_val), rho)))
+            @expression(m.model_mip, cut_expr, 2*u_val*r - 2*sum(abs(w_val[j])*rho[j] for j in 1:dim))
         else
-            # Not using SOC absvalue lifting, so add a single one-sided cut
-            # norm(v')*t + dot(v',v) >= 0
+            # Non-disaggregated K* cut on (r, t) is (u, w)
             @expression(m.model_mip, cut_expr, u_val*r + vecdot(w_val, t))
         end
+
         if add_cut!(m, cut_expr, m.logs[:SOC])
             is_viol_cut = true
         end
@@ -2098,21 +2095,25 @@ function add_cut_sdp!(m, T, W_eig)
             W_eig_j = W_eig[:,j]
 
             if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
-                # Using SDP SOC eig cuts
+                # Using SDP SOC eig cuts (cannot add SOC cuts during callbacks)
                 # Over all diagonal entries i, exclude the largest one
                 i = findmax(abs.(W_eig_j))[2]
 
-                y = T[i,i]
-                z = sum(T[k,l]*W_eig_j[k]*W_eig_j[l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
-                @constraint(m.model_mip, z >= 0)
-                x = sum(T[k,i]*W_eig_j[k] for k in 1:dim if k!=i)
-                @expression(m.model_mip, cut_expr, y + z - norm([(y - z), 2*x]))
+                # 3-dim rotated-SOC K* constraint is (T_i,i, <T_-i,-i, (W_eig_j*W_eig_j')_-i,-i>, sqrt2*<T_-i,i, W_eig_j_-i>) in RSOC^3
+                # Use norm to add SOC constraint
+                # (p1, p2, q) in RSOC <-> (p1+p2, p1-p2, sqrt2*q) in SOC
+                p2 = sum(T[k,l]*W_eig_j[k]*W_eig_j[l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
+                @expression(m.model_mip, cut_expr, T[i,i] + p2 - norm([(T[i,i] - p2), 2*sum(T[k,i]*W_eig_j[k] for k in 1:dim if k!=i)]))
+
                 if add_cut!(m, cut_expr, m.logs[:SDP])
                     is_viol_cut = true
                 end
             else
-                # Not using SDP SOC cuts
+                # Using SDP linear eig cuts
+                # K* cut on T is W_eig_j*W_eig_j'
+                # Scale by num_eig
                 @expression(m.model_mip, cut_expr, num_eig*vecdot(Symmetric(W_eig_j*W_eig_j'), T))
+
                 if add_cut!(m, cut_expr, m.logs[:SDP])
                     is_viol_cut = true
                 end
@@ -2120,22 +2121,27 @@ function add_cut_sdp!(m, T, W_eig)
         end
     else
         # Using full PSD cut
-        if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
-            # Using SDP SOC full cut
-            mat_dual = Symmetric(W_eig*W_eig')
-            i = findmax(abs.(diag(mat_dual)))[2]
+        W = Symmetric(W_eig*W_eig')
 
-            y = T[i,i]
-            z = sum(T[k,l]*mat_dual[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
-            @constraint(m.model_mip, z >= 0)
-            @expression(m.model_mip, x[j in 1:num_eig], sum((T[k,i]*W_eig[k,j]) for k in 1:dim if k!=i))
-            @expression(m.model_mip, cut_expr, y + z - norm([(y - z), (2*x)...]))
+        if m.sdp_soc && !(m.mip_solver_drives && m.oa_started)
+            # Using SDP SOC full cut (cannot add SOC cuts during callbacks)
+            # Over all diagonal entries i, exclude the largest one
+            i = findmax(abs.(diag(W)))[2]
+
+            # 3-dim rotated-SOC K* constraint is (T_i,i, <T_-i,-i, W_-i,-i>, sqrt2*<T_-i,i, W_eig_1_-i>, ..., sqrt2*<T_-i,i, W_eig_L_-i>) in RSOC^{L+2}, where L is the number of eigenvectors (num_eig)
+            # Use norm to add SOC constraint
+            # (p1, p2, q1, ..., qL) in RSOC <-> (p1+p2, p1-p2, sqrt2*q1, ..., sqrt2*qL) in SOC
+            p2 = sum(T[k,l]*W[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
+            @expression(m.model_mip, cut_expr, T[i,i] + p2 - norm([(T[i,i] - p2), 2*[sum((T[k,i]*W_eig[k,j]) for k in 1:dim if k!=i) for j in 1:num_eig]...]))
+
             if add_cut!(m, cut_expr, m.logs[:SDP])
                 is_viol_cut = true
             end
         else
-            # Using PSD linear cut
-            @expression(m.model_mip, cut_expr, vecdot(Symmetric(W_eig*W_eig'), T))
+            # Using SDP linear full cut
+            # K* cut on T is W
+            @expression(m.model_mip, cut_expr, vecdot(W, T))
+
             if add_cut!(m, cut_expr, m.logs[:SDP])
                 is_viol_cut = true
             end
@@ -2370,9 +2376,8 @@ function calc_infeas(cones, vals)
         elseif cone == :SOC
             viol_soc = max(viol_soc, vecnorm(vals[idx[j]] for j in 2:length(idx)) - vals[idx[1]])
         elseif cone == :SOCRotated
-            # Convert to SOC and calculate using SOC violation function
-            # (y,z,x) in RSOC <=> (sqrt2inv*(y+z),sqrt2inv*(-y+z),x) in SOC
-            t = sqrt2inv*(vals[idx[1]] + vals[idx[2]])
+            # Convert to SOC and calculate using SOC violation function, maintain original scaling
+            # (p1, p2, q) in RSOC <-> (sqrt2inv*(p1+p2), sqrt2inv*(-p1+p2), q) in SOC            t = sqrt2inv*(vals[idx[1]] + vals[idx[2]])
             usqr = 1/2*(-vals[idx[1]] + vals[idx[2]])^2 + sumabs2(vals[idx[j]] for j in 3:length(idx))
             viol_rot = max(viol_rot, sqrt(usqr) - t)
         elseif cone == :ExpPrimal
