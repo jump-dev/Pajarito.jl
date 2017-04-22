@@ -1096,7 +1096,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
                 # 2*pi_j >= t_j^2/r, all j
                 pi = @variable(model_mip, [j in 1:dim], lowerbound=0)
                 for j in 1:dim
-                    setname(d[j], "pi$(j)_soc$(n_soc)")
+                    setname(pi[j], "pi$(j)_soc$(n_soc)")
                 end
 
                 # Add disaggregated SOC constraint
@@ -2044,12 +2044,12 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
                 # Using SOC absvalue lifting, so add two-sided cut
                 # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j - 2*|v'_j|*a_j >= 0
                 # Scale by 2*dim
-                @expression(m.model_mip, cut_expr, 2*dim*(w_val[j]^2/u_val*t + 2*u_val*d[j] - 2*abs(w_val[j])*a[j]))
+                @expression(m.model_mip, cut_expr, 2*dim*(w_val[j]^2/u_val*r + 2*u_val*pi[j] - 2*abs(w_val[j])*rho[j]))
             else
                 # Not using SOC absvalue lifting, so add a single one-sided cut
                 # (v'_j)^2/norm(v')*t + 2*norm(v')*d_j + 2*v'_j*v_j >= 0
                 # Scale by 2*dim
-                @expression(m.model_mip, cut_expr, 2*dim*(w_val[j]^2/u_val*t + 2*u_val*d[j] + 2*w_val[j]*v[j]))
+                @expression(m.model_mip, cut_expr, 2*dim*(w_val[j]^2/u_val*r + 2*u_val*pi[j] + 2*w_val[j]*t[j]))
             end
             if add_cut!(m, cut_expr, m.logs[:SOC])
                 is_viol_cut = true
@@ -2063,11 +2063,11 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
             # Using SOC absvalue lifting, so add many-sided cut
             # norm(v')*t - dot(|v'|,a) >= 0
             # Scale by 2
-            @expression(m.model_mip, cut_expr, 2*(u_val*t - vecdot(abs.(w_val), a)))
+            @expression(m.model_mip, cut_expr, 2*(u_val*r - vecdot(abs.(w_val), rho)))
         else
             # Not using SOC absvalue lifting, so add a single one-sided cut
             # norm(v')*t + dot(v',v) >= 0
-            @expression(m.model_mip, cut_expr, u_val*t + vecdot(w_val, v))
+            @expression(m.model_mip, cut_expr, u_val*r + vecdot(w_val, t))
         end
         if add_cut!(m, cut_expr, m.logs[:SOC])
             is_viol_cut = true
