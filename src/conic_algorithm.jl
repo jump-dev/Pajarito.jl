@@ -1945,12 +1945,12 @@ function add_sep_cut_exp!(m, add_cuts::Bool, r, s, t)
         # s is (almost) zero: violation is t
         viol = t_val
 
-        # TODO: for now, error if r is too small
-        if r_val <= m.mip_feas_tol
-            error("Cannot add exp cone separation cut on point ($r_val, $s_val, $t_val)\n")
-        end
-
         if add_cuts && (viol > m.mip_feas_tol)
+            # TODO: for now, error if r is too small
+            if r_val <= m.mip_feas_tol
+                error("Cannot add exp cone separation cut on point ($r_val, $s_val, $t_val)\n")
+            end
+
             # K* separation cut on (r,s,t) is (t/r, -2*log(exp(1)*t/2r), -2)
             u_val = t_val/r_val
             v_val = -2.*(1. + log(u_val/2.))
