@@ -510,7 +510,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     probname = "exp_sepcut"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
-            prim_cuts_only=true, solve_relax=false, solve_subp=false)
+            prim_cuts_only=true, solve_relax=false, solve_subp=false, cut_zero_tol=1e-8)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -523,7 +523,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     probname = "exp_sepcut"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            prim_cuts_assist=false)
+            cut_zero_tol=1e-8)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
