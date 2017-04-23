@@ -1844,7 +1844,7 @@ end
 function add_subp_cut_sdp!(m, T, W_val)
     is_viol_cut = false
 
-    W_eig_obj = eigfact!(W_val, sqrt(m.mip_feas_tol), Inf)
+    W_eig_obj = eigfact!(W_val, m.mip_feas_tol, Inf)
 
     # K* projected (scaled) subproblem cut is sum_{j: lambda_j > 0} lambda_j W_eig_j W_eig_j'
     if !isempty(W_eig_obj[:values])
