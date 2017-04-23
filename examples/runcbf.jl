@@ -12,14 +12,14 @@ mip_solver = CplexSolver(
     CPX_PARAM_EPRHS=1e-7,
 )
 
-# using Mosek
-# cont_solver = MosekSolver(LOG=0)
+using Mosek
+cont_solver = MosekSolver(LOG=0)
 
-#using SCS
-#cont_solver = SCSSolver(eps=1e-5, max_iters=100000, verbose=0)
+# using SCS
+# cont_solver = SCSSolver(eps=1e-5, max_iters=100000, verbose=0)
 
-using ECOS
-cont_solver = ECOSSolver(verbose=false)
+# using ECOS
+# cont_solver = ECOSSolver(verbose=false)
 
 solver = PajaritoSolver(
     mip_solver_drives=mip_solver_drives,
