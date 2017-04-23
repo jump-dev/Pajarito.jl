@@ -1811,7 +1811,7 @@ function add_subp_cut_soc!(m, r, t, pi, rho, u_val, w_val)
     is_viol_cut = false
 
     # K* projected subproblem cut is (norm2(w), w)
-    if (u_val > m.cut_zero_tol) && clean_array!(m, w_val)
+    if (u_val > m.mip_feas_tol) && clean_array!(m, w_val)
         u_val = vecnorm(w_val)
         is_viol_cut = add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
         m.logs[:SOC][:n_subp] += 1
@@ -1824,9 +1824,9 @@ end
 function add_subp_cut_exp!(m, r, s, t, u_val, v_val, w_val)
     is_viol_cut = false
 
-    if w_val > -m.cut_zero_tol
+    if w_val > -m.mip_feas_tol
         # w is (near) zero: K* projected subproblem cut on (r,s,t) is (max(u, 0), max(v, 0), 0)
-        if (u_val > m.cut_zero_tol) && (v_val > m.cut_zero_tol)
+        if (u_val > m.mip_feas_tol) && (v_val > m.mip_feas_tol)
             is_viol_cut = add_cut_exp!(m, r, s, t, u_val, v_val, 0.)
             m.logs[:ExpPrimal][:n_subp] += 1
         end
@@ -1844,7 +1844,7 @@ end
 function add_subp_cut_sdp!(m, T, W_val)
     is_viol_cut = false
 
-    W_eig_obj = eigfact!(W_val, sqrt(m.cut_zero_tol), Inf)
+    W_eig_obj = eigfact!(W_val, sqrt(m.mip_feas_tol), Inf)
 
     # K* projected (scaled) subproblem cut is sum_{j: lambda_j > 0} lambda_j W_eig_j W_eig_j'
     if !isempty(W_eig_obj[:values])
