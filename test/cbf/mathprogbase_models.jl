@@ -70,6 +70,22 @@ dat = ConicBenchmarkUtilities.mpbtocbf(name, c, A, b, con_cones, var_cones, var_
 ConicBenchmarkUtilities.writecbfdata(joinpath(pwd(), "$name.cbf"), dat)
 
 
+name = "exp_sepcut"
+# Exp problem designed to test the special separation cuts for s = 0
+# min -t
+# s.t. (t,s,r)     ∈ Exp
+#      1/2 - t - s ≥ 0
+# s Binary
+c = [-1.0, 0.0, 0.0]
+A = [1.0 1.0 0.0]
+b = [0.5]
+con_cones = [(:NonNeg,1:1)]
+var_cones = [(:ExpPrimal,1:3)]
+var_types = [:Cont,:Bin,:Cont]
+dat = ConicBenchmarkUtilities.mpbtocbf(name, c, A, b, con_cones, var_cones, var_types)
+ConicBenchmarkUtilities.writecbfdata(joinpath(pwd(), "$name.cbf"), dat)
+
+
 name = "exp_ising"
 # Exp problem derived from Ising model for pairwise binary Markov random field structure estimation (work with Marc Vuffray, LANL 2016)
 c = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]

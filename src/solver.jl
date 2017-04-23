@@ -95,7 +95,7 @@ function PajaritoSolver(;
     prim_cuts_always = false,
     prim_cuts_assist = true,
 
-    cut_zero_tol = 1e-10,
+    cut_zero_tol = 1e-12,
     prim_cut_feas_tol = 1e-6,
     )
 

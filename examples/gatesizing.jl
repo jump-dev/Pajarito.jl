@@ -70,11 +70,11 @@ mip_solver = CplexSolver(
 )
 
 
-# using SCS
-# cont_solver = SCSSolver(eps=1e-5, max_iters=1000000, verbose=0)
+using SCS
+cont_solver = SCSSolver(eps=1e-5, max_iters=1000000, verbose=1)
 
-using ECOS
-cont_solver = ECOSSolver(verbose=false)
+# using ECOS
+# cont_solver = ECOSSolver(verbose=false)
 
 
 solver = PajaritoSolver(
