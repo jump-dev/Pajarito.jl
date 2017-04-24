@@ -9,7 +9,7 @@ using JuMP
 Set up JuMP model
 =========================================================#
 
-function portfoliorisk(solver, P, S, SP, r, Smax, sigmahalf, gamma, riskball)
+function portfoliorisk(solver, P, S, SP, Smax, returns, sigmahalf, gamma, riskball, DDT)
     m = Model(solver=solver)
 
     # Total investment sums to 1 (use <= 1 to simulate presence of riskless asset, ensuring feasibility)
@@ -17,7 +17,7 @@ function portfoliorisk(solver, P, S, SP, r, Smax, sigmahalf, gamma, riskball)
     @constraint(m, sum(x) <= 1)
 
     # Maximize total returns
-    @objective(m, Max, sum(r[p,s]*x[p,s] for p in P, s in SP[p]))
+    @objective(m, Max, sum(returns[p][s]*x[p,s] for p in P, s in SP[p]))
 
     # Total number of stocks with nonzero investment cannot exceed Smax (||x||_0 <= Smax)
     @variable(m, y[s in S], Bin)
@@ -25,15 +25,17 @@ function portfoliorisk(solver, P, S, SP, r, Smax, sigmahalf, gamma, riskball)
     @constraint(m, [p in P, s in SP[p]], x[p,s] <= y[s])
 
     for p in P
-        sxp = sigmahalf[p]*vec(x[p,:])
+        dim = length(SP[p])
+        xp = [x[p,s] for s in SP[p]]
+        sxp = sigmahalf[p]*xp
 
         if riskball[p] == :norm2
             @constraint(m, norm(sxp) <= gamma[p])
         elseif riskball[p] == :robustnorm2
-
-            # @SDconstraint(m, )
+            @variable(m, lambda >= 0)
+            @SDconstraint(m, [gamma[p] sxp'  xp'; sxp (gamma[p] - lambda*DDT[p]) zeros(dim, dim); xp zeros(dim, dim) lambda*eye(dim))] >= 0)
         elseif riskball[p] == :entropy
-            @constraint(m, sum(entropy(m, sxp[s]) for s in SP[p]) <= gamma[p]^2)
+            @constraint(m, sum(entropy(m, sxps) for sxps in sxp) <= gamma[p]^2)
         else
             error("Invalid risk ball type $(riskball[p])")
         end
@@ -60,7 +62,7 @@ Specify/read data
 function load_portfolio(por_file::String)
     file = open(por_file, "r")
 
-    n_stocks = int(readline(file))
+    g 6n_stocks = int(readline(file))
 
     returns = float(split(readline(file))[1:n_stocks])
 
@@ -78,8 +80,38 @@ function load_portfolio(por_file::String)
 end
 
 
-P, S, SP, r, Smax, sigmahalf, gamma, riskball
+por_files = readdir(joinpath(pwd(), "data")
 
+riskball = [:norm2, :robustnorm2, :entropy]
+gamma = [0.2, 0.2]
+N = length(riskball)
+
+P = 1:N
+SP = Vector{Vector{String}}(N)
+returns = Vector{Float64}(N)
+sigmahalf = Vector{Array{Float64}}(N)
+DDT = Vector{Array{Float64}}(N)
+total_stocks = 0
+stocks = Set{String}()
+
+for p in P
+    (n_stocks, SP[p], returns[p], sigmahalf[p]) = load_portfolio(por_files[p])
+
+    total_stocks += n_stocks
+    append!(S, SP[p])
+
+    if riskball[p] == :robustnorm2
+        # Generate perturbation matrix DDT and completely symmetrize (to avoid JuMP symmetry constraints)
+        D = rand(n_stocks, round(Int, n_stocks/2))
+        DDT[p] = zeros(n_stocks, n_stocks)
+        for i in 1:n_stocks, j in i:n_stocks
+            DDT[p][i,j] = DDT[p][j,i] = D[i]*D[j]
+        end
+    end
+end
+
+Smax = round(Int, total_stocks/3)
+S = collect(stocks)
 
 
 #=========================================================
@@ -128,7 +160,7 @@ solver = PajaritoSolver(
 Solve and print solution
 =========================================================#
 
-m = portfoliorisk(solver, P, S, SP, r, Smax, sigmahalf, gamma, riskball)
+m = portfoliorisk(solver, P, S, SP, Smax, returns, sigmahalf, gamma, riskball)
 solve!(m)
 
 @printf "\nReturns (obj) = %7.3f\n" getobjectivevalue(m)
