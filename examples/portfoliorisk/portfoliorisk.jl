@@ -9,7 +9,7 @@ using JuMP
 Set up JuMP model
 =========================================================#
 
-function portfoliorisk(solver, P, S, SP, r, Smax, sigmahalf, gamma)
+function portfoliorisk(solver, P, S, SP, r, Smax, sigmahalf, gamma, riskball)
     m = Model(solver=solver)
 
     # Total investment sums to 1 (use <= 1 to simulate presence of riskless asset, ensuring feasibility)
@@ -78,7 +78,7 @@ function load_portfolio(por_file::String)
 end
 
 
-P, S, SP, r, Smax, sigmahalf, gamma
+P, S, SP, r, Smax, sigmahalf, gamma, riskball
 
 
 
@@ -128,7 +128,7 @@ solver = PajaritoSolver(
 Solve and print solution
 =========================================================#
 
-m = portfoliorisk(solver, P, S, SP, r, Smax, sigmahalf, gamma)
+m = portfoliorisk(solver, P, S, SP, r, Smax, sigmahalf, gamma, riskball)
 solve!(m)
 
 @printf "\nReturns (obj) = %7.3f\n" getobjectivevalue(m)
