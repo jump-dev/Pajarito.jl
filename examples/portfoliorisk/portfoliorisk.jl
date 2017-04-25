@@ -48,7 +48,7 @@ function portfoliorisk(solver, Portfolios, Stocks, Smax)
             @constraint(m, norm(Shx[p,s] for s in p.stocks) <= p.gamma)
         elseif p.risk == :robustnorm2
             lambda = @variable(m, lowerbound=0)
-            @SDconstraint(m, [p.gamma [Shx[p,s] for s in p.stocks]' [x[p,s] for s in p.stocks]'; [Shx[p,s] for s in p.stocks] [p.gamma - lambda*p.Delta[(s1,s2)] for s1 in p.stocks, s2 in p.stocks] zeros(p.size, p.size); [x[p,s] for s in p.stocks] zeros(p.size, p.size) diagm(fill(lambda, p.size))] >= 0)
+            @SDconstraint(m, [p.gamma [Shx[p,s] for s in p.stocks]' [x[p,s] for s in p.stocks]'; [Shx[p,s] for s in p.stocks] (diagm(fill(p.gamma, p.size)) - [lambda.*p.Delta[(s1,s2)] for s1 in p.stocks, s2 in p.stocks]) zeros(p.size, p.size); [x[p,s] for s in p.stocks] zeros(p.size, p.size) diagm(fill(lambda, p.size))] >= 0)
         elseif p.risk == :entropy
             ent1 = @variable(m, [s in p.stocks])
             ent2 = @variable(m, [s in p.stocks])
@@ -93,7 +93,7 @@ function generatedata(risks, counts, maxstocks, gammas, datadir, datafiles)
         if prisk == :robustnorm2
             # Generate random matrix and scale and clean zeros
             Deltahalf = randn(psize, psize)
-            scalefactor = 1/100*norm([v for v in values(pSigmahalf)])/norm(vec(Deltahalf))
+            scalefactor = 1/10*norm([v for v in values(pSigmahalf)])/norm(vec(Deltahalf))
             @assert 1e-3 < scalefactor < 1e2
             for i in 1:psize, j in 1:psize
                 val = scalefactor*Deltahalf[i,j]
@@ -155,8 +155,8 @@ function loadportfolio(datadir, datafile, maxstocks::Int)
     @assert chomp(readline(file)) == ""
 
     line = chomp(readline(file))
-    @assert startswith(line, '[') && endswith(line, ']')
-    rawnames = split(line[2:end-1], "', '")
+    @assert startswith(line, "['") && endswith(line, "']")
+    rawnames = split(line[3:end-2], "', '")
     @assert length(rawnames) == n
 
     pstocks = [String(rawnames[s]) for s in takestocks]
@@ -188,14 +188,14 @@ mip_solver = CplexSolver(
     CPX_PARAM_EPGAP=(mip_solver_drives ? rel_gap : 0.)
 )
 
-# using SCS
-# cont_solver = SCSSolver(eps=1e-5, max_iters=10000, verbose=1)
+using SCS
+cont_solver = SCSSolver(eps=1e-3, max_iters=100000, verbose=0, warm_start=true)
 
 # using ECOS
 # cont_solver = ECOSSolver(verbose=false)
 
-using Mosek
-cont_solver = MosekSolver(LOG=1)
+# using Mosek
+# cont_solver = MosekSolver(LOG=0)
 
 solver = PajaritoSolver(
     mip_solver_drives=mip_solver_drives,
@@ -221,16 +221,16 @@ Specify model options and generate data
 srand(101)
 
 risks = [:norm2, :robustnorm2, :entropy]
-counts = [0, 1, 0]
-maxstocks = [10, 5, 6]
-gammas = [0.05, 100., 0.08]
+counts = [5, 2, 3]
+maxstocks = [20, 5, 10]
+gammas = [0.05, 0.05, 0.05]
 
 datadir = joinpath(pwd(), "data")
 datafiles = readdir(datadir)
 
 (Portfolios, Stocks) = generatedata(risks, counts, maxstocks, gammas, datadir, datafiles)
 
-Smax = 20 #round(Int, length(S)/3)
+Smax = 25 #round(Int, length(S)/3)
 
 @printf "\n\nChoose %d of %d unique stocks (sum of %d portfolio sizes is %d)\n\n" Smax length(Stocks) length(Portfolios) sum(p.size for p in Portfolios)
 
