@@ -6,10 +6,10 @@ using JuMP
 
 
 #=========================================================
-Set up JuMP model
+JuMP model functions
 =========================================================#
 
-function portfoliorisk(solver, P, S, SP, Smax, returns, sigmahalf, gamma, riskball, DDT)
+function portfoliorisk(solver, P, S, SP, Smax, returns, Sigmahalf, gamma, riskball, Delta)
     m = Model(solver=solver)
 
     # Total investment sums to 1 (use <= 1 to simulate presence of riskless asset, ensuring feasibility)
@@ -27,13 +27,13 @@ function portfoliorisk(solver, P, S, SP, Smax, returns, sigmahalf, gamma, riskba
     for p in P
         dim = length(SP[p])
         xp = [x[p,s] for s in SP[p]]
-        sxp = sigmahalf[p]*xp
+        sxp = Sigmahalf[p]*xp
 
         if riskball[p] == :norm2
             @constraint(m, norm(sxp) <= gamma[p])
         elseif riskball[p] == :robustnorm2
-            @variable(m, lambda >= 0)
-            @SDconstraint(m, [gamma[p] sxp'  xp'; sxp (gamma[p] - lambda*DDT[p]) zeros(dim, dim); xp zeros(dim, dim) lambda*eye(dim))] >= 0)
+            lambda = @variable(m)
+            @SDconstraint(m, [gamma[p] sxp'  xp'; sxp (gamma[p] - lambda*Delta[p]) zeros(dim, dim); xp zeros(dim, dim) lambda*eye(dim))] >= 0)
         elseif riskball[p] == :entropy
             @constraint(m, sum(entropy(m, sxps) for sxps in sxp) <= gamma[p]^2)
         else
@@ -41,14 +41,14 @@ function portfoliorisk(solver, P, S, SP, Smax, returns, sigmahalf, gamma, riskba
         end
     end
 
-    return m
+    return (m, x, y)
 end
 
 function entropy(m, q::AffExpr)
     # a + b where a >= (1+q)log(1+q), b >= (1-q)log(1-q)
-    @variable(m, a)
+    a = @variable(m)
     @Conicconstraint(m, [-a, 1 + q, 1] >= 0, :ExpPrimal)
-    @variable(m, b)
+    b = @variable(m)
     @Conicconstraint(m, [-b, 1 - q, 1] >= 0, :ExpPrimal)
 
     return (a + b)
@@ -56,62 +56,104 @@ end
 
 
 #=========================================================
-Specify/read data
+Data generation functions
 =========================================================#
 
-function load_portfolio(por_file::String)
-    file = open(por_file, "r")
+# Generate model data from basic model options, reading portfolio data from portfoliofiles
+function generatedata(balls, counts, maxstocks, gammas, Smax, portfoliofiles)
+    N = sum(counts)
+    @printf "\n\nGenerating data for %d portfolios\n" N
+    @printf "\n%6s %6s %12s:" "Name" "Stocks" "Risk type"
 
-    g 6n_stocks = int(readline(file))
+    P = 1:N
+    SP = Vector{Vector{String}}(N)
+    returns = Vector{Float64}(N)
+    Sigmahalf = Vector{Array{Float64}}(N)
+    riskball = Vector{Symbol}(N)
+    gamma = Vector{Float64}(N)
+    Delta = Vector{Array{Float64}}(N)
 
-    returns = float(split(readline(file))[1:n_stocks])
+    stockset = Set{String}()
+    p = 0
+    for b in 1:length(balls), bp in 1:counts[b] # for each ball type, each portfolio of the ball type
+        p += 1
 
-    sigmahalf = zeros(n_stocks, n_stocks)
-    for s in 1:n_stocks
-        sigmahalf[s,:] = float(split(readline(file))[1:n_stocks])
+        riskball[p] = balls[b]
+        gamma[p] = gammas[b]
+
+        (returns[p], Sigmahalf[p], SP[p]) = loadportfolio(portfoliofiles[p], maxstocks[b]) # read raw data for portfolio
+        numstocks = length(SP[p])
+        append!(stockset, SP[n])
+
+        if riskball[n] == :robustnorm2
+            # Generate random matrix and scale and clean zeros
+            Deltahalf = randn(numstocks, numstocks)
+            scalefactor = 1/2*norm(Sigmahalf[n])/norm(Deltahalf)
+            @assert 1e-2 < scalefactor < 1e2
+            for i in 1:numstocks, j in 1:numstocks
+                val = scalefactor*Deltahalf[i,j]
+                if val < 1e-3
+                    Deltahalf[i,j] = 0.
+                else
+                    Deltahalf[i,j] = val
+                end
+            end
+
+            # Fill Delta matrix and completely symmetrize (to avoid JuMP adding PSD symmetry constraints)
+            Delta[p] = zeros(numstocks, numstocks)
+            for i in 1:numstocks, j in i:numstocks
+                Delta[p][i,j] = Delta[p][j,i] = vecdot(Deltahalf[i,:], Deltahalf[:,j])
+            end
+        end
+
+        @printf "\n%6d %6d %12s" p numstocks string(riskball[n])
     end
 
-    @assert readline(file) == ""
+    S = collect(stockset)
 
-    nameline = readline(file)
-    names = [parse(String, x) for x in split(nameline[2:end-1], ',')]
+    @printf "\n\nChoose %d of %d unique stocks (sum of portfolio sizes is %d)\n\n" Smax length(S) sum(length.(SP))
 
-    return (n_stocks, names, returns, sigmahalf)
+    return (P, SP, S, Smax, returns, Sigmahalf, riskball, gamma, Delta)
 end
 
+# Load data from a .por file, returning returns, sqrt of covariance matrix, ticker names; take at most maxstocks stocks
+function loadportfolio(portfoliofile::String, maxstocks::Int)
+    file = open(portfoliofile, "r")
 
-por_files = readdir(joinpath(pwd(), "data")
+    n = parse(Int, chomp(readline(file)))
 
-riskball = [:norm2, :robustnorm2, :entropy]
-gamma = [0.2, 0.2]
-N = length(riskball)
+    if n > maxstocks
+        taken = maxstocks
+        takestocks = permute(1:n)[1:taken]
+    else
+        taken = n
+        takestocks = permute(1:n)
+    end
 
-P = 1:N
-SP = Vector{Vector{String}}(N)
-returns = Vector{Float64}(N)
-sigmahalf = Vector{Array{Float64}}(N)
-DDT = Vector{Array{Float64}}(N)
-total_stocks = 0
-stocks = Set{String}()
+    data = split(chomp(readline(file)))
+    @assert length(data) == n
+    rawreturns = [parse(Float64, data[s]) for s in takestocks]
 
-for p in P
-    (n_stocks, SP[p], returns[p], sigmahalf[p]) = load_portfolio(por_files[p])
-
-    total_stocks += n_stocks
-    append!(S, SP[p])
-
-    if riskball[p] == :robustnorm2
-        # Generate perturbation matrix DDT and completely symmetrize (to avoid JuMP symmetry constraints)
-        D = rand(n_stocks, round(Int, n_stocks/2))
-        DDT[p] = zeros(n_stocks, n_stocks)
-        for i in 1:n_stocks, j in i:n_stocks
-            DDT[p][i,j] = DDT[p][j,i] = D[i]*D[j]
+    matdata = zeros(n, n)
+    for i in 1:n
+        data = split(chomp(readline(file)))
+        @assert length(data) == n
+        for j in 1:n
+            matdata[i,j] = parse(Float64, data[j])
         end
     end
-end
+    rawSigmahalf = matdata[takestocks,takestocks]
 
-Smax = round(Int, total_stocks/3)
-S = collect(stocks)
+    @assert chomp(readline(file)) == ""
+
+    line = chomp(readline(file))
+    @assert startswith(line, '[') && endswith(line, ']')
+    data = split(line[2:end-1], ',')
+    @assert length(data) == n
+    rawnames = [parse(String, data[s]) for s in takestocks]
+
+    return (rawreturns, rawSigmahalf, rawnames)
+end
 
 
 #=========================================================
@@ -157,18 +199,35 @@ solver = PajaritoSolver(
 
 
 #=========================================================
+Specify model options and generate data
+=========================================================#
+
+balls = [:norm2, :robustnorm2, :entropy]
+counts = [5, 2, 5]
+maxstocks = [50, 8, 30]
+gammas = [0.2, 0.3, 0.25]
+
+Smax = round(Int, sum(counts)/3)
+
+portfoliofiles = readdir(joinpath(pwd(), "data")
+
+(P, SP, S, Smax, returns, Sigmahalf, riskball, gamma, Delta) = generatedata(balls, counts, maxstocks, gammas, Smax, portfoliofiles)
+
+
+#=========================================================
 Solve and print solution
 =========================================================#
 
-m = portfoliorisk(solver, P, S, SP, Smax, returns, sigmahalf, gamma, riskball)
+(m, x, y) = portfoliorisk(solver, P, SP, S, Smax, returns, Sigmahalf, riskball, gamma, Delta)
+
 solve!(m)
 
 @printf "\nReturns (obj) = %7.3f\n" getobjectivevalue(m)
 for p in P
-    @printf "\nPortfolio %s:\n" p
+    @printf "\nPortfolio %d investments:\n" p
     for s in SP[p]
         if getvalue(y[s]) > 0.1
-            @printf " %4d %7.3f\n" s getvalue(x[p,s])
+            @printf "%6d %8.4f\n" s getvalue(x[p,s])
         end
     end
 end
