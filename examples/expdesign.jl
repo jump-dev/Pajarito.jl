@@ -147,7 +147,6 @@ mip_solver_drives = true
 log_level = 3
 rel_gap = 1e-5
 
-
 # using Cbc
 # mip_solver = CbcSolver()
 
@@ -160,13 +159,11 @@ mip_solver = CplexSolver(
     CPX_PARAM_EPGAP=(mip_solver_drives ? 1e-5 : 1e-9)
 )
 
-
 using SCS
 cont_solver = SCSSolver(eps=1e-6, max_iters=1000000, verbose=1)
 
 # using Mosek
 # cont_solver = MosekSolver(LOG=0)
-
 
 solver = PajaritoSolver(
     mip_solver_drives=mip_solver_drives,

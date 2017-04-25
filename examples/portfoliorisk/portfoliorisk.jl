@@ -12,6 +12,10 @@ type Portfolio
     Delta::Dict{Tuple{String,String},Float64}
 end
 
+function Base.show(io::IO, p::Portfolio)
+    print(io, p.id)
+end
+
 
 #=========================================================
 JuMP model functions
@@ -36,21 +40,22 @@ function portfoliorisk(solver, Portfolios, Stocks, Smax)
     @constraint(m, [p in Portfolios, s in p.stocks], x[p,s] <= y[s])
 
     # Add risk constraints on Sigmahalf_p*x_p for each portfolio p
-    for p in Portfolios
-        @expression(m, Shx[p, s1 in p.stocks], sum(p.Sigmahalf[(s1,s2)]*x[p,s2] for s2 in p.stocks))
+    @variable(m, Shx[p in Portfolios, s in p.stocks])
+    @constraint(m, [p in Portfolios, s1 in p.stocks], Shx[p,s1] == sum(p.Sigmahalf[(s1,s2)]*x[p,s2] for s2 in p.stocks))
 
+    for p in Portfolios
         if p.risk == :norm2
-            @constraint(m, norm(Shx[s] for s in p.stocks) <= p.gamma)
+            @constraint(m, norm(Shx[p,s] for s in p.stocks) <= p.gamma)
         elseif p.risk == :robustnorm2
-            @variable(m, lambda[p] >= 0)
-            @SDconstraint(m, [p.gamma Shx[p,p.stocks]' x[p,p.stocks]'; Shx[p,p.stocks] [p.gamma - lambda[p]*p.Delta[(s1,s2)] for s1 in p.stocks, s2 in p.stocks] zeros(p.size, p.size); x[p,p.stocks] zeros(p.size, p.size) diagm(fill(lambda[p], p.size))] >= 0)
+            lambda = @variable(m, lowerbound=0)
+            @SDconstraint(m, [p.gamma [Shx[p,s] for s in p.stocks]' [x[p,s] for s in p.stocks]'; [Shx[p,s] for s in p.stocks] [p.gamma - lambda*p.Delta[(s1,s2)] for s1 in p.stocks, s2 in p.stocks] zeros(p.size, p.size); [x[p,s] for s in p.stocks] zeros(p.size, p.size) diagm(fill(lambda, p.size))] >= 0)
         elseif p.risk == :entropy
-            @variable(m, ent1[p, s in p.stocks])
-            @variable(m, ent2[p, s in p.stocks])
-            @constraint(m, sum(ent1[p,s] + ent2[p,s] for s in p.stocks) <= p.gamma^2)
+            ent1 = @variable(m, [s in p.stocks])
+            ent2 = @variable(m, [s in p.stocks])
+            @constraint(m, sum(ent1[s] + ent2[s] for s in p.stocks) <= p.gamma^2)
             for s in p.stocks
-                @Conicconstraint(m, [-ent1[p,s], 1 + Shx[p,s], 1] >= 0, :ExpPrimal)
-                @Conicconstraint(m, [-ent2[p,s], 1 - Shx[p,s], 1] >= 0, :ExpPrimal)
+                @Conicconstraint(m, [-ent1[s], 1 + Shx[p,s], 1] >= 0, :ExpPrimal)
+                @Conicconstraint(m, [-ent2[s], 1 - Shx[p,s], 1] >= 0, :ExpPrimal)
             end
         else
             error("Invalid risk type $(p.risk)")
@@ -69,12 +74,12 @@ Data generation functions
 function generatedata(risks, counts, maxstocks, gammas, datadir, datafiles)
     N = sum(counts)
     @printf "\n\nGenerating data for %d portfolios\n" N
-    @printf "\n%6s %6s %12s:" "ID" "Size" "Risk type"
+    @printf "\n%6s %6s %12s" "ID" "Size" "Risk type"
 
     Portfolios = Vector{Portfolio}(N)
 
     k = 0
-    for b in 1:length(risks), bp in counts[b] # For each risk type, each portfolio of the risk type
+    for b in 1:length(risks), bp in 1:counts[b] # For each risk type, each portfolio of the risk type
         k += 1
 
         pid = k
@@ -88,8 +93,8 @@ function generatedata(risks, counts, maxstocks, gammas, datadir, datafiles)
         if prisk == :robustnorm2
             # Generate random matrix and scale and clean zeros
             Deltahalf = randn(psize, psize)
-            scalefactor = 1/2*norm([v for v in values(pSigmahalf)])/norm(vec(Deltahalf))
-            @assert 1e-2 < scalefactor < 1e2
+            scalefactor = 1/10*norm([v for v in values(pSigmahalf)])/norm(vec(Deltahalf))
+            @assert 1e-3 < scalefactor < 1e2
             for i in 1:psize, j in 1:psize
                 val = scalefactor*Deltahalf[i,j]
                 if val < 1e-3
@@ -111,7 +116,11 @@ function generatedata(risks, counts, maxstocks, gammas, datadir, datafiles)
         Portfolios[k] = Portfolio(pid, psize, pstocks, preturns, pSigmahalf, prisk, pgamma, pDelta)
     end
 
-    Stocks = collect(union!([p.stocks for p in Portfolios]))
+    stockset = Set{String}()
+    for p in Portfolios
+        union!(stockset, p.stocks)
+    end
+    Stocks = collect(stockset)
 
     return (Portfolios, Stocks)
 end
@@ -147,7 +156,7 @@ function loadportfolio(datadir, datafile, maxstocks::Int)
 
     line = chomp(readline(file))
     @assert startswith(line, '[') && endswith(line, ']')
-    rawnames = split(line[2:end-1], ',')
+    rawnames = split(line[2:end-1], "', '")
     @assert length(rawnames) == n
 
     pstocks = [String(rawnames[s]) for s in takestocks]
@@ -168,19 +177,22 @@ using Pajarito
 
 mip_solver_drives = true
 log_level = 3
-rel_gap = 1e-5
+rel_gap = 1e-4
 
 using CPLEX
 mip_solver = CplexSolver(
     CPX_PARAM_SCRIND=(mip_solver_drives ? 1 : 0),
     # CPX_PARAM_SCRIND=1,
-    CPX_PARAM_EPINT=1e-8,
-    CPX_PARAM_EPRHS=1e-7,
-    CPX_PARAM_EPGAP=(mip_solver_drives ? 1e-5 : 1e-9)
+    CPX_PARAM_EPINT=1e-9,
+    CPX_PARAM_EPRHS=1e-9,
+    CPX_PARAM_EPGAP=(mip_solver_drives ? rel_gap : 0.)
 )
 
-using SCS
-cont_solver = SCSSolver(eps=1e-6, max_iters=1000000, verbose=1)
+# using SCS
+# cont_solver = SCSSolver(eps=5e-6, max_iters=1000000, verbose=0)
+
+using ECOS
+cont_solver = ECOSSolver(verbose=false)
 
 # using Mosek
 # cont_solver = MosekSolver(LOG=0)
@@ -206,17 +218,19 @@ solver = PajaritoSolver(
 Specify model options and generate data
 =========================================================#
 
+srand(101)
+
 risks = [:norm2, :robustnorm2, :entropy]
-counts = [5, 2, 3]
-maxstocks = [50, 8, 30]
-gammas = [0.2, 0.3, 0.25]
+counts = [3, 0, 3]
+maxstocks = [20, 5, 10]
+gammas = [0.05, 0.5, 0.08]
 
 datadir = joinpath(pwd(), "data")
 datafiles = readdir(datadir)
 
 (Portfolios, Stocks) = generatedata(risks, counts, maxstocks, gammas, datadir, datafiles)
 
-Smax = 50 #round(Int, length(S)/3)
+Smax = 20 #round(Int, length(S)/3)
 
 @printf "\n\nChoose %d of %d unique stocks (sum of %d portfolio sizes is %d)\n\n" Smax length(Stocks) length(Portfolios) sum(p.size for p in Portfolios)
 
@@ -227,14 +241,21 @@ Solve and print solution
 
 (m, x, y) = portfoliorisk(solver, Portfolios, Stocks, Smax)
 
-solve!(m)
+status = solve(m)
 
-@printf "\nReturns (obj) = %7.3f\n" getobjectivevalue(m)
+@printf "\nStatus = %s\n" status
+
+@printf "\nReturns (obj) = %8.4f\n" getobjectivevalue(m)
+@printf "\nTotal number chosen = %d" sum(round(Int, getvalue(y[s])) for s in Stocks)
+@printf "\nTotal fraction invested = %8.4f" getvalue(sum(x))
+
 for p in Portfolios
-    @printf "\nPortfolio %d investments:\n" p.id
+    @printf "\nPortfolio %d investments\n" p.id
+
     for s in p.stocks
         if getvalue(y[s]) > 0.1
-            @printf "%6d %8.4f\n" s getvalue(x[p,s])
+            @printf "%6s %8.4f\n" s getvalue(x[p,s])
         end
     end
 end
+println()
