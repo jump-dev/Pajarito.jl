@@ -547,7 +547,6 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         end
 
         status_relax = MathProgBase.status(model_relax)
-        obj_relax = MathProgBase.getobjval(model_relax)
 
         if status_relax == :Infeasible
             if m.log_level > 0
@@ -561,6 +560,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             warn("Conic solver failure on initial relaxation: returned status $status_relax\n")
             m.status = :FailedRelax
         else
+            obj_relax = MathProgBase.getobjval(model_relax)
             if m.log_level > 2
                 @printf " - Relaxation status    = %14s\n" status_relax
                 @printf " - Relaxation objective = %14.6f\n" obj_relax

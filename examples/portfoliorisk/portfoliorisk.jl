@@ -93,7 +93,7 @@ function generatedata(risks, counts, maxstocks, gammas, datadir, datafiles)
         if prisk == :robustnorm2
             # Generate random matrix and scale and clean zeros
             Deltahalf = randn(psize, psize)
-            scalefactor = 1/10*norm([v for v in values(pSigmahalf)])/norm(vec(Deltahalf))
+            scalefactor = 1/100*norm([v for v in values(pSigmahalf)])/norm(vec(Deltahalf))
             @assert 1e-3 < scalefactor < 1e2
             for i in 1:psize, j in 1:psize
                 val = scalefactor*Deltahalf[i,j]
@@ -189,13 +189,13 @@ mip_solver = CplexSolver(
 )
 
 # using SCS
-# cont_solver = SCSSolver(eps=5e-6, max_iters=1000000, verbose=0)
+# cont_solver = SCSSolver(eps=1e-5, max_iters=10000, verbose=1)
 
-using ECOS
-cont_solver = ECOSSolver(verbose=false)
+# using ECOS
+# cont_solver = ECOSSolver(verbose=false)
 
-# using Mosek
-# cont_solver = MosekSolver(LOG=0)
+using Mosek
+cont_solver = MosekSolver(LOG=1)
 
 solver = PajaritoSolver(
     mip_solver_drives=mip_solver_drives,
@@ -221,9 +221,9 @@ Specify model options and generate data
 srand(101)
 
 risks = [:norm2, :robustnorm2, :entropy]
-counts = [3, 0, 3]
-maxstocks = [20, 5, 10]
-gammas = [0.05, 0.5, 0.08]
+counts = [0, 1, 0]
+maxstocks = [10, 5, 6]
+gammas = [0.05, 100., 0.08]
 
 datadir = joinpath(pwd(), "data")
 datafiles = readdir(datadir)
