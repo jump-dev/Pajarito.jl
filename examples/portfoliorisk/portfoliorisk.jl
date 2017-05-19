@@ -221,8 +221,8 @@ Specify model options and generate data
 srand(101)
 
 risks = [:norm2, :robustnorm2, :entropy]
-counts = [5, 2, 3]
-maxstocks = [20, 5, 10]
+counts = [10, 5, 10]
+maxstocks = [50, 10, 30]
 gammas = [0.05, 0.05, 0.05]
 
 datadir = joinpath(pwd(), "data")
@@ -230,7 +230,7 @@ datafiles = readdir(datadir)
 
 (Portfolios, Stocks) = generatedata(risks, counts, maxstocks, gammas, datadir, datafiles)
 
-Smax = 25 #round(Int, length(S)/3)
+Smax = 100 #round(Int, length(S)/3)
 
 @printf "\n\nChoose %d of %d unique stocks (sum of %d portfolio sizes is %d)\n\n" Smax length(Stocks) length(Portfolios) sum(p.size for p in Portfolios)
 
