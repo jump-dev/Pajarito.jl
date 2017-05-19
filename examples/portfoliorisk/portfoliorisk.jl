@@ -246,8 +246,8 @@ status = solve(m)
 @printf "\nStatus = %s\n" status
 
 @printf "\nReturns (obj) = %8.4f\n" getobjectivevalue(m)
-@printf "\nTotal number chosen = %d" sum(round(Int, getvalue(y[s])) for s in Stocks)
-@printf "\nTotal fraction invested = %8.4f" getvalue(sum(x))
+@printf "\nTotal number chosen = %d\n" sum(round(Int, getvalue(y[s])) for s in Stocks)
+@printf "\nTotal fraction invested = %8.4f\n" getvalue(sum(x))
 
 for p in Portfolios
     @printf "\nPortfolio %d investments\n" p.id
