@@ -21,7 +21,7 @@ end
 JuMP model functions
 =========================================================#
 
-# Requires a special branch of JuMP to allow modeling exponential cone
+# If using entropy constraints, requires a special branch of JuMP to allow modeling exponential cone (https://github.com/chriscoey/JuMP.jl/tree/coneconstr)
 using JuMP
 
 function portfoliorisk(solver, Portfolios, Stocks, Smax)
