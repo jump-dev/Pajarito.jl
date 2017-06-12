@@ -39,7 +39,6 @@ function gatesizing(yUB)
         P.constraints += (y[i] == sum([log(j) * z[j,i] for j=1:yUB]))
     end
 
-    # @show conic_problem(P)
     solve!(P, solver)
 
     println("\nCircuit delay (obj) = $(P.optval)")
