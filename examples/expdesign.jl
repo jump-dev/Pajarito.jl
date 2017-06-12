@@ -50,7 +50,6 @@ function aOpt_Convexjl(q, p, V, n, nmax)
     	aOpt.constraints += isposdef([Q E[:,i]; E[i,:]' u[i]])
     end
 
-    # @show conic_problem(aOpt)
     solve!(aOpt, solver)
     println("\n  objective $(aOpt.optval)")
     println("  solution\n$(np.value)")
@@ -70,7 +69,6 @@ function aOpt_JuMPjl(q, p, V, n, nmax)
         @SDconstraint(aOpt, [V * diagm(np./n) * V' E[:,i]; E[i,:]' u[i]] >= 0)
     end
 
-    # @show JuMP.conicdata(aOpt)
     solve(aOpt)
     println("\n  objective $(getobjectivevalue(aOpt))")
     println("  solution\n$(getvalue(np))\n")
@@ -92,7 +90,6 @@ function eOpt_Convexjl(q, p, V, n, nmax)
         isposdef(Q - t * eye(q))
     )
 
-    # @show conic_problem(eOpt)
     solve!(eOpt, solver)
     println("\n  objective $(eOpt.optval)")
     println("  solution\n$(np.value)")
@@ -109,7 +106,6 @@ function eOpt_JuMPjl(q, p, V, n, nmax)
     @objective(eOpt, Max, t)
     @SDconstraint(eOpt, V * diagm(np./n) * V' - t * eye(q) >= 0)
 
-    # @show JuMP.conicdata(eOpt)
     solve(eOpt)
     println("\n  objective $(getobjectivevalue(eOpt))")
     println("  solution\n$(getvalue(np))\n")
@@ -129,7 +125,6 @@ function dOpt_Convexjl(q, p, V, n, nmax)
         np <= nmax
     )
 
-    # @show conic_problem(dOpt)
     solve!(dOpt, solver)
     println("\n  objective $(dOpt.optval)")
     println("  solution\n$(np.value)")
