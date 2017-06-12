@@ -4,11 +4,6 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#=========================================================
-TODO
-Rewrite to the standard of conicmodel.jl
-=========================================================#
-
 using JuMP
 
 type PajaritoNonlinearModel <: MathProgBase.AbstractNonlinearModel
