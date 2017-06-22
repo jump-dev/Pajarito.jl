@@ -1,3 +1,15 @@
+# Navigate an object through a series of obstacles, while minimizing the jerk of the trajectory.
+# The domain is broken down into a polyhedral covering, and the time interval into subintervals.
+# In each subinterval, we enforce the object is contained entirely within one of the polyhedral
+# subregions, which enforces that we do not run into any obstacles.
+#
+# The trajectory is described by polynomials p_x and p_y, which describe the x and y position,
+# respectively, as a function of time. This is a polynomial optimization problem, which we relax
+# into a mixed-integer sum of squares problem. The problem is infeasible for polynomials of degree
+# 4 or less, and feasible for degree 5.
+# 
+# Example written and by Joey Huchette.
+
 using JuMP, PolyJuMP, SumOfSquares, MultivariatePolynomials, Pajarito, CPLEX, Mosek
 
 type Box
