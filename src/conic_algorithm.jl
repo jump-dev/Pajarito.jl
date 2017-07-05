@@ -19,6 +19,7 @@ TODO features
 =========================================================#
 
 using JuMP
+using ConicBenchmarkUtilities
 
 
 #=========================================================
@@ -77,7 +78,10 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     sep_cuts_assist::Bool       # (Conic only) Add subproblem cuts, and add primal cuts only subproblem cuts cannot be added
 
     cut_zero_tol::Float64       # (Conic only) Zero tolerance for cut coefficients
-    mip_feas_tol::Float64  # (Conic only) Absolute feasibility tolerance used for primal cuts (set equal to feasibility tolerance of `mip_solver`)
+    mip_feas_tol::Float64       # (Conic only) Absolute feasibility tolerance used for primal cuts (set equal to feasibility tolerance of `mip_solver`)
+
+    dump_subproblems::Bool      # Save each conic subproblem in conic benchmark format (CBF) at a specified location
+    dump_basename::String       # Basename of conic subproblem CBF files: "/path/to/foo" creates files "/path/to/foo_NN.cbf" where "NN" is a counter
 
     # Initial data
     num_var_orig::Int           # Initial number of variables
@@ -153,7 +157,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     status::Symbol              # Current Pajarito status
 
     # Model constructor
-    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, use_mip_starts, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_subp_factor, viol_cuts_only, sep_cuts_only, sep_cuts_always, sep_cuts_assist, cut_zero_tol, mip_feas_tol)
+    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, use_mip_starts, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_subp_factor, viol_cuts_only, sep_cuts_only, sep_cuts_always, sep_cuts_assist, cut_zero_tol, mip_feas_tol, dump_subproblems, dump_basename)
         m = new()
 
         m.log_level = log_level
@@ -188,6 +192,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.init_sdp_soc = init_sdp_soc
         m.sdp_eig = sdp_eig
         m.sdp_soc = sdp_soc
+        m.dump_subproblems = dump_subproblems
+        m.dump_basename = dump_basename
 
         m.var_types = Symbol[]
         # m.var_start = Float64[]
@@ -1751,8 +1757,15 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
         MathProgBase.loadproblem!(m.model_conic, m.c_sub_cont, m.A_sub_cont, b_sub_int, m.cone_con_sub, m.cone_var_sub)
     end
 
-    MathProgBase.optimize!(m.model_conic)
     m.logs[:n_conic] += 1
+
+    # Optionally dump the conic subproblem into a cbf file
+    if m.dump_subproblems
+        dat = ConicBenchmarkUtilities.mpbtocbf(string(m.logs[:n_conic]), m.c_sub_cont, m.A_sub_cont, b_sub_int, m.cone_con_sub, m.cone_var_sub, fill(:Cont, length(m.c_sub_cont)))
+        ConicBenchmarkUtilities.writecbfdata((m.dump_basename * "_" * string(m.logs[:n_conic]) * ".cbf"), dat)
+    end
+
+    MathProgBase.optimize!(m.model_conic)
     m.logs[:subp_solve] += toq()
 
     status_conic = MathProgBase.status(m.model_conic)

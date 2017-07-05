@@ -7,10 +7,11 @@
 # respectively, as a function of time. This is a polynomial optimization problem, which we relax
 # into a mixed-integer sum of squares problem. The problem is infeasible for polynomials of degree
 # 4 or less, and feasible for degree 5.
-# 
+#
 # Example written and by Joey Huchette.
 
-using JuMP, PolyJuMP, SumOfSquares, MultivariatePolynomials, Pajarito, CPLEX, Mosek
+using JuMP, PolyJuMP, SumOfSquares, MultivariatePolynomials
+using Pajarito, CPLEX, Mosek
 
 type Box
     xl::Float64
