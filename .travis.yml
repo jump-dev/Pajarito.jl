@@ -5,7 +5,7 @@ os:
 #  - osx # disabled because of day-long queue time
 julia:
   - 0.5
-  - nightly
+#  - nightly # disabled because JuMP not working on nightly as of 07/2017
 # Workaround for https://github.com/travis-ci/travis-ci/issues/4942
 git:
   depth: 99999
