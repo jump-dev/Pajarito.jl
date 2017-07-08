@@ -211,8 +211,8 @@ solver = PajaritoSolver(
     # prim_cuts_only=true,
     # prim_cuts_always=true,
     # prim_cuts_assist=true,
-    dump_subproblems = true,
-    dump_basename = joinpath(pwd(), "portcbf/port")
+    # dump_subproblems = true,
+    # dump_basename = joinpath(pwd(), "portcbf/port")
 )
 
 
@@ -245,26 +245,26 @@ Solve and print solution
 
 
 # Save as CBF file
-name = "8,100_8,20_8,8"
-path = "/home/coey/portcbf/socexppsd/"
-ConicBenchmarkUtilities.jump_to_cbf(m, name, joinpath(path, "$name.cbf"))
+# name = "8,100_8,20_8,8"
+# path = "/home/coey/portcbf/socexppsd/"
+# ConicBenchmarkUtilities.jump_to_cbf(m, name, joinpath(path, "$name.cbf"))
 
 
-# status = solve(m)
-#
-# @printf "\nStatus = %s\n" status
-#
-# @printf "\nReturns (obj) = %8.4f\n" getobjectivevalue(m)
-# @printf "\nTotal number chosen = %d\n" sum(round(Int, getvalue(y[s])) for s in Stocks)
-# @printf "\nTotal fraction invested = %8.4f\n" getvalue(sum(x))
-#
-# for p in Portfolios
-#     @printf "\nPortfolio %d investments\n" p.id
-#
-#     for s in p.stocks
-#         if getvalue(y[s]) > 0.1
-#             @printf "%6s %8.4f\n" s getvalue(x[p,s])
-#         end
-#     end
-# end
-# println()
+status = solve(m)
+
+@printf "\nStatus = %s\n" status
+
+@printf "\nReturns (obj) = %8.4f\n" getobjectivevalue(m)
+@printf "\nTotal number chosen = %d\n" sum(round(Int, getvalue(y[s])) for s in Stocks)
+@printf "\nTotal fraction invested = %8.4f\n" getvalue(sum(x))
+
+for p in Portfolios
+    @printf "\nPortfolio %d investments\n" p.id
+
+    for s in p.stocks
+        if getvalue(y[s]) > 0.1
+            @printf "%6s %8.4f\n" s getvalue(x[p,s])
+        end
+    end
+end
+println()

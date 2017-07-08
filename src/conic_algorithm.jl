@@ -1762,7 +1762,7 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
     # Optionally dump the conic subproblem into a cbf file
     if m.dump_subproblems
         dat = ConicBenchmarkUtilities.mpbtocbf(string(m.logs[:n_conic]), m.c_sub_cont, m.A_sub_cont, b_sub_int, m.cone_con_sub, m.cone_var_sub, fill(:Cont, length(m.c_sub_cont)))
-        ConicBenchmarkUtilities.writecbfdata((m.dump_basename * "_" * string(m.logs[:n_conic]) * ".cbf"), dat)
+        ConicBenchmarkUtilities.writecbfdata((m.dump_basename * "_" * string(time()) * ".cbf"), dat)
     end
 
     MathProgBase.optimize!(m.model_conic)
