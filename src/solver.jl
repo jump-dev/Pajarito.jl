@@ -55,6 +55,9 @@ type PajaritoSolver <: MathProgBase.AbstractMathProgSolver
 
     cut_zero_tol::Float64       # (Conic only) Zero tolerance for cut coefficients
     prim_cut_feas_tol::Float64  # (Conic only) Absolute feasibility tolerance used for primal cuts (set equal to feasibility tolerance of `mip_solver`)
+
+    dump_subproblems::Bool      # Save each conic subproblem in conic benchmark format (CBF) at a specified location
+    dump_basename::String       # Basename of conic subproblem CBF files: "/path/to/foo" creates files "/path/to/foo_NN.cbf" where "NN" is a counter
 end
 
 
@@ -97,6 +100,9 @@ function PajaritoSolver(;
 
     cut_zero_tol = 1e-12,
     prim_cut_feas_tol = 1e-6,
+
+    dump_subproblems = false,
+    dump_basename = nothing,
     )
 
     if mip_solver == UnsetSolver()
@@ -108,8 +114,16 @@ function PajaritoSolver(;
         viol_cuts_only = mip_solver_drives
     end
 
+    if dump_basename == nothing
+        if dump_subproblems
+            error("No basename set for conic subproblem dumps (set dump_basename)\n")
+        else
+            dump_basename = ""
+        end
+    end
+
     # Deepcopy the solvers because we may change option values inside Pajarito
-    PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, deepcopy(mip_solver), deepcopy(mip_subopt_solver), mip_subopt_count, round_mip_sols, use_mip_starts, deepcopy(cont_solver), solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_subp_factor, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, cut_zero_tol, prim_cut_feas_tol)
+    PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, deepcopy(mip_solver), deepcopy(mip_subopt_solver), mip_subopt_count, round_mip_sols, use_mip_starts, deepcopy(cont_solver), solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_subp_factor, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, cut_zero_tol, prim_cut_feas_tol, dump_subproblems, dump_basename)
 end
 
 
@@ -151,7 +165,7 @@ function MathProgBase.ConicModel(s::PajaritoSolver)
             s.prim_cuts_assist = true
         end
 
-        return PajaritoConicModel(s.log_level, s.timeout, s.rel_gap, s.mip_solver_drives, s.mip_solver, s.mip_subopt_solver, s.mip_subopt_count, s.round_mip_sols, s.use_mip_starts, s.cont_solver, s.solve_relax, s.solve_subp, s.dualize_relax, s.dualize_subp, s.soc_disagg, s.soc_abslift, s.soc_in_mip, s.sdp_eig, s.sdp_soc, s.init_soc_one, s.init_soc_inf, s.init_exp, s.init_sdp_lin, s.init_sdp_soc, s.scale_subp_cuts, s.scale_subp_factor, s.viol_cuts_only, s.prim_cuts_only, s.prim_cuts_always, s.prim_cuts_assist, s.cut_zero_tol, s.prim_cut_feas_tol)
+        return PajaritoConicModel(s.log_level, s.timeout, s.rel_gap, s.mip_solver_drives, s.mip_solver, s.mip_subopt_solver, s.mip_subopt_count, s.round_mip_sols, s.use_mip_starts, s.cont_solver, s.solve_relax, s.solve_subp, s.dualize_relax, s.dualize_subp, s.soc_disagg, s.soc_abslift, s.soc_in_mip, s.sdp_eig, s.sdp_soc, s.init_soc_one, s.init_soc_inf, s.init_exp, s.init_sdp_lin, s.init_sdp_soc, s.scale_subp_cuts, s.scale_subp_factor, s.viol_cuts_only, s.prim_cuts_only, s.prim_cuts_always, s.prim_cuts_assist, s.cut_zero_tol, s.prim_cut_feas_tol, s.dump_subproblems, s.dump_basename)
     elseif applicable(MathProgBase.NonlinearModel, s.cont_solver)
         return MathProgBase.ConicModel(ConicNonlinearBridge.ConicNLPWrapper(nlp_solver=s))
     else

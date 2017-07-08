@@ -210,7 +210,9 @@ solver = PajaritoSolver(
     sdp_eig=true,
     # prim_cuts_only=true,
     # prim_cuts_always=true,
-    # prim_cuts_assist=true
+    # prim_cuts_assist=true,
+    # dump_subproblems = true,
+    # dump_basename = joinpath(pwd(), "portcbf/port")
 )
 
 
@@ -218,11 +220,11 @@ solver = PajaritoSolver(
 Specify model options and generate data
 =========================================================#
 
-srand(101)
+# srand(101)
 
-risks = [:norm2, :robustnorm2, :entropy]
-counts = [10, 5, 10]
-maxstocks = [50, 10, 30]
+risks = [:norm2, :entropy, :robustnorm2]
+counts = [8, 8, 8]
+maxstocks = [100, 20, 8]
 gammas = [0.05, 0.05, 0.05]
 
 datadir = joinpath(pwd(), "data")
@@ -230,7 +232,7 @@ datafiles = readdir(datadir)
 
 (Portfolios, Stocks) = generatedata(risks, counts, maxstocks, gammas, datadir, datafiles)
 
-Smax = 100 #round(Int, length(S)/3)
+Smax = round(Int, length(Stocks)/3)
 
 @printf "\n\nChoose %d of %d unique stocks (sum of %d portfolio sizes is %d)\n\n" Smax length(Stocks) length(Portfolios) sum(p.size for p in Portfolios)
 
@@ -240,6 +242,13 @@ Solve and print solution
 =========================================================#
 
 (m, x, y) = portfoliorisk(solver, Portfolios, Stocks, Smax)
+
+
+# Save as CBF file
+# name = "8,100_8,20_8,8"
+# path = "/home/coey/portcbf/socexppsd/"
+# ConicBenchmarkUtilities.jump_to_cbf(m, name, joinpath(path, "$name.cbf"))
+
 
 status = solve(m)
 
