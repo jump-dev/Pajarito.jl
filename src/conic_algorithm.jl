@@ -1429,6 +1429,7 @@ function solve_mip_driven!(m)
 
         # If solution is infeasible but we added no cuts, have to finish or the MIP solver could accept a bad solution
         if !is_feas && !is_viol_subp && !is_viol_any
+            warn("Lazy callback solution is infeasible but no cuts could be added: terminating solve\n")
             return JuMP.StopTheSolver
         end
     end
