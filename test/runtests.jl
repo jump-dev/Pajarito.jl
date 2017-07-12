@@ -141,7 +141,7 @@ println()
     end
 
     @testset "MISOCP solver - $mipname" for (mipname, mip) in solvers["MISOCP"]
-        if msd && !applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip), _ -> _)
+        if msd && !applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip), x -> x)
             # Only test MSD on lazy callback solvers
             continue
         end
