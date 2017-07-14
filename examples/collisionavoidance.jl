@@ -11,7 +11,40 @@
 # Example written and by Joey Huchette.
 
 using JuMP, PolyJuMP, SumOfSquares, MultivariatePolynomials
-using Pajarito, CPLEX, Mosek
+using Pajarito
+
+# Specify Pajarito solver
+
+mip_solver_drives = true
+rel_gap = 1e-4
+
+# using Cbc
+# mip_solver = CbcSolver()
+
+using CPLEX
+mip_solver = CplexSolver(
+    CPX_PARAM_SCRIND=(mip_solver_drives ? 1 : 0),
+    CPX_PARAM_EPINT=1e-9,
+    CPX_PARAM_EPRHS=1e-9,
+    CPX_PARAM_EPGAP=(mip_solver_drives ? 1e-5 : 1e-9)
+)
+
+# using Mosek
+# conic_solver = MosekSolver(LOG=0)
+# conic_solver = MosekSolver(MSK_DPAR_INTPNT_CO_TOL_PFEAS=1e-6,MSK_DPAR_INTPNT_CO_TOL_DFEAS=1e-6,MSK_DPAR_INTPNT_CO_TOL_REL_GAP=1e-5,MSK_DPAR_INTPNT_TOL_INFEAS=1e-8,MSK_DPAR_INTPNT_CO_TOL_MU_RED=1e-6)
+
+micp_solver = PajaritoSolver(
+    mip_solver_drives=mip_solver_drives,
+    log_level=3,
+    rel_gap=rel_gap,
+	mip_solver=mip_solver,
+	# cont_solver=conic_solver,
+    solve_relax=false,
+    solve_subp=false,
+    prim_cuts_only=true
+)
+
+# Create model
 
 type Box
     xl::Float64
@@ -20,15 +53,17 @@ type Box
     yu::Float64
 end
 
-boxes = Box[Box(0.0,1.0,0.0,0.3),
-            Box(0.8,1.7,0.1,0.3),
-            Box(1.4,1.9,0.2,0.4),
-            Box(1.0,1.7,0.3,0.5),
-            Box(0.5,1.4,0.4,0.6),
-            Box(0.0,1.0,0.5,0.7),
-            Box(0.2,1.0,0.6,0.8),
-            Box(0.5,1.3,0.7,0.9),
-            Box(1.0,2.0,0.7,1.0)]
+boxes = Box[
+    Box(0.0,1.0,0.0,0.3),
+    Box(0.8,1.7,0.1,0.3),
+    Box(1.4,1.9,0.2,0.4),
+    Box(1.0,1.7,0.3,0.5),
+    Box(0.5,1.4,0.4,0.6),
+    Box(0.0,1.0,0.5,0.7),
+    Box(0.2,1.0,0.6,0.8),
+    Box(0.5,1.3,0.7,0.9),
+    Box(1.0,2.0,0.7,1.0)
+]
 
 N = 8 # Number of trajectory pieces
 d = 2 # dimension of space
@@ -37,19 +72,17 @@ M = 2 # number of horizontal segments
 
 domain = Box(0,M,0,1)
 
-X₀   = Dict(:x=>0, :y=>0)
-X₀′  = Dict(:x=>1, :y=>0)
+X₀ = Dict(:x=>0, :y=>0)
+X₀′ = Dict(:x=>1, :y=>0)
 X₀′′ = Dict(:x=>0, :y=>0)
-X₁   = Dict(:x=>2, :y=>1)
+X₁ = Dict(:x=>2, :y=>1)
 
 T = linspace(0, 1, N+1)
 
 Tmin = minimum(T)
 Tmax = maximum(T)
 
-mip_solver = mip_solver=CplexSolver()
-cont_solver = MosekSolver(MSK_DPAR_INTPNT_CO_TOL_PFEAS=1e-6,MSK_DPAR_INTPNT_CO_TOL_DFEAS=1e-6,MSK_DPAR_INTPNT_CO_TOL_REL_GAP=1e-5,MSK_DPAR_INTPNT_TOL_INFEAS=1e-8,MSK_DPAR_INTPNT_CO_TOL_MU_RED=1e-6)
-model = SOSModel(solver=PajaritoSolver(mip_solver=mip_solver, mip_subopt_solver=mip_solver, cont_solver=cont_solver, mip_solver_drives=true, cut_zero_tol=1e-6, rel_gap=1e-3, solve_relax=false))
+model = SOSModel(solver=micp_solver)
 
 @polyvar(t)
 Z = monomials([t], 0:r)
@@ -73,17 +106,17 @@ for j in 1:N
 end
 
 for axis in (:x,:y)
-    @constraint(model,               p[(axis,1)       ]([Tmin], [t]) == X₀[axis])
-    @constraint(model, differentiate(p[(axis,1)], t   )([Tmin], [t]) == X₀′[axis])
+    @constraint(model, p[(axis,1)]([Tmin], [t]) == X₀[axis])
+    @constraint(model, differentiate(p[(axis,1)], t)([Tmin], [t]) == X₀′[axis])
     @constraint(model, differentiate(p[(axis,1)], t, 2)([Tmin], [t]) == X₀′′[axis])
 
     for j in 1:N-1
-        @constraint(model,               p[(axis,j)       ]([T[j+1]], [t]) ==               p[(axis,j+1)       ]([T[j+1]], [t]))
-        @constraint(model, differentiate(p[(axis,j)], t   )([T[j+1]], [t]) == differentiate(p[(axis,j+1)], t   )([T[j+1]], [t]))
+        @constraint(model, p[(axis,j)]([T[j+1]], [t]) == p[(axis,j+1)]([T[j+1]], [t]))
+        @constraint(model, differentiate(p[(axis,j)], t )([T[j+1]], [t]) == differentiate(p[(axis,j+1)], t)([T[j+1]], [t]))
         @constraint(model, differentiate(p[(axis,j)], t, 2)([T[j+1]], [t]) == differentiate(p[(axis,j+1)], t, 2)([T[j+1]], [t]))
     end
 
-    @constraint(model,               p[(axis,N)       ]([Tmax], [t]) == X₁[axis])
+    @constraint(model, p[(axis,N)]([Tmax], [t]) == X₁[axis])
 end
 
 @variable(model, γ[keys(p)] ≥ 0)
@@ -94,10 +127,11 @@ end
 
 solve(model)
 
+# Interpret solution: eval_poly(r) gives the trajectory location at time r
+
 PP = Dict(key => getvalue(p[key]) for key in keys(p))
 HH = getvalue(H)
 
-# eval_poly(r) gives the trajectory location at time r
 function eval_poly(r)
     for i in 1:N
         if T[i] <= r <= T[i+1]
@@ -108,7 +142,8 @@ function eval_poly(r)
     error("Time $r out of interval [$(minimum(T)),$(maximum(T))]")
 end
 
-# We can use SFML to visualize the path
+Optionally visualize the path (requires SFML package)
+
 using SFML
 
 const window_width = 800
@@ -182,3 +217,4 @@ while isopen(window)
     draw(window, heli.shape)
     display(window)
 end
+
