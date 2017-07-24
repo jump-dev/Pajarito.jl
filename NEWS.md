@@ -1,6 +1,12 @@
 Pajarito release notes
 ======================
 
+Version 0.5.0 (July 12, 2017)
+---------------------------------
+
+  * Some cleanup and refactoring.
+  * Updates to the cuts math for PSD and Exp.
+
 Version 0.4.0 (March 29, 2017)
 ---------------------------------
 
