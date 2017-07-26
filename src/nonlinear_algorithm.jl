@@ -181,7 +181,7 @@ function MathProgBase.loadproblem!(
 
     MathProgBase.initialize(d, [:Grad,:Jac,:Hess])
 
-    m.constrtype = Array(Symbol, numConstr)
+    m.constrtype = Array{Symbol}(numConstr)
     for i = 1:numConstr
         if lb[i] > -Inf && ub[i] < Inf
             m.constrtype[i] = :(==)
@@ -217,7 +217,7 @@ end
 
 function populatelinearmatrix(m::PajaritoNonlinearModel)
     # set up map of linear rows
-    constrlinear = Array(Bool, m.numConstr)
+    constrlinear = Array{Bool}(m.numConstr)
     numlinear = 0
     constraint_to_linear = fill(-1,m.numConstr)
     for i = 1:m.numConstr
