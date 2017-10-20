@@ -261,7 +261,7 @@ function populatelinearmatrix(m::PajaritoNonlinearModel)
         push!(A_I,row); push!(A_J, jac_J[k]); push!(A_V, jac_V[k])
     end
 
-    m.A = sparse(A_I, A_J, A_V, m.numConstr-m.numNLConstr, m.numVar)
+    m.A = sparse(A_I, A_J, A_V, numlinear, m.numVar)
 
     # g(x) might have a constant, i.e., a'x + b
     # let's find b
