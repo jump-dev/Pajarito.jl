@@ -1890,13 +1890,6 @@ function add_subp_cut_sdp!(m, T, W_val)
         end
     end
 
-    @expression(m.model_mip, cut_expr, vecdot(W_val, T))
-
-    if add_cut!(m, cut_expr, m.logs[:SDP])
-        is_viol_cut = true
-    end
-
-
     return is_viol_cut
 end
 
