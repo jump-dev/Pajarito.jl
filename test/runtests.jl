@@ -80,6 +80,8 @@ if scs
 end
 if mos
     solvers["SOC"]["Mosek"] = solvers["PSD+SOC"]["Mosek"] = Mosek.MosekSolver(LOG=0)
+    # Mosek 9+ recognizes the exponential cone:
+    # solvers["Exp+SOC"]["Mosek"] = solvers["PSD+Exp"]["Mosek"] = Mosek.MosekSolver(LOG=0)
 end
 
 

@@ -530,8 +530,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     flush(STDERR)
 
     # Calculate infeasible and optimal subproblem K* cuts scaling factors
-    m.inf_subp_scale = m.scale_subp_factor*(m.num_soc + m.num_exp + m.num_sdp)
-    m.opt_subp_scale = m.inf_subp_scale*m.mip_feas_tol/m.rel_gap
+    m.inf_subp_scale = m.scale_subp_factor*m.mip_feas_tol*(m.num_soc + m.num_exp + m.num_sdp)
+    m.opt_subp_scale = m.inf_subp_scale/m.rel_gap
 
     if m.solve_relax
         # Solve relaxed conic problem, proceed with algorithm if optimal or suboptimal, else finish
@@ -562,25 +562,32 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         elseif status_relax == :Unbounded
             warn("Initial conic relaxation status was $status_relax\n")
             m.status = :UnboundedRelax
-        elseif (status_relax != :Optimal) && (status_relax != :Suboptimal)
-            warn("Conic solver failure on initial relaxation: returned status $status_relax\n")
-            m.status = :FailedRelax
         else
-            obj_relax = MathProgBase.getobjval(model_relax)
+            # if status_relax in (:Optimal, :Suboptimal, :PDFeas, :DualFeas)
             if m.log_level > 2
                 @printf " - Relaxation status    = %14s\n" status_relax
-                @printf " - Relaxation objective = %14.6f\n" obj_relax
             end
-            m.status = :SolvedRelax
-            m.best_bound = obj_relax
 
-            # Get dual and check for NaNs
-            dual_conic = MathProgBase.getdual(model_relax)
+            dual_conic = Float64[]
+            try
+                dual_conic = MathProgBase.getdual(model_relax)
+                if any(isnan, dual_conic)
+                    dual_conic = Float64[]
+                end
+            end
+
             if !isempty(dual_conic) && !any(isnan, dual_conic)
+                m.status = :SolvedRelax
+                dual_obj = -dot(b_new, dual_conic)
+                m.best_bound = dual_obj
+                if m.log_level > 2
+                    @printf " - Relaxation bound     = %14.6f\n" dual_obj
+                end
+
                 # Optionally scale dual
                 if m.scale_subp_cuts
                     # Rescale by number of cones / absval of full conic objective
-                    scale!(dual_conic, m.opt_subp_scale/(abs(obj_relax) + 1e-5))
+                    scale!(dual_conic, m.opt_subp_scale/(abs(dual_obj) + 1e-5))
                 end
 
                 # Add relaxation cuts
@@ -606,7 +613,12 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 end
 
                 m.logs[:relax_cuts] += toq()
+            else
+                m.status = :FailedRelax
             end
+        # else
+        #     warn("Conic solver failure on initial relaxation: returned status $status_relax\n")
+        #     m.status = :FailedRelax
         end
 
         # Free the conic model
@@ -1469,7 +1481,23 @@ function solve_mip_driven!(m)
 
     if status_mip == :Optimal
         # Check MIP final solution and update incumbent
-        check_feas_add_sep_cuts!(m, false)
+        (is_feas, is_viol_any) = check_feas_add_sep_cuts!(m, false)
+        if !is_feas
+            warn("MIP solver final solution was not conic feasible\n")
+        end
+
+        # # Accept final mip solver solution even if conic infeasible
+        # soln_int = getvalue(m.x_int)
+        # soln_cont = getvalue(m.x_cont)
+        # obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_cont)
+        #
+        # if obj_full < m.best_obj
+        #     # Save new incumbent info
+        #     m.best_obj = obj_full
+        #     m.best_int = soln_int
+        #     m.best_cont = soln_cont
+        #     m.is_best_conic = false
+        # end
     end
 
     # Update gap if best bound and best objective are finite
@@ -1662,45 +1690,40 @@ function solve_subp_add_subp_cuts!(m)
         (status_conic, soln_conic, dual_conic) = solve_subp!(m, b_sub_int)
 
         # Determine cut scaling factors and check if have new feasible incumbent solution
-        if (status_conic == :Infeasible) && !isempty(dual_conic)
-            # Subproblem infeasible: first check infeasible ray has negative value, and scale
-            ray_value = vecdot(dual_conic, b_sub_int)
-            if ray_value < -infeas_ray_tol
+        if !isempty(dual_conic)
+            # dual_value = -dot(dual_conic, b_sub_int)
+            dual_value = dot(m.c_sub_int, soln_int) - dot(dual_conic, b_sub_int)
+            if status_conic == :Infeasible
+                @assert dual_value > 1e-10
+                # Subproblem infeasible: first check infeasible ray has negative value, and scale
+                # ray_value = vecdot(dual_conic, b_sub_int)
+                # if ray_value < -infeas_ray_tol
                 if m.scale_subp_cuts
-                    # Rescale by infeasible scale factor / negative value of ray
-                    scale!(dual_conic, -m.inf_subp_scale/ray_value)
+                    # Rescale by infeasible scale factor / full ray objective value
+                    scale!(dual_conic, m.inf_subp_scale/dual_value)
                 end
-            else
-                warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (please submit an issue)\n")
-                return false
-            end
-        elseif (status_conic == :Optimal) && !isempty(dual_conic)
-            # Subproblem feasible: first calculate full objective value
-            obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_conic)
+                # else
+                #     warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (please submit an issue)\n")
+                # end
+            elseif !isempty(soln_conic)
+                # Subproblem feasible: first calculate full objective value
+                obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_conic)
+                if m.scale_subp_cuts
+                    # Rescale by optimal scale factor / (abs(dual objective) + 1e-5)
+                    scale!(dual_conic, m.opt_subp_scale/(abs(dual_value) + 1e-5))
+                end
 
-            if m.scale_subp_cuts
-                # Rescale by optimal scale factor / abs(objective + 1e-5)
-                scale!(dual_conic, m.opt_subp_scale/(abs(obj_full) + 1e-5))
-            end
-
-            m.logs[:n_feas_conic] += 1
-            if obj_full < m.best_obj
-                # Conic solver solution is a new incumbent
-                m.best_obj = obj_full
-                m.best_int = soln_int
-                m.best_cont = soln_conic
-                m.new_incumb = true
-                m.is_best_conic = true
-            end
-        elseif !isempty(dual_conic)
-            # We have a dual but don't handle the status - try adding cuts anyway (always valid, as projected onto dual cones)
-            if m.scale_subp_cuts
-                # Rescale by infeasible scale factor
-                scale!(dual_conic, m.inf_subp_scale)
+                m.logs[:n_feas_conic] += 1
+                if obj_full < m.best_obj
+                    # Conic solver solution is a new incumbent
+                    m.best_obj = obj_full
+                    m.best_int = soln_int
+                    m.best_cont = soln_conic
+                    m.new_incumb = true
+                    m.is_best_conic = true
+                end
             end
         else
-            # Status not handled, cannot add subproblem cuts
-            warn("Conic solver failure: returned status $status_conic\n")
             return false
         end
 
@@ -1779,32 +1802,30 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
     elseif status_conic == :UserLimit
         m.logs[:n_lim] += 1
     elseif status_conic == :ConicFailure
+        warn("Conic solver failure: returned status $status_conic\n")
         m.logs[:n_fail] += 1
     else
+        warn("Conic solver failure: returned status $status_conic\n")
         m.logs[:n_other] += 1
     end
 
-    if status_conic == :Optimal
+    # Get a dual
+    # if status_conic in (:Optimal, :Infeasible, :Suboptimal, :PDFeas, :DualFeas)
+    dual_conic = Float64[]
+    try
+        dual_conic = MathProgBase.getdual(m.model_conic)
+        if any(isnan, dual_conic)
+            dual_conic = Float64[]
+        end
+    end
+
+    # Get a primal
+    soln_conic = Float64[]
+    if status_conic in (:Optimal, :PDFeas, :PrimFeas)
         soln_conic = MathProgBase.getsolution(m.model_conic)
         if any(isnan, soln_conic)
             soln_conic = Float64[]
         end
-    else
-        soln_conic = Float64[]
-    end
-
-    if (status_conic == :Optimal) || (status_conic == :Infeasible)
-        dual_conic = MathProgBase.getdual(m.model_conic)
-    else
-        # Try to get a dual
-        try
-            dual_conic = MathProgBase.getdual(m.model_conic)
-        catch
-            dual_conic = Float64[]
-        end
-    end
-    if any(isnan, dual_conic)
-        dual_conic = Float64[]
     end
 
     # Free the conic model if not saving it
@@ -1868,6 +1889,13 @@ function add_subp_cut_sdp!(m, T, W_val)
             m.logs[:SDP][:n_subp] += 1
         end
     end
+
+    @expression(m.model_mip, cut_expr, vecdot(W_val, T))
+
+    if add_cut!(m, cut_expr, m.logs[:SDP])
+        is_viol_cut = true
+    end
+
 
     return is_viol_cut
 end
@@ -2005,6 +2033,13 @@ function add_sep_cut_sdp!(m, add_cuts::Bool, T)
             is_viol_cut = add_cut_sdp!(m, T, T_eig)
             m.logs[:SDP][:n_sep] += 1
         end
+
+        # Also add full cut, as sometimes it is needed for convergence
+        @expression(m.model_mip, cut_expr, vecdot(Symmetric(T_eig*T_eig'), T))
+        if add_cut!(m, cut_expr, m.logs[:SDP])
+            is_viol_cut = true
+        end
+        m.logs[:SDP][:n_sep] += 1
     end
 
     return (is_viol_cut, viol)
@@ -2034,12 +2069,15 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
 
             if m.soc_abslift
                 # Disaggregated K* cut on (r, pi_j, rho_j) is ((w_j/u)^2/2, 1, -|w_j/u|)
-                # Scale by 2*dim*u_val
-                @expression(m.model_mip, cut_expr, dim*w_val[j]^2/u_val*r + 2*dim*u_val*pi[j] - 2*dim*abs(w_val[j])*rho[j])
+                @expression(m.model_mip, cut_expr, (w_val[j]/u_val)^2/2*r + pi[j] - abs(w_val[j]/u_val)*rho[j])
             else
                 # Disaggregated K* cut on (r, pi_j, t_j) is ((w_j/u)^2/2, 1, w_j/u)
-                # Scale by 2*dim*u_val
-                @expression(m.model_mip, cut_expr, dim*w_val[j]^2/u_val*r + 2*dim*u_val*pi[j] + 2*dim*w_val[j]*t[j])
+                @expression(m.model_mip, cut_expr, (w_val[j]/u_val)^2/2*r + pi[j] + w_val[j]/u_val*t[j])
+            end
+
+            if m.scale_subp_cuts
+                # Scale by dim*u_val
+                cut_expr = dim*u_val*cut_expr
             end
 
             if add_cut!(m, cut_expr, m.logs[:SOC])
@@ -2051,8 +2089,7 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
     if add_full || !m.soc_disagg
         if m.soc_abslift
             # Non-disaggregated K* cut on (r, rho_1, ..., rho_j, ..., rho_dim) is (u, -|w_j|)
-            # Scale by 2
-            @expression(m.model_mip, cut_expr, 2*u_val*r - 2*sum(abs(w_val[j])*rho[j] for j in 1:dim))
+            @expression(m.model_mip, cut_expr, u_val*r - sum(abs(w_val[j])*rho[j] for j in 1:dim))
         else
             # Non-disaggregated K* cut on (r, t) is (u, w)
             @expression(m.model_mip, cut_expr, u_val*r + vecdot(w_val, t))
@@ -2096,19 +2133,20 @@ function add_cut_sdp!(m, T, W_eig)
                 # (p1, p2, q) in RSOC <-> (p1+p2, p1-p2, sqrt2*q) in SOC
                 p2 = sum(T[k,l]*W_eig_j[k]*W_eig_j[l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
                 @expression(m.model_mip, cut_expr, T[i,i] + p2 - norm([(T[i,i] - p2), 2.*sum(T[k,i]*W_eig_j[k] for k in 1:dim if k!=i)]))
-
-                if add_cut!(m, cut_expr, m.logs[:SDP])
-                    is_viol_cut = true
-                end
             else
                 # Using SDP linear eig cuts
                 # K* cut on T is W_eig_j*W_eig_j'
                 # Scale by num_eig
-                @expression(m.model_mip, cut_expr, num_eig*vecdot(Symmetric(W_eig_j*W_eig_j'), T))
+                @expression(m.model_mip, cut_expr, vecdot(Symmetric(W_eig_j*W_eig_j'), T))
+            end
 
-                if add_cut!(m, cut_expr, m.logs[:SDP])
-                    is_viol_cut = true
-                end
+            if m.scale_subp_cuts
+                # Scale by num_eig
+                cut_expr = num_eig*cut_expr
+            end
+
+            if add_cut!(m, cut_expr, m.logs[:SDP])
+                is_viol_cut = true
             end
         end
     else
@@ -2125,10 +2163,6 @@ function add_cut_sdp!(m, T, W_eig)
             # (p1, p2, q) in RSOC <-> (p1+p2, p1-p2, sqrt2*q) in SOC
             p2 = sum(T[k,l]*W[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
             @expression(m.model_mip, cut_expr, T[i,i] + p2 - norm([(T[i,i] - p2), 2.*[sum((T[k,i]*W_eig[k,j]) for k in 1:dim if k!=i) for j in 1:num_eig]...]))
-
-            if add_cut!(m, cut_expr, m.logs[:SDP])
-                is_viol_cut = true
-            end
         else
             # Using SDP linear full cut
             # K* cut on T is W
@@ -2375,7 +2409,7 @@ function calc_infeas(cones, vals)
             # Convert to SOC and calculate using SOC violation function, maintain original scaling
             # (p1, p2, q) in RSOC <-> (sqrt2inv*(p1+p2), sqrt2inv*(-p1+p2), q) in SOC
             t = sqrt2inv*(vals[idx[1]] + vals[idx[2]])
-            usqr = 1/2*(-vals[idx[1]] + vals[idx[2]])^2 + sumabs2(vals[idx[j]] for j in 3:length(idx))
+            usqr = 1/2*(-vals[idx[1]] + vals[idx[2]])^2 + sum(abs2, (vals[idx[j]] for j in 3:length(idx)))
             viol_rot = max(viol_rot, sqrt(usqr) - t)
         elseif cone == :ExpPrimal
             if vals[idx[2]] <= 1e-7
