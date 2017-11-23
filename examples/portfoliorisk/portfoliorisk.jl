@@ -49,14 +49,14 @@ function portfoliorisk(solver, Portfolios, Stocks, Smax)
         elseif p.risk == :robustnorm2
             lambda = @variable(m, lowerbound=0)
             @SDconstraint(m, [p.gamma [Shx[p,s] for s in p.stocks]' [x[p,s] for s in p.stocks]'; [Shx[p,s] for s in p.stocks] (diagm(fill(p.gamma, p.size)) - [lambda.*p.Delta[(s1,s2)] for s1 in p.stocks, s2 in p.stocks]) zeros(p.size, p.size); [x[p,s] for s in p.stocks] zeros(p.size, p.size) diagm(fill(lambda, p.size))] >= 0)
-        elseif p.risk == :entropy
-            ent1 = @variable(m, [s in p.stocks])
-            ent2 = @variable(m, [s in p.stocks])
-            @constraint(m, sum(ent1[s] + ent2[s] for s in p.stocks) <= p.gamma^2)
-            for s in p.stocks
-                @Conicconstraint(m, [-ent1[s], 1 + Shx[p,s], 1] >= 0, :ExpPrimal)
-                @Conicconstraint(m, [-ent2[s], 1 - Shx[p,s], 1] >= 0, :ExpPrimal)
-            end
+        # elseif p.risk == :entropy
+        #     ent1 = @variable(m, [s in p.stocks])
+        #     ent2 = @variable(m, [s in p.stocks])
+        #     @constraint(m, sum(ent1[s] + ent2[s] for s in p.stocks) <= p.gamma^2)
+        #     for s in p.stocks
+        #         @Conicconstraint(m, [-ent1[s], 1 + Shx[p,s], 1] >= 0, :ExpPrimal)
+        #         @Conicconstraint(m, [-ent2[s], 1 - Shx[p,s], 1] >= 0, :ExpPrimal)
+        #     end
         else
             error("Invalid risk type $(p.risk)")
         end
@@ -175,7 +175,7 @@ Specify MICP solver
 
 using Pajarito
 
-mip_solver_drives = true
+mip_solver_drives = false
 log_level = 3
 rel_gap = 1e-4
 
@@ -188,26 +188,26 @@ mip_solver = CplexSolver(
     CPX_PARAM_EPGAP=(mip_solver_drives ? rel_gap : 0.)
 )
 
-using SCS
-cont_solver = SCSSolver(eps=1e-3, max_iters=100000, verbose=0, warm_start=true)
+# using SCS
+# cont_solver = SCSSolver(eps=1e-3, max_iters=100000, verbose=0, warm_start=true)
 
 # using ECOS
 # cont_solver = ECOSSolver(verbose=false)
 
-# using Mosek
-# cont_solver = MosekSolver(LOG=0)
+using Mosek
+cont_solver = MosekSolver(LOG=0)
 
 solver = PajaritoSolver(
     mip_solver_drives=mip_solver_drives,
     log_level=log_level,
     rel_gap=rel_gap,
-	mip_solver=mip_solver,
-	cont_solver=cont_solver,
-    solve_subp=true,
-    solve_relax=true,
-	init_sdp_soc=false,
-    sdp_soc=false,
-    sdp_eig=true,
+    mip_solver=mip_solver,
+    cont_solver=cont_solver,
+    # solve_subp=false,
+    # solve_relax=false,
+    # init_sdp_soc=false,
+    # sdp_soc=false,
+    sdp_eig=false,
     # prim_cuts_only=true,
     # prim_cuts_always=true,
     # prim_cuts_assist=true,
@@ -220,11 +220,11 @@ solver = PajaritoSolver(
 Specify model options and generate data
 =========================================================#
 
-# srand(101)
+srand(102)
 
 risks = [:norm2, :entropy, :robustnorm2]
-counts = [8, 8, 8]
-maxstocks = [100, 20, 8]
+counts = [0, 0, 1]
+maxstocks = [100, 20, 20]
 gammas = [0.05, 0.05, 0.05]
 
 datadir = joinpath(pwd(), "data")
