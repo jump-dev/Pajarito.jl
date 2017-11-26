@@ -2025,14 +2025,13 @@ function add_sep_cut_sdp!(m, add_cuts::Bool, T)
         if add_cuts && clean_array!(m, T_eig)
             is_viol_cut = add_cut_sdp!(m, T, T_eig)
             m.logs[:SDP][:n_sep] += 1
-        end
 
-        # Also add full cut, as sometimes it is needed for convergence
-        @expression(m.model_mip, cut_expr, vecdot(Symmetric(T_eig*T_eig'), T))
-        if add_cut!(m, cut_expr, m.logs[:SDP])
-            is_viol_cut = true
+            # Also add full cut, as sometimes it is helpful for convergence
+            @expression(m.model_mip, cut_expr, vecdot(Symmetric(T_eig*T_eig'), T))
+            if add_cut!(m, cut_expr, m.logs[:SDP])
+                is_viol_cut = true
+            end
         end
-        m.logs[:SDP][:n_sep] += 1
     end
 
     return (is_viol_cut, viol)
