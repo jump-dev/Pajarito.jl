@@ -1479,7 +1479,7 @@ function solve_mip_driven!(m)
         m.best_bound = mip_obj_bound
     end
 
-    if status_mip == :Optimal
+    if isfinite(getobjectivevalue(m.model_mip))
         # Check MIP final solution and update incumbent
         (is_feas, is_viol_any) = check_feas_add_sep_cuts!(m, false)
         if !is_feas
