@@ -26,20 +26,20 @@ solvers = Dict{String,Dict{String,MathProgBase.AbstractMathProgSolver}}()
 solvers["MILP"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 solvers["MISOCP"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 
-tol_int = 1e-8
-tol_feas = 1e-7
+tol_int = 1e-9
+tol_feas = 1e-8
 tol_gap = 0.0
 
 if cpx
     solvers["MILP"]["CPLEX"] = solvers["MISOCP"]["CPLEX"] = CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=tol_int, CPX_PARAM_EPRHS=tol_feas, CPX_PARAM_EPGAP=tol_gap)
     if mos
-        solvers["MISOCP"]["Paj(CPLEX+Mosek)"] = PajaritoSolver(mip_solver=CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=tol_int, CPX_PARAM_EPRHS=tol_feas/10, CPX_PARAM_EPGAP=tol_gap), cont_solver=Mosek.MosekSolver(LOG=0), log_level=0, rel_gap=1e-6)
+        solvers["MISOCP"]["Paj(CPLEX+Mosek)"] = PajaritoSolver(mip_solver=CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=tol_int, CPX_PARAM_EPRHS=tol_feas/10, CPX_PARAM_EPGAP=tol_gap), cont_solver=Mosek.MosekSolver(LOG=0), log_level=0, rel_gap=1e-7)
     end
 end
 if glp
     solvers["MILP"]["GLPK"] = GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, mip_gap=tol_gap)
     if eco
-        solvers["MISOCP"]["Paj(GLPK+ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas/10, mip_gap=tol_gap), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-6)
+        solvers["MISOCP"]["Paj(GLPK+ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas/10, mip_gap=tol_gap), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-7)
     end
 end
 # Gurobi has failed a test due to a known bug; CBC and SCIP fail some tests but the failures have not been fully investigated

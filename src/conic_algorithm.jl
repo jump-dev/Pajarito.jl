@@ -1689,38 +1689,38 @@ function solve_subp_add_subp_cuts!(m)
         b_sub_int = m.b_sub - m.A_sub_int*soln_int
         (status_conic, soln_conic, dual_conic) = solve_subp!(m, b_sub_int)
 
-        # Determine cut scaling factors and check if have new feasible incumbent solution
+        # Handle a primal solution
+        if !isempty(soln_conic)
+            # Calculate full objective value and check if incumbent
+            obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_conic)
+            if obj_full < m.best_obj
+                # Conic solver solution is a new incumbent
+                m.best_obj = obj_full
+                m.best_int = soln_int
+                m.best_cont = soln_conic
+                m.new_incumb = true
+                m.is_best_conic = true
+            end
+            m.logs[:n_feas_conic] += 1
+        end
+
+        # Handle a dual solution/ray
         if !isempty(dual_conic)
-            # dual_value = -dot(dual_conic, b_sub_int)
-            dual_value = dot(m.c_sub_int, soln_int) - dot(dual_conic, b_sub_int)
             if status_conic == :Infeasible
-                @assert dual_value > 1e-10
-                # Subproblem infeasible: first check infeasible ray has negative value, and scale
-                # ray_value = vecdot(dual_conic, b_sub_int)
-                # if ray_value < -infeas_ray_tol
-                if m.scale_subp_cuts
-                    # Rescale by infeasible scale factor / full ray objective value
+                # Calculate obj value of dual ray and check it is strictly positive
+                dual_value = -dot(b_sub_int, dual_conic)
+                if dual_value < 1e-10
+                    warn("For infeasible subproblem, dual ray objective value $dual_value is not significantly positive (please submit an issue)\n")
+                elseif m.scale_subp_cuts
+                    # Rescale using dual value for dual infeasibility case
                     scale!(dual_conic, m.inf_subp_scale/dual_value)
                 end
-                # else
-                #     warn("Conic solver failure: returned status $status_conic with empty solution and nonempty dual, but b'y is not sufficiently negative for infeasible ray y (please submit an issue)\n")
-                # end
-            elseif !isempty(soln_conic)
-                # Subproblem feasible: first calculate full objective value
-                obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_conic)
+            else
+                # Calculate obj value of full dual solution
+                dual_value = -dot(b_sub_int, dual_conic) + dot(m.c_sub_int, soln_int)
                 if m.scale_subp_cuts
-                    # Rescale by optimal scale factor / (abs(dual objective) + 1e-5)
+                    # Rescale using dual value for strong duality case
                     scale!(dual_conic, m.opt_subp_scale/(abs(dual_value) + 1e-5))
-                end
-
-                m.logs[:n_feas_conic] += 1
-                if obj_full < m.best_obj
-                    # Conic solver solution is a new incumbent
-                    m.best_obj = obj_full
-                    m.best_int = soln_int
-                    m.best_cont = soln_conic
-                    m.new_incumb = true
-                    m.is_best_conic = true
                 end
             end
         else
@@ -1879,7 +1879,7 @@ end
 function add_subp_cut_sdp!(m, T, W_val)
     is_viol_cut = false
 
-    W_eig_obj = eigfact!(W_val, m.mip_feas_tol, Inf)
+    W_eig_obj = eigfact!(W_val, m.mip_feas_tol/2., Inf)
 
     # K* projected (scaled) subproblem cut is sum_{j: lambda_j > 0} lambda_j W_eig_j W_eig_j'
     if !isempty(W_eig_obj[:values])
@@ -2014,7 +2014,7 @@ function add_sep_cut_sdp!(m, add_cuts::Bool, T)
     viol = 0.
 
     # Get eigendecomposition object, with eigenvalues smaller than separation cut feasibility tolerance
-    T_eig_obj = eigfact!(Symmetric(getvalue(T)), -Inf, -m.mip_feas_tol)
+    T_eig_obj = eigfact!(Symmetric(getvalue(T)), -Inf, -m.mip_feas_tol/2.)
 
     # Violation is negative min eigenvalue (empty if all eigenvalues larger than separation cut feasibility tolerance)
     if !isempty(T_eig_obj[:values])
@@ -2025,12 +2025,6 @@ function add_sep_cut_sdp!(m, add_cuts::Bool, T)
         if add_cuts && clean_array!(m, T_eig)
             is_viol_cut = add_cut_sdp!(m, T, T_eig)
             m.logs[:SDP][:n_sep] += 1
-
-            # Also add full cut, as sometimes it is helpful for convergence
-            @expression(m.model_mip, cut_expr, vecdot(Symmetric(T_eig*T_eig'), T))
-            if add_cut!(m, cut_expr, m.logs[:SDP])
-                is_viol_cut = true
-            end
         end
     end
 
