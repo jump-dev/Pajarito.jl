@@ -965,21 +965,7 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
             @test isapprox(objbound, -7.5, atol=TOL)
             @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
         end
-
-        testname = "SOC full cuts (cardls)"
-        probname = "sdp_cardls"
-        @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-                sdp_eig=false, sdp_soc=true)
-
-            (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-
-            @test status == :Optimal
-            @test isapprox(objval, 16.045564, atol=TOL)
-            @test isapprox(objbound, 16.045564, atol=TOL)
-            @test isapprox(sol[1:6], [0, 1, 1, 1, 0, 0], atol=TOL)
-        end
-
+        
         testname = "SOC full cuts infeasible"
         probname = "sdpsoc_infeasible"
         @testset "$testname" begin
