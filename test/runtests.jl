@@ -26,8 +26,8 @@ solvers = Dict{String,Dict{String,MathProgBase.AbstractMathProgSolver}}()
 solvers["MILP"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 solvers["MISOCP"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 
-tol_int = 1e-8
-tol_feas = 1e-7
+tol_int = 1e-9
+tol_feas = 1e-8
 tol_gap = 0.0
 
 if cpx
