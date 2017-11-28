@@ -436,20 +436,6 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
     end
 
-    testname = "No primal cuts assist"
-    probname = "expsoc_optimal2"
-    @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            prim_cuts_assist=false)
-
-        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-
-        @test status == :Optimal
-        @test isapprox(objval, -18, atol=TOL)
-        @test isapprox(objbound, -18, atol=TOL)
-        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
-    end
-
     testname = "Primal cuts always"
     probname = "expsoc_optimal2"
     @testset "$testname" begin
@@ -808,7 +794,7 @@ function run_expsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
         @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 
-    testname = "SOC in MIP, no conic"
+    testname = "SOC in MIP, no conic solver"
     probname = "expsoc_optimal"
     @testset "$testname" begin
         solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
@@ -952,20 +938,6 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
             @test status == :Infeasible
         end
 
-        testname = "SOC cuts, no conic solver"
-        probname = "sdpsoc_optimal"
-        @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, log_level=log_level,
-                sdp_eig=true, init_sdp_soc=true, sdp_soc=true, prim_cuts_only=true, solve_relax=false, solve_subp=false)
-
-            (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-
-            @test status == :Optimal
-            @test isapprox(objval, -7.5, atol=TOL)
-            @test isapprox(objbound, -7.5, atol=TOL)
-            @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
-        end
-        
         testname = "SOC full cuts infeasible"
         probname = "sdpsoc_infeasible"
         @testset "$testname" begin
