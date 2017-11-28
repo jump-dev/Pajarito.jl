@@ -134,6 +134,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     update_conicsub::Bool       # Indicates whether to use setbvec! to update an existing conic subproblem model
     model_conic::MathProgBase.AbstractConicModel # Conic subproblem model: persists when the conic solver implements MathProgBase.setbvec!
     oa_started::Bool            # Indicator for Iterative or MIP-solver-driven algorithms started
+    oa_finished::Bool           # Indicator for Iterative or MIP-solver-driven algorithms finished
     cache_dual::Dict{Vector{Float64},Vector{Float64}} # Set of integer solution subvectors already seen
     new_incumb::Bool            # Indicates whether a new incumbent solution from the conic solver is waiting to be added as warm-start or heuristic
     cb_heur                     # Heuristic callback reference (MIP-driven only)
@@ -197,6 +198,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.num_con_orig = 0
 
         m.oa_started = false
+        m.oa_finished = false
         m.best_obj = Inf
         m.best_bound = -Inf
         m.gap_rel_opt = NaN
@@ -1386,12 +1388,14 @@ function solve_iterative!(m)
 
         if m.gap_rel_opt <= m.rel_gap
             # Opt gap condition satisfied
+            m.oa_finished = true
             return :Optimal
         elseif count_subopt > 0
             # MIP solve was suboptimal, try solving next MIP to optimality, if that doesn't help then we will end on next iteration
             count_subopt = m.mip_subopt_count
         elseif !is_viol_subp && !is_viol_any
             # MIP solve was optimal, no violated cuts were added, so must finish
+            m.oa_finished = true
             if status_mip == :UserLimit
                 return :UserLimit
             elseif isfinite(m.gap_rel_opt)
@@ -1460,6 +1464,7 @@ function solve_mip_driven!(m)
     m.logs[:mip_solve] = time()
     status_mip = solve(m.model_mip, suppress_warnings=true)
     m.logs[:mip_solve] = time() - m.logs[:mip_solve]
+    m.oa_finished = true
 
     # End if MIP didn't stop because of optimal or user limit
     if (status_mip != :UserLimit) && (status_mip != :Optimal) && (status_mip != :Suboptimal)
@@ -1473,18 +1478,9 @@ function solve_mip_driven!(m)
     end
 
     if isfinite(getobjectivevalue(m.model_mip))
-        # Accept final mip solver solution (requires trusting that it satisfies all the cuts)
-        soln_int = getvalue(m.x_int)
-        soln_cont = getvalue(m.x_cont)
-        obj_full = dot(m.c_sub_int, soln_int) + dot(m.c_sub_cont, soln_cont)
-
-        if obj_full < m.best_obj
-            # Save new incumbent info
-            m.best_obj = obj_full
-            m.best_int = soln_int
-            m.best_cont = soln_cont
-            m.is_best_conic = false
-        end
+        # Check final mip solver solution, accept if feasible and new
+        solve_subp_add_subp_cuts!(m)
+        check_feas_add_sep_cuts!(m)
     end
 
     # Update gap if best bound and best objective are finite
@@ -1615,20 +1611,24 @@ function add_cut!(m, cut_expr, cone_logs)
         @constraint(m.model_mip, cut_expr >= 0)
         cone_logs[:n_relax] += 1
     elseif getvalue(cut_expr) <= -m.mip_feas_tol
-        if m.mip_solver_drives
-            @lazyconstraint(m.cb_lazy, cut_expr >= 0)
-        else
-            @constraint(m.model_mip, cut_expr >= 0)
-        end
         is_viol_cut = true
-        cone_logs[:n_viol_total] += 1
-    elseif !m.viol_cuts_only
-        if m.mip_solver_drives
-            @lazyconstraint(m.cb_lazy, cut_expr >= 0)
-        else
-            @constraint(m.model_mip, cut_expr >= 0)
+        if !m.oa_finished
+            if m.mip_solver_drives
+                @lazyconstraint(m.cb_lazy, cut_expr >= 0)
+            else
+                @constraint(m.model_mip, cut_expr >= 0)
+            end
+            cone_logs[:n_viol_total] += 1
         end
-        cone_logs[:n_nonviol_total] += 1
+    elseif !m.viol_cuts_only
+        if !m.oa_finished
+            if m.mip_solver_drives
+                @lazyconstraint(m.cb_lazy, cut_expr >= 0)
+            else
+                @constraint(m.model_mip, cut_expr >= 0)
+            end
+            cone_logs[:n_nonviol_total] += 1
+        end
     end
 
     return is_viol_cut
