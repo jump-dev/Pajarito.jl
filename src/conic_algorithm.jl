@@ -29,8 +29,6 @@ using ConicBenchmarkUtilities
 const sqrt2 = sqrt(2)
 const sqrt2inv = 1/sqrt2
 
-const infeas_ray_tol = 1e-8 # For checking if conic subproblem infeasible ray is sufficiently negative
-
 const unstable_soc_disagg_tol = 1e-4 # For checking if a disaggregated SOC cut is numerically unstable
 
 
@@ -1500,6 +1498,9 @@ function solve_mip_driven!(m)
     elseif status_mip == :UserLimit
         return :UserLimit
     elseif isfinite(m.gap_rel_opt)
+        if isfinite(getobjectivevalue(m.model_mip))
+            warn("MIP solver's status is $status_mip and reported objective gap is $(MathProgBase.getobjgap(m.model_mip))\n")
+        end
         return :Suboptimal
     else
         return :FailedOA
@@ -1862,7 +1863,7 @@ end
 function add_subp_cut_sdp!(m, T, W_val)
     is_viol_cut = false
 
-    W_eig_obj = eigfact!(W_val, m.mip_feas_tol, Inf)
+    W_eig_obj = eigfact!(W_val, m.cut_zero_tol, Inf)
 
     # K* projected (scaled) subproblem cut is sum_{j: lambda_j > 0} lambda_j W_eig_j W_eig_j'
     if !isempty(W_eig_obj[:values])
@@ -2089,8 +2090,8 @@ function add_cut_sdp!(m, T, W_eig)
             end
 
             if m.scale_subp_cuts
-                # Scale by num_eig
-                cut_expr = num_eig*cut_expr
+                # Scale by dim
+                cut_expr = dim*cut_expr
             end
 
             is_viol_cut |= add_cut!(m, cut_expr, m.logs[:SDP])
@@ -2113,9 +2114,9 @@ function add_cut_sdp!(m, T, W_eig)
             # Using SDP linear full cut
             # K* cut on T is W
             @expression(m.model_mip, cut_expr, vecdot(W, T))
-
-            is_viol_cut |= add_cut!(m, cut_expr, m.logs[:SDP])
         end
+
+        is_viol_cut |= add_cut!(m, cut_expr, m.logs[:SDP])
     end
 
     return is_viol_cut
