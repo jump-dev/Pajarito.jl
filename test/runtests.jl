@@ -27,7 +27,7 @@ solvers["MILP"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 solvers["MISOCP"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 
 tol_int = 1e-9
-tol_feas = 1e-8
+tol_feas = 1e-7
 tol_gap = 0.0
 
 if glp
@@ -73,17 +73,17 @@ solvers["Exp+SOC"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 solvers["PSD+SOC"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 solvers["PSD+Exp"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 if eco
-    solvers["SOC"]["ECOS"] = solvers["Exp+SOC"]["ECOS"] = ECOS.ECOSSolver(verbose=false)
+    solvers["SOC"]["ECOS"] = solvers["Exp+SOC"]["ECOS"] = ECOS.ECOSSolver(verbose=false, reltol=1e-10, reltol_inacc=1e-3)
 end
 if scs
-    solvers["PSD+Exp"]["SCS"] = SCS.SCSSolver(eps=1e-5, max_iters=10000000, verbose=0)
-    solvers["Exp+SOC"]["SCS"] = SCS.SCSSolver(eps=1e-5, max_iters=10000000, verbose=0)
-    solvers["SOC"]["SCS"] = solvers["PSD+SOC"]["SCS"] =  SCS.SCSSolver(eps=1e-6, max_iters=10000000, verbose=0)
+    solvers["PSD+Exp"]["SCS"] = SCS.SCSSolver(eps=1e-5, max_iters=1e7, verbose=0)
+    solvers["Exp+SOC"]["SCS"] = SCS.SCSSolver(eps=1e-5, max_iters=1e7, verbose=0)
+    solvers["SOC"]["SCS"] = solvers["PSD+SOC"]["SCS"] =  SCS.SCSSolver(eps=1e-6, max_iters=1e7, verbose=0)
 end
 if mos
-    solvers["SOC"]["Mosek"] = solvers["PSD+SOC"]["Mosek"] = Mosek.MosekSolver(LOG=0)
+    solvers["SOC"]["Mosek"] = solvers["PSD+SOC"]["Mosek"] = Mosek.MosekSolver(LOG=0, MSK_DPAR_INTPNT_CO_TOL_REL_GAP=1e-10, MSK_DPAR_INTPNT_CO_TOL_NEAR_REL=1e7)
     # Mosek 9+ recognizes the exponential cone:
-    solvers["Exp+SOC"]["Mosek"] = solvers["PSD+Exp"]["Mosek"] = Mosek.MosekSolver(LOG=0)
+    solvers["Exp+SOC"]["Mosek"] = solvers["PSD+Exp"]["Mosek"] = Mosek.MosekSolver(LOG=0, MSK_DPAR_INTPNT_CO_TOL_REL_GAP=1e-10, MSK_DPAR_INTPNT_CO_TOL_NEAR_REL=1e7)
 end
 
 

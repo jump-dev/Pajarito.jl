@@ -92,8 +92,8 @@ function PajaritoSolver(;
     init_sdp_soc = false,
 
     scale_subp_cuts = true,
-    scale_subp_factor = 1.,
-    viol_cuts_only = false,
+    scale_subp_factor = 10.,
+    viol_cuts_only = nothing,
     prim_cuts_only = false,
     prim_cuts_always = false,
     prim_cuts_assist = true,
@@ -107,6 +107,11 @@ function PajaritoSolver(;
 
     if mip_solver == UnsetSolver()
         error("No MIP solver specified (set mip_solver)\n")
+    end
+
+    if viol_cuts_only == nothing
+        # If user has not set option, default is true on MSD and false on iterative
+        viol_cuts_only = mip_solver_drives
     end
 
     if dump_basename == nothing
