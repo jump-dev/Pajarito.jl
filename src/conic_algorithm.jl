@@ -1803,7 +1803,7 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
 
     # Get a primal
     soln_conic = Float64[]
-    if status_conic in (:Optimal, :PDFeas, :PrimFeas)
+    if status_conic in (:Optimal, :Suboptimal, :PDFeas, :PrimFeas)
         soln_conic = MathProgBase.getsolution(m.model_conic)
         if any(isnan, soln_conic)
             soln_conic = Float64[]
