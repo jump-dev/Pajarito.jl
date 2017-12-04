@@ -1891,7 +1891,7 @@ end
 =========================================================#
 
 # Check cone infeasibilities of current solution, add K* cuts from current solution for infeasible cones, if feasible check new incumbent
-function check_feas_add_sep_cuts!(m)
+function check_feas_add_sep_cuts!(m, add_cuts::Bool)
     tic()
     is_viol_any = false
 
