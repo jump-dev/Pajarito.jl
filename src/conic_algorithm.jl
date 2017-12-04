@@ -139,6 +139,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     update_conicsub::Bool       # Indicates whether to use setbvec! to update an existing conic subproblem model
     model_conic::MathProgBase.AbstractConicModel # Conic subproblem model: persists when the conic solver implements MathProgBase.setbvec!
     oa_started::Bool            # Indicator for Iterative or MIP-solver-driven algorithms started
+    oa_finished::Bool           # Indicator for Iterative or MIP-solver-driven algorithms finished
     cache_dual::Dict{Vector{Float64},Vector{Float64}} # Set of integer solution subvectors already seen
     new_incumb::Bool            # Indicates whether a new incumbent solution from the conic solver is waiting to be added as warm-start or heuristic
     cb_heur                     # Heuristic callback reference (MIP-driven only)
@@ -202,6 +203,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.num_con_orig = 0
 
         m.oa_started = false
+        m.oa_finished = false
         m.best_obj = Inf
         m.best_bound = -Inf
         m.gap_rel_opt = NaN
@@ -1393,12 +1395,14 @@ function solve_iterative!(m)
 
         if m.gap_rel_opt <= m.rel_gap
             # Opt gap condition satisfied
+            m.oa_finished = true
             return :Optimal
         elseif count_subopt > 0
             # MIP solve was suboptimal, try solving next MIP to optimality, if that doesn't help then we will end on next iteration
             count_subopt = m.mip_subopt_count
         elseif !is_viol_subp && !is_viol_any
             # MIP solve was optimal, no violated cuts were added, so must finish
+            m.oa_finished = true
             if status_mip == :UserLimit
                 return :UserLimit
             elseif isfinite(m.gap_rel_opt)
@@ -1470,6 +1474,7 @@ function solve_mip_driven!(m)
     m.logs[:mip_solve] = time()
     status_mip = solve(m.model_mip, suppress_warnings=true)
     m.logs[:mip_solve] = time() - m.logs[:mip_solve]
+    m.oa_finished = true
 
     # End if MIP didn't stop because of optimal or user limit
     if (status_mip != :UserLimit) && (status_mip != :Optimal) && (status_mip != :Suboptimal)
@@ -1499,6 +1504,9 @@ function solve_mip_driven!(m)
     elseif status_mip == :UserLimit
         return :UserLimit
     elseif isfinite(m.gap_rel_opt)
+        if isfinite(getobjectivevalue(m.model_mip))
+            warn("MIP solver's status is $status_mip and reported objective gap is $(MathProgBase.getobjgap(m.model_mip))\n")
+        end
         return :Suboptimal
     else
         return :FailedOA
@@ -1611,7 +1619,6 @@ function add_cut!(m, cut_expr, cone_logs)
 
     if !m.oa_started
         @constraint(m.model_mip, cut_expr >= 0)
-
         cone_logs[:n_relax] += 1
     else
         cut_val = getvalue(cut_expr)
@@ -1884,10 +1891,9 @@ end
 =========================================================#
 
 # Check cone infeasibilities of current solution, add K* cuts from current solution for infeasible cones, if feasible check new incumbent
-function check_feas_add_sep_cuts!(m, add_cuts::Bool)
+function check_feas_add_sep_cuts!(m)
     tic()
     is_viol_any = false
-    max_viol = 0.
 
     for n in 1:m.num_soc
         (is_viol_cut, viol) = add_sep_cut_soc!(m, add_cuts, m.r_soc[n], m.t_soc[n], m.pi_soc[n], m.rho_soc[n])
@@ -1909,8 +1915,7 @@ function check_feas_add_sep_cuts!(m, add_cuts::Bool)
 
     m.logs[:sep_cuts] += toq()
 
-    # Check feasibility of solution (via worst cone violation) and return whether feasible and whether added violated cut
-    if max_viol < feas_factor*m.mip_feas_tol
+    if !is_viol_any
         # Accept MIP solution as feasible and check if new incumbent
         m.logs[:n_feas_mip] += 1
         soln_int = getvalue(m.x_int)
@@ -1924,17 +1929,14 @@ function check_feas_add_sep_cuts!(m, add_cuts::Bool)
             m.best_cont = soln_cont
             m.is_best_conic = false
         end
-
-        return (true, is_viol_any)
-    else
-        return (false, is_viol_any)
     end
+
+    return is_viol_any
 end
 
 # Calculate the SOC violation and optionally add a separation cut
-function add_sep_cut_soc!(m, add_cuts::Bool, r, t, pi, rho)
+function add_sep_cut_soc!(m, r, t, pi, rho)
     is_viol_cut = false
-    viol = 0.
 
     r_val = getvalue(r)
     t_val = getvalue(t)
@@ -1943,19 +1945,18 @@ function add_sep_cut_soc!(m, add_cuts::Bool, r, t, pi, rho)
     viol = vecnorm(t_val) - r_val
 
     # K* separation cut is (1, -t/norm(t))
-    if add_cuts && (viol > m.mip_feas_tol) && clean_array!(m, t_val)
+    if (viol > m.mip_feas_tol) && clean_array!(m, t_val)
         w_val = -t_val/vecnorm(t_val)
         is_viol_cut = add_cut_soc!(m, r, t, pi, rho, 1., w_val)
         m.logs[:SOC][:n_sep] += 1
     end
 
-    return (is_viol_cut, viol)
+    return is_viol_cut
 end
 
 # Calculate the Exp violation and optionally add a separation cut
-function add_sep_cut_exp!(m, add_cuts::Bool, r, s, t)
+function add_sep_cut_exp!(m, r, s, t)
     is_viol_cut = false
-    viol = 0.
 
     r_val = getvalue(r)
     s_val = getvalue(s)
@@ -1965,7 +1966,7 @@ function add_sep_cut_exp!(m, add_cuts::Bool, r, s, t)
         # s is (almost) zero: violation is t
         viol = t_val
 
-        if add_cuts && (viol > m.mip_feas_tol)
+        if viol > m.mip_feas_tol
             # TODO: for now, error if r is too small
             if r_val <= 1e-10
                 error("Cannot add exp cone separation cut on point ($r_val, $s_val, $t_val)\n")
@@ -1982,7 +1983,7 @@ function add_sep_cut_exp!(m, add_cuts::Bool, r, s, t)
         ets = exp(t_val/s_val)
         viol = s_val*ets - r_val
 
-        if add_cuts && (viol > m.mip_feas_tol)
+        if viol > m.mip_feas_tol
             # K* separation cut on (r,s,t) is (1, (t-s)/s*exp(t/s), -exp(t/s))
             v_val = (t_val - s_val)/s_val*ets
             is_viol_cut = add_cut_exp!(m, r, s, t, 1., v_val, -ets)
@@ -1990,30 +1991,27 @@ function add_sep_cut_exp!(m, add_cuts::Bool, r, s, t)
         end
     end
 
-    return (is_viol_cut, viol)
+    return is_viol_cut
 end
 
 # Calculate the PSD violation and optionally add a separation cut
-function add_sep_cut_sdp!(m, add_cuts::Bool, T)
+function add_sep_cut_sdp!(m, T)
     is_viol_cut = false
-    viol = 0.
 
     # Get eigendecomposition object, with eigenvalues smaller than separation cut feasibility tolerance
     T_eig_obj = eigfact!(Symmetric(getvalue(T)), -Inf, -m.mip_feas_tol)
 
     # Violation is negative min eigenvalue (empty if all eigenvalues larger than separation cut feasibility tolerance)
     if !isempty(T_eig_obj[:values])
-        viol = -minimum(T_eig_obj[:values])
-
         # K* separation cut is sum_{j: lambda_j < 0} T_eig_j T_eig_j'
         T_eig = T_eig_obj[:vectors]
-        if add_cuts && clean_array!(m, T_eig)
+        if clean_array!(m, T_eig)
             is_viol_cut = add_cut_sdp!(m, T, T_eig)
             m.logs[:SDP][:n_sep] += 1
         end
     end
 
-    return (is_viol_cut, viol)
+    return is_viol_cut
 end
 
 
@@ -2370,7 +2368,7 @@ function calc_infeas(cones, vals)
             # Convert to SOC and calculate using SOC violation function, maintain original scaling
             # (p1, p2, q) in RSOC <-> (sqrt2inv*(p1+p2), sqrt2inv*(-p1+p2), q) in SOC
             t = sqrt2inv*(vals[idx[1]] + vals[idx[2]])
-            usqr = 1/2*(-vals[idx[1]] + vals[idx[2]])^2 + sum(abs2, vals[idx[j]] for j in 3:length(idx))
+            usqr = 1/2*(-vals[idx[1]] + vals[idx[2]])^2 + sum(abs2, (vals[idx[j]] for j in 3:length(idx)))
             viol_rot = max(viol_rot, sqrt(usqr) - t)
         elseif cone == :ExpPrimal
             if vals[idx[2]] <= 1e-7
