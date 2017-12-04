@@ -9,13 +9,10 @@ This mixed-integer conic programming algorithm is described in:
   Lubin, Yamangil, Bent, Vielma (2016), Extended formulations
   in Mixed-Integer Convex Programming, IPCO 2016, Liege, Belgium
   (available online at http://arxiv.org/abs/1511.06710)
-
 Model MICP with JuMP.jl conic format or Convex.jl DCP format
 http://mathprogbasejl.readthedocs.org/en/latest/conic.html
-
 TODO features
 - implement warm-starting: use set_best_soln!
-
 =========================================================#
 
 using JuMP
@@ -29,7 +26,11 @@ using ConicBenchmarkUtilities
 const sqrt2 = sqrt(2)
 const sqrt2inv = 1/sqrt2
 
-const unstable_soc_disagg_tol = 1e-4 # For checking if a disaggregated SOC cut is numerically unstable
+const infeas_ray_tol = 1e-10 # For checking if conic subproblem infeasible ray is sufficiently negative
+
+const feas_factor = 100. # For checking if solution is considered feasible from its maximum conic violation
+
+const unstable_soc_disagg_tol = 1e-5 # For checking if a disaggregated SOC cut is numerically unstable
 
 
 #=========================================================
@@ -103,6 +104,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     model_mip::JuMP.Model       # JuMP MIP (outer approximation) model
     x_int::Vector{JuMP.Variable} # JuMP (sub)vector of integer variables
     x_cont::Vector{JuMP.Variable} # JuMP (sub)vector of continuous variables
+    num_cones::Int              # Number of cones in the MIP (linear and non-linear)
 
     # SOC data
     num_soc::Int                # Number of SOCs
@@ -134,7 +136,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     update_conicsub::Bool       # Indicates whether to use setbvec! to update an existing conic subproblem model
     model_conic::MathProgBase.AbstractConicModel # Conic subproblem model: persists when the conic solver implements MathProgBase.setbvec!
     oa_started::Bool            # Indicator for Iterative or MIP-solver-driven algorithms started
-    oa_finished::Bool           # Indicator for Iterative or MIP-solver-driven algorithms finished
     cache_dual::Dict{Vector{Float64},Vector{Float64}} # Set of integer solution subvectors already seen
     new_incumb::Bool            # Indicates whether a new incumbent solution from the conic solver is waiting to be added as warm-start or heuristic
     cb_heur                     # Heuristic callback reference (MIP-driven only)
@@ -198,7 +199,6 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.num_con_orig = 0
 
         m.oa_started = false
-        m.oa_finished = false
         m.best_obj = Inf
         m.best_bound = -Inf
         m.gap_rel_opt = NaN
@@ -528,8 +528,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     flush(STDERR)
 
     # Calculate infeasible and optimal subproblem K* cuts scaling factors
-    m.inf_subp_scale = m.scale_subp_factor*m.mip_feas_tol*(m.num_soc + m.num_exp + m.num_sdp)
-    m.opt_subp_scale = m.inf_subp_scale/m.rel_gap
+    m.inf_subp_scale = m.mip_feas_tol*m.num_cones*m.scale_subp_factor
+    m.opt_subp_scale = m.mip_feas_tol/m.rel_gap*m.num_cones*m.scale_subp_factor
 
     if m.solve_relax
         # Solve relaxed conic problem, proceed with algorithm if optimal or suboptimal, else finish
@@ -1017,18 +1017,18 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     for (spec, cols) in cone_var_new
         if spec == :NonNeg
             for j in cols
-                setname(x_all[j], "x$(j)")
+                # setname(x_all[j], "x$(j)")
                 setlowerbound(x_all[j], 0.)
             end
         elseif spec == :NonPos
             for j in cols
-                setname(x_all[j], "x$(j)")
+                # setname(x_all[j], "x$(j)")
                 setupperbound(x_all[j], 0.)
             end
-        elseif spec == :Free
-            for j in cols
-                setname(x_all[j], "x$(j)")
-            end
+        # elseif spec == :Free
+        #     for j in cols
+        #         setname(x_all[j], "x$(j)")
+        #     end
         end
     end
 
@@ -1061,6 +1061,7 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     T_sdp = Vector{Array{JuMP.AffExpr,2}}(m.num_sdp)
 
     # Add constraint cones to MIP; if linear, add directly, else create slacks if necessary
+    n_lin = 0
     n_soc = 0
     n_exp = 0
     n_sdp = 0
@@ -1069,10 +1070,13 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
 
     for (spec, rows) in cone_con_new
         if spec == :NonNeg
+            n_lin += length(rows)
             @constraint(model_mip, lhs_expr[rows] .>= 0)
         elseif spec == :NonPos
+            n_lin += length(rows)
             @constraint(model_mip, lhs_expr[rows] .<= 0.)
         elseif spec == :Zero
+            n_lin += length(rows)
             @constraint(model_mip, lhs_expr[rows] .== 0.)
         elseif spec == :SOC
             # Set up a SOC
@@ -1105,9 +1109,9 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
                 # Add disaggregated SOC variables pi
                 # 2*pi_j >= t_j^2/r, all j
                 pi = @variable(model_mip, [j in 1:dim], lowerbound=0)
-                for j in 1:dim
-                    setname(pi[j], "pi$(j)_soc$(n_soc)")
-                end
+                # for j in 1:dim
+                #     setname(pi[j], "pi$(j)_soc$(n_soc)")
+                # end
 
                 # Add disaggregated SOC constraint
                 # r - 2*sum(pi)
@@ -1121,9 +1125,9 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
                 # Add absolute value SOC variables rho
                 # rho_j >= |t_j|
                 rho = @variable(model_mip, [j in 1:dim], lowerbound=0)
-                for j in 1:dim
-                    setname(rho[j], "rho$(j)_soc$(n_soc)")
-                end
+                # for j in 1:dim
+                #     setname(rho[j], "rho$(j)_soc$(n_soc)")
+                # end
 
                 # Add absolute value SOC constraints
                 # rho_j >= t_j, rho_j >= -t_j
@@ -1277,6 +1281,8 @@ function create_mip_data!(m, c_new::Vector{Float64}, A_new::SparseMatrixCSC{Floa
     m.x_cont = x_all[cols_cont]
     # @show model_mip
 
+    m.num_cones = n_lin + n_soc + n_exp + n_sdp
+
     if m.soc_in_mip
         m.num_soc = 0
     end
@@ -1345,7 +1351,7 @@ function solve_iterative!(m)
         m.logs[:mip_solve] += toq()
         m.logs[:n_iter] += 1
 
-        # End if MIP didn't stop because of optimal or user limit
+        # End if MIP didn't stop because of (sub)optimal or user limit
         if (status_mip != :UserLimit) && (status_mip != :Optimal) && (status_mip != :Suboptimal)
             return status_mip
         end
@@ -1369,14 +1375,10 @@ function solve_iterative!(m)
         end
 
         # Try to solve new conic subproblem and add subproblem cuts, update incumbent solution if feasible conic solution
-        is_viol_subp = solve_subp_add_subp_cuts!(m)
+        is_viol_subp = solve_subp_add_subp_cuts!(m, true)
 
-        if m.sep_cuts_always || (m.sep_cuts_assist && !is_viol_subp)
-            # Try to add primal cuts on MIP solution, update incumbent if feasible
-            is_viol_any = check_feas_add_sep_cuts!(m)
-        else
-            is_viol_any = false
-        end
+        # Try to add primal cuts on MIP solution, update incumbent if feasible
+        (is_feas, is_viol_any) = check_feas_add_sep_cuts!(m, ((m.sep_cuts_assist && !is_viol_subp) || m.sep_cuts_always))
 
         # Update gap if best bound and best objective are finite
         if isfinite(m.best_obj) && isfinite(m.best_bound)
@@ -1388,14 +1390,12 @@ function solve_iterative!(m)
 
         if m.gap_rel_opt <= m.rel_gap
             # Opt gap condition satisfied
-            m.oa_finished = true
             return :Optimal
         elseif count_subopt > 0
             # MIP solve was suboptimal, try solving next MIP to optimality, if that doesn't help then we will end on next iteration
             count_subopt = m.mip_subopt_count
         elseif !is_viol_subp && !is_viol_any
             # MIP solve was optimal, no violated cuts were added, so must finish
-            m.oa_finished = true
             if status_mip == :UserLimit
                 return :UserLimit
             elseif isfinite(m.gap_rel_opt)
@@ -1426,12 +1426,10 @@ function solve_mip_driven!(m)
         end
 
         # Try to solve new conic subproblem and add subproblem cuts, update incumbent solution if feasible conic solution
-        is_viol_subp = solve_subp_add_subp_cuts!(m)
+        is_viol_subp = solve_subp_add_subp_cuts!(m, true)
 
-        if m.sep_cuts_always || (m.sep_cuts_assist && !is_viol_subp)
-            # Try to add primal cuts on MIP solution, update incumbent if feasible
-            is_viol_any = check_feas_add_sep_cuts!(m)
-        end
+        # Try to add primal cuts on MIP solution, update incumbent if feasible
+        (is_feas, is_viol_any) = check_feas_add_sep_cuts!(m, ((m.sep_cuts_assist && !is_viol_subp) || m.sep_cuts_always))
 
         # Update gap if best bound and best objective are finite
         if isfinite(m.best_obj) && isfinite(m.best_bound)
@@ -1440,6 +1438,11 @@ function solve_mip_driven!(m)
                 # Gap condition satisfied, stop MIP solve
                 return JuMP.StopTheSolver
             end
+        end
+
+        # If solution is infeasible but we added no cuts, have to finish or the MIP solver could accept a bad solution
+        if !is_feas && !is_viol_subp && !is_viol_any
+            warn("Lazy callback solution is infeasible but no cuts could be added\n")
         end
     end
     addlazycallback(m.model_mip, callback_lazy)
@@ -1464,7 +1467,6 @@ function solve_mip_driven!(m)
     m.logs[:mip_solve] = time()
     status_mip = solve(m.model_mip, suppress_warnings=true)
     m.logs[:mip_solve] = time() - m.logs[:mip_solve]
-    m.oa_finished = true
 
     # End if MIP didn't stop because of optimal or user limit
     if (status_mip != :UserLimit) && (status_mip != :Optimal) && (status_mip != :Suboptimal)
@@ -1479,8 +1481,8 @@ function solve_mip_driven!(m)
 
     if isfinite(getobjectivevalue(m.model_mip))
         # Check final mip solver solution, accept if feasible and new
-        solve_subp_add_subp_cuts!(m)
-        check_feas_add_sep_cuts!(m)
+        solve_subp_add_subp_cuts!(m, false)
+        check_feas_add_sep_cuts!(m, false)
     end
 
     # Update gap if best bound and best objective are finite
@@ -1494,9 +1496,6 @@ function solve_mip_driven!(m)
     elseif status_mip == :UserLimit
         return :UserLimit
     elseif isfinite(m.gap_rel_opt)
-        if isfinite(getobjectivevalue(m.model_mip))
-            warn("MIP solver's status is $status_mip and reported objective gap is $(MathProgBase.getobjgap(m.model_mip))\n")
-        end
         return :Suboptimal
     else
         return :FailedOA
@@ -1533,7 +1532,7 @@ function set_best_soln!(m, soln_int, soln_cont)
 
         if m.soc_disagg
             # Set disaggregated SOC variable pi values
-            if r_val < m.mip_feas_tol
+            if r_val < 1e-10
                 # r value is small so set pi to 0
                 pi_val = zeros(dim)
             else
@@ -1609,25 +1608,24 @@ function add_cut!(m, cut_expr, cone_logs)
 
     if !m.oa_started
         @constraint(m.model_mip, cut_expr >= 0)
+
         cone_logs[:n_relax] += 1
-    elseif getvalue(cut_expr) <= -m.mip_feas_tol
-        is_viol_cut = true
-        if !m.oa_finished
+    else
+        cut_val = getvalue(cut_expr)
+
+        if !m.viol_cuts_only || (cut_val <= -m.mip_feas_tol)
             if m.mip_solver_drives
                 @lazyconstraint(m.cb_lazy, cut_expr >= 0)
             else
                 @constraint(m.model_mip, cut_expr >= 0)
             end
-            cone_logs[:n_viol_total] += 1
-        end
-    elseif !m.viol_cuts_only
-        if !m.oa_finished
-            if m.mip_solver_drives
-                @lazyconstraint(m.cb_lazy, cut_expr >= 0)
+
+            if cut_val <= -m.mip_feas_tol
+                is_viol_cut = true
+                cone_logs[:n_viol_total] += 1
             else
-                @constraint(m.model_mip, cut_expr >= 0)
+                cone_logs[:n_nonviol_total] += 1
             end
-            cone_logs[:n_nonviol_total] += 1
         end
     end
 
@@ -1640,7 +1638,7 @@ end
 =========================================================#
 
 # Solve the subproblem for the current integer solution, add new incumbent conic solution if feasible and best, add K* cuts from subproblem dual solution
-function solve_subp_add_subp_cuts!(m)
+function solve_subp_add_subp_cuts!(m, add_cuts::Bool)
     # Get current integer solution
     soln_int = getvalue(m.x_int)
     if m.round_mip_sols
@@ -1652,11 +1650,11 @@ function solve_subp_add_subp_cuts!(m)
         # Integer solution has been seen before, cannot get new subproblem cuts
         m.logs[:n_repeat] += 1
 
-        if !m.mip_solver_drives || m.sep_cuts_only || !m.solve_subp
+        if !add_cuts || !m.mip_solver_drives || m.sep_cuts_only || !m.solve_subp
             if !m.mip_solver_drives && !m.sep_cuts_only
                 warn("Repeated integer solution without converging\n")
             end
-            # Nothing to do if using iterative, or if not using subproblem cuts
+            # Nothing to do if using iterative or if not using subproblem cuts
             return false
         else
             # In MSD, re-add subproblem cuts from existing conic dual
@@ -1691,6 +1689,11 @@ function solve_subp_add_subp_cuts!(m)
             m.logs[:n_feas_conic] += 1
         end
 
+        # If not using subproblem cuts, return
+        if m.sep_cuts_only || !add_cuts
+            return false
+        end
+
         # Handle a dual solution/ray
         if !isempty(dual_conic)
             if status_conic == :Infeasible
@@ -1710,18 +1713,13 @@ function solve_subp_add_subp_cuts!(m)
                     scale!(dual_conic, m.opt_subp_scale/(abs(dual_value) + 1e-5))
                 end
             end
+
+            # In MSD, save the dual so can re-add subproblem cuts later
+            if m.mip_solver_drives
+                m.cache_dual[soln_int] = dual_conic
+            end
         else
             return false
-        end
-
-        # If not using subproblem cuts, return
-        if m.sep_cuts_only
-            return false
-        end
-
-        # In MSD, save the dual so can re-add subproblem cuts later
-        if m.mip_solver_drives
-            m.cache_dual[soln_int] = dual_conic
         end
     end
 
@@ -1805,7 +1803,7 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
 
     # Get a primal
     soln_conic = Float64[]
-    if status_conic in (:Optimal, :PDFeas, :PrimFeas)
+    if status_conic in (:Optimal, :Suboptimal, :PDFeas, :PrimFeas)
         soln_conic = MathProgBase.getsolution(m.model_conic)
         if any(isnan, soln_conic)
             soln_conic = Float64[]
@@ -1830,7 +1828,7 @@ function add_subp_cut_soc!(m, r, t, pi, rho, u_val, w_val)
     is_viol_cut = false
 
     # K* projected subproblem cut is (norm2(w), w)
-    if (u_val > m.mip_feas_tol) && clean_array!(m, w_val)
+    if (u_val > 1e-10) && clean_array!(m, w_val)
         u_val = vecnorm(w_val)
         is_viol_cut = add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
         m.logs[:SOC][:n_subp] += 1
@@ -1843,7 +1841,7 @@ end
 function add_subp_cut_exp!(m, r, s, t, u_val, v_val, w_val)
     is_viol_cut = false
 
-    if w_val > -m.mip_feas_tol
+    if w_val > -1e-8
         # w is (near) zero: K* projected subproblem cut on (r,s,t) is (max(u, 0), max(v, 0), 0)
         if (u_val > m.mip_feas_tol) && (v_val > m.mip_feas_tol)
             is_viol_cut = add_cut_exp!(m, r, s, t, u_val, v_val, 0.)
@@ -1863,7 +1861,7 @@ end
 function add_subp_cut_sdp!(m, T, W_val)
     is_viol_cut = false
 
-    W_eig_obj = eigfact!(W_val, m.cut_zero_tol, Inf)
+    W_eig_obj = eigfact!(W_val, 1e-10, Inf)
 
     # K* projected (scaled) subproblem cut is sum_{j: lambda_j > 0} lambda_j W_eig_j W_eig_j'
     if !isempty(W_eig_obj[:values])
@@ -1883,25 +1881,33 @@ end
 =========================================================#
 
 # Check cone infeasibilities of current solution, add K* cuts from current solution for infeasible cones, if feasible check new incumbent
-function check_feas_add_sep_cuts!(m)
+function check_feas_add_sep_cuts!(m, add_cuts::Bool)
     tic()
     is_viol_any = false
+    max_viol = 0.
 
     for n in 1:m.num_soc
-        is_viol_any |= add_sep_cut_soc!(m, m.r_soc[n], m.t_soc[n], m.pi_soc[n], m.rho_soc[n])
+        (is_viol_cut, viol) = add_sep_cut_soc!(m, add_cuts, m.r_soc[n], m.t_soc[n], m.pi_soc[n], m.rho_soc[n])
+        is_viol_any |= is_viol_cut
+        max_viol = max(viol, max_viol)
     end
 
     for n in 1:m.num_exp
-        is_viol_any |= add_sep_cut_exp!(m, m.r_exp[n], m.s_exp[n], m.t_exp[n])
+        (is_viol_cut, viol) = add_sep_cut_exp!(m, add_cuts, m.r_exp[n], m.s_exp[n], m.t_exp[n])
+        is_viol_any |= is_viol_cut
+        max_viol = max(viol, max_viol)
     end
 
     for n in 1:m.num_sdp
-        is_viol_any |= add_sep_cut_sdp!(m, m.T_sdp[n])
+        (is_viol_cut, viol) = add_sep_cut_sdp!(m, add_cuts, m.T_sdp[n])
+        is_viol_any |= is_viol_cut
+        max_viol = max(viol, max_viol)
     end
 
     m.logs[:sep_cuts] += toq()
 
-    if !is_viol_any
+    # Check feasibility of solution (via worst cone violation) and return whether feasible and whether added violated cut
+    if max_viol < feas_factor*m.mip_feas_tol
         # Accept MIP solution as feasible and check if new incumbent
         m.logs[:n_feas_mip] += 1
         soln_int = getvalue(m.x_int)
@@ -1915,14 +1921,17 @@ function check_feas_add_sep_cuts!(m)
             m.best_cont = soln_cont
             m.is_best_conic = false
         end
-    end
 
-    return is_viol_any
+        return (true, is_viol_any)
+    else
+        return (false, is_viol_any)
+    end
 end
 
 # Calculate the SOC violation and optionally add a separation cut
-function add_sep_cut_soc!(m, r, t, pi, rho)
+function add_sep_cut_soc!(m, add_cuts::Bool, r, t, pi, rho)
     is_viol_cut = false
+    viol = 0.
 
     r_val = getvalue(r)
     t_val = getvalue(t)
@@ -1931,30 +1940,31 @@ function add_sep_cut_soc!(m, r, t, pi, rho)
     viol = vecnorm(t_val) - r_val
 
     # K* separation cut is (1, -t/norm(t))
-    if (viol > m.mip_feas_tol) && clean_array!(m, t_val)
+    if add_cuts && (viol > m.mip_feas_tol) && clean_array!(m, t_val)
         w_val = -t_val/vecnorm(t_val)
         is_viol_cut = add_cut_soc!(m, r, t, pi, rho, 1., w_val)
         m.logs[:SOC][:n_sep] += 1
     end
 
-    return is_viol_cut
+    return (is_viol_cut, viol)
 end
 
 # Calculate the Exp violation and optionally add a separation cut
-function add_sep_cut_exp!(m, r, s, t)
+function add_sep_cut_exp!(m, add_cuts::Bool, r, s, t)
     is_viol_cut = false
+    viol = 0.
 
     r_val = getvalue(r)
     s_val = getvalue(s)
     t_val = getvalue(t)
 
-    if s_val <= m.mip_feas_tol
+    if s_val <= 1e-7
         # s is (almost) zero: violation is t
         viol = t_val
 
-        if viol > m.mip_feas_tol
+        if add_cuts && (viol > m.mip_feas_tol)
             # TODO: for now, error if r is too small
-            if r_val <= m.mip_feas_tol
+            if r_val <= 1e-10
                 error("Cannot add exp cone separation cut on point ($r_val, $s_val, $t_val)\n")
             end
 
@@ -1969,7 +1979,7 @@ function add_sep_cut_exp!(m, r, s, t)
         ets = exp(t_val/s_val)
         viol = s_val*ets - r_val
 
-        if viol > m.mip_feas_tol
+        if add_cuts && (viol > m.mip_feas_tol)
             # K* separation cut on (r,s,t) is (1, (t-s)/s*exp(t/s), -exp(t/s))
             v_val = (t_val - s_val)/s_val*ets
             is_viol_cut = add_cut_exp!(m, r, s, t, 1., v_val, -ets)
@@ -1977,27 +1987,30 @@ function add_sep_cut_exp!(m, r, s, t)
         end
     end
 
-    return is_viol_cut
+    return (is_viol_cut, viol)
 end
 
 # Calculate the PSD violation and optionally add a separation cut
-function add_sep_cut_sdp!(m, T)
+function add_sep_cut_sdp!(m, add_cuts::Bool, T)
     is_viol_cut = false
+    viol = 0.
 
     # Get eigendecomposition object, with eigenvalues smaller than separation cut feasibility tolerance
     T_eig_obj = eigfact!(Symmetric(getvalue(T)), -Inf, -m.mip_feas_tol)
 
     # Violation is negative min eigenvalue (empty if all eigenvalues larger than separation cut feasibility tolerance)
     if !isempty(T_eig_obj[:values])
+        viol = -minimum(T_eig_obj[:values])
+
         # K* separation cut is sum_{j: lambda_j < 0} T_eig_j T_eig_j'
         T_eig = T_eig_obj[:vectors]
-        if clean_array!(m, T_eig)
+        if add_cuts && clean_array!(m, T_eig)
             is_viol_cut = add_cut_sdp!(m, T, T_eig)
             m.logs[:SDP][:n_sep] += 1
         end
     end
 
-    return is_viol_cut
+    return (is_viol_cut, viol)
 end
 
 
@@ -2354,7 +2367,7 @@ function calc_infeas(cones, vals)
             # Convert to SOC and calculate using SOC violation function, maintain original scaling
             # (p1, p2, q) in RSOC <-> (sqrt2inv*(p1+p2), sqrt2inv*(-p1+p2), q) in SOC
             t = sqrt2inv*(vals[idx[1]] + vals[idx[2]])
-            usqr = 1/2*(-vals[idx[1]] + vals[idx[2]])^2 + sum(abs2, (vals[idx[j]] for j in 3:length(idx)))
+            usqr = 1/2*(-vals[idx[1]] + vals[idx[2]])^2 + sum(abs2, vals[idx[j]] for j in 3:length(idx))
             viol_rot = max(viol_rot, sqrt(usqr) - t)
         elseif cone == :ExpPrimal
             if vals[idx[2]] <= 1e-7

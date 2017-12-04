@@ -92,7 +92,7 @@ function PajaritoSolver(;
     init_sdp_soc = false,
 
     scale_subp_cuts = true,
-    scale_subp_factor = 2.,
+    scale_subp_factor = 10.,
     viol_cuts_only = nothing,
     prim_cuts_only = false,
     prim_cuts_always = false,

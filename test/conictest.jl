@@ -68,7 +68,7 @@ function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
     testname = "SOC optimal"
     probname = "soc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -80,7 +80,7 @@ function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
     testname = "SOC infeasible"
     probname = "soc_infeasible"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -90,7 +90,7 @@ function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
     testname = "SOCRot optimal"
     probname = "socrot_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -103,7 +103,7 @@ function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
     testname = "SOCRot infeasible"
     probname = "socrot_infeasible"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -113,7 +113,7 @@ function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
     testname = "Equality constraint"
     probname = "soc_equality"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -126,7 +126,7 @@ function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
     testname = "Zero cones"
     probname = "soc_zero"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -139,7 +139,7 @@ function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
     testname = "SOC infeasible binary"
     probname = "soc_infeasible2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -150,7 +150,7 @@ end
 # SOC problems for conic algorithm
 function run_soc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
     @testset "Supported cones check" begin
-        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        solver = PajaritoSolver(timeout=120., mip_solver=mip_solver, cont_solver=cont_solver)
         cones = MathProgBase.supportedcones(solver)
         @test :SOC in cones
         @test :SOCRotated in cones
@@ -159,8 +159,7 @@ function run_soc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, re
     testname = "Timeout 1st MIP (tls5)"
     probname = "tls5"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            timeout=15.)
+        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, timeout=15.)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -171,8 +170,7 @@ function run_soc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, re
     testname = "SOC dualize"
     probname = "soc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            dualize_subp=true, dualize_relax=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, dualize_subp=true, dualize_relax=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -184,8 +182,7 @@ function run_soc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, re
     testname = "Suboptimal MIP solves"
     probname = "soc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            mip_subopt_count=3, mip_subopt_solver=mip_solver)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, mip_subopt_count=3, mip_subopt_solver=mip_solver)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -197,8 +194,7 @@ function run_soc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, re
     testname = "SOCRot dualize"
     probname = "socrot_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            dualize_subp=true, dualize_relax=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, dualize_subp=true, dualize_relax=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -211,8 +207,7 @@ function run_soc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, re
     testname = "Infeas L1, disagg"
     probname = "soc_infeasible2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_soc_one=true, soc_disagg=true, soc_abslift=false)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=true, soc_disagg=true, soc_abslift=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -222,8 +217,7 @@ function run_soc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, re
     testname = "Infeas L1, disagg, abs"
     probname = "soc_infeasible2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_soc_one=true, soc_disagg=true, soc_abslift=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=true, soc_disagg=true, soc_abslift=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -233,8 +227,7 @@ function run_soc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, re
     testname = "Infeas L1, abs"
     probname = "soc_infeasible2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_soc_one=true, soc_disagg=false, soc_abslift=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=true, soc_disagg=false, soc_abslift=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -244,8 +237,7 @@ function run_soc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, re
     testname = "Infeas disagg"
     probname = "soc_infeasible2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_soc_one=false, soc_disagg=true, soc_abslift=false)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, soc_disagg=true, soc_abslift=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -255,8 +247,7 @@ function run_soc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, re
     testname = "Infeas disagg, abs"
     probname = "soc_infeasible2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_soc_one=false, soc_disagg=true, soc_abslift=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, soc_disagg=true, soc_abslift=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -266,8 +257,7 @@ function run_soc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, re
     testname = "Infeas abs"
     probname = "soc_infeasible2"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_soc_one=false, soc_disagg=false, soc_abslift=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, soc_disagg=false, soc_abslift=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -280,7 +270,7 @@ function run_expsoc(mip_solver_drives, mip_solver, cont_solver, log_level, redir
     testname = "Exp optimal"
     probname = "exp_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -293,7 +283,7 @@ function run_expsoc(mip_solver_drives, mip_solver, cont_solver, log_level, redir
     testname = "ExpSOC optimal"
     probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -303,23 +293,10 @@ function run_expsoc(mip_solver_drives, mip_solver, cont_solver, log_level, redir
         @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 
-    testname = "ExpSOC optimal 2"
-    probname = "expsoc_optimal2"
-    @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
-
-        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-
-        @test status == :Optimal
-        @test isapprox(objval, -18, atol=TOL)
-        @test isapprox(objbound, -18, atol=TOL)
-        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
-    end
-
     testname = "ExpSOC optimal 3"
     probname = "expsoc_optimal3"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -332,8 +309,7 @@ function run_expsoc(mip_solver_drives, mip_solver, cont_solver, log_level, redir
     testname = "No disagg, no L1"
     probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_soc_one=false, soc_disagg=false)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, soc_disagg=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -346,7 +322,7 @@ function run_expsoc(mip_solver_drives, mip_solver, cont_solver, log_level, redir
     testname = "Exp large (gate sizing)"
     probname = "exp_gatesizing"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -359,7 +335,7 @@ function run_expsoc(mip_solver_drives, mip_solver, cont_solver, log_level, redir
     testname = "Exp large 2 (Ising)"
     probname = "exp_ising"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -373,7 +349,7 @@ end
 # Exp+SOC problems for conic algorithm
 function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
     @testset "Supported cones check" begin
-        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        solver = PajaritoSolver(timeout=120., mip_solver=mip_solver, cont_solver=cont_solver)
         cones = MathProgBase.supportedcones(solver)
         @test :SOC in cones
         @test :SOCRotated in cones
@@ -381,80 +357,74 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     end
 
     testname = "ExpSOC no init cuts"
-    probname = "expsoc_optimal2"
+    probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_exp=false, init_soc_one=false, init_soc_inf=false)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_exp=false, init_soc_one=false, init_soc_inf=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
-        @test isapprox(objval, -18, atol=TOL)
-        @test isapprox(objbound, -18, atol=TOL)
-        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
+        @test isapprox(objval, -7.609438, atol=TOL)
+        @test isapprox(objbound, -7.609438, atol=TOL)
+        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 
     testname = "No init cuts, no disagg"
-    probname = "expsoc_optimal2"
+    probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_exp=false, init_soc_one=false, init_soc_inf=false, soc_disagg=false)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_exp=false, init_soc_one=false, init_soc_inf=false, soc_disagg=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
-        @test isapprox(objval, -18, atol=TOL)
-        @test isapprox(objbound, -18, atol=TOL)
-        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
-    end
-
-    testname = "No init cuts, no disagg, abs"
-    probname = "expsoc_optimal2"
-    @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_exp=false, init_soc_one=false, init_soc_inf=false, soc_disagg=false, soc_abslift=true)
-
-        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-
-        @test status == :Optimal
-        @test isapprox(objval, -18, atol=TOL)
-        @test isapprox(objbound, -18, atol=TOL)
-        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
+        @test isapprox(objval, -7.609438, atol=TOL)
+        @test isapprox(objbound, -7.609438, atol=TOL)
+        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 
     testname = "No scaling"
-    probname = "expsoc_optimal2"
+    probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            scale_subp_cuts=false)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, scale_subp_cuts=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
-        @test isapprox(objval, -18, atol=TOL)
-        @test isapprox(objbound, -18, atol=TOL)
-        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
+        @test isapprox(objval, -7.609438, atol=TOL)
+        @test isapprox(objbound, -7.609438, atol=TOL)
+        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
+    end
+
+    testname = "No primal cuts assist"
+    probname = "expsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, -7.609438, atol=TOL)
+        @test isapprox(objbound, -7.609438, atol=TOL)
+        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 
     testname = "Primal cuts always"
-    probname = "expsoc_optimal2"
+    probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            prim_cuts_always=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_always=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
         @test status == :Optimal
-        @test isapprox(objval, -18, atol=TOL)
-        @test isapprox(objbound, -18, atol=TOL)
-        @test isapprox(sol[2:4], [6, -18, 0], atol=TOL)
+        @test isapprox(objval, -7.609438, atol=TOL)
+        @test isapprox(objbound, -7.609438, atol=TOL)
+        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 
     testname = "Primal cuts only"
     probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            prim_cuts_only=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -467,8 +437,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "No conic solver"
     probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
-            solve_relax=false, solve_subp=false, prim_cuts_only=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level, solve_relax=false, solve_subp=false, prim_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -481,8 +450,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "Viol cuts only"
     probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            viol_cuts_only=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, viol_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -495,8 +463,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     # testname = "Separation cuts s=0"
     # probname = "exp_sepcut"
     # @testset "$testname" begin
-    #     solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
-    #         prim_cuts_only=true, solve_relax=false, solve_subp=false, prim_cut_feas_tol=1e-7)
+    #     solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level, prim_cuts_only=true, solve_relax=false, solve_subp=false, prim_cut_feas_tol=1e-7)
     #
     #     (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
     #
@@ -504,12 +471,11 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     #     @test isapprox(objval, 0., atol=TOL)
     #     @test isapprox(objbound, 0., atol=TOL)
     # end
-    #
+
     # testname = "Separation+subproblem cuts s=0"
     # probname = "exp_sepcut"
     # @testset "$testname" begin
-    #     solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-    #         prim_cut_feas_tol=1e-7)
+    #     solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cut_feas_tol=1e-7)
     #
     #     (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
     #
@@ -522,7 +488,7 @@ end
 # SDP+SOC problems for conic algorithm
 function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
     @testset "Supported cones check" begin
-        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        solver = PajaritoSolver(timeout=120., mip_solver=mip_solver, cont_solver=cont_solver)
         cones = MathProgBase.supportedcones(solver)
         @test :SOC in cones
         @test :SOCRotated in cones
@@ -532,7 +498,7 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "SDPSOC optimal"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -545,7 +511,7 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "Infeasible"
     probname = "sdpsoc_infeasible"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -555,8 +521,7 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "No init cuts"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_soc_one=false, init_soc_inf=false, init_sdp_lin=false)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, init_soc_inf=false, init_sdp_lin=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -569,8 +534,7 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "No eig cuts"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_soc_one=false, init_soc_inf=false, init_sdp_lin=false, sdp_eig=false)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, init_soc_inf=false, init_sdp_lin=false, sdp_eig=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -583,8 +547,7 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "Dualize"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            dualize_relax=true, dualize_subp=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, dualize_relax=true, dualize_subp=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -597,8 +560,7 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "Viol cuts only"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_soc_one=false, init_soc_inf=false, init_sdp_lin=false, viol_cuts_only=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, init_soc_inf=false, init_sdp_lin=false, viol_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -611,8 +573,7 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "No scaling"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            init_soc_one=false, init_soc_inf=false, init_sdp_lin=false, scale_subp_cuts=false)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, init_soc_inf=false, init_sdp_lin=false, scale_subp_cuts=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -625,8 +586,7 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "No primal cuts assist"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            prim_cuts_assist=false)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -639,8 +599,7 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "Primal cuts only"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            prim_cuts_only=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -653,8 +612,7 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "No conic solver"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
-            solve_relax=false, solve_subp=false, prim_cuts_only=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level, solve_relax=false, solve_subp=false, prim_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -667,8 +625,7 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "Suboptimal MIP solves (cardls)"
     probname = "sdp_cardls"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            mip_subopt_count=3, mip_subopt_solver=mip_solver)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, mip_subopt_count=3, mip_subopt_solver=mip_solver)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -681,8 +638,7 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "No eig cuts (cardls)"
     probname = "sdp_cardls"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            sdp_eig=false)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -695,7 +651,7 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "SDP integer (Aopt)"
     probname = "sdp_optimalA"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -708,7 +664,7 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "SDP integer (Eopt)"
     probname = "sdp_optimalE"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -722,7 +678,7 @@ end
 # SDP+Exp problems for conic algorithm
 function run_sdpexp_conic(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
     @testset "Supported cones check" begin
-        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        solver = PajaritoSolver(timeout=120., mip_solver=mip_solver, cont_solver=cont_solver)
         cones = MathProgBase.supportedcones(solver)
         @test :ExpPrimal in cones
         @test :SDP in cones
@@ -731,7 +687,7 @@ function run_sdpexp_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "ExpSDP integer (Dopt)"
     probname = "expsdp_optimalD"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -744,8 +700,7 @@ function run_sdpexp_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
     testname = "Primal cuts only (Dopt)"
     probname = "expsdp_optimalD"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            prim_cuts_only=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_only=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -759,7 +714,7 @@ end
 # Exp+SOC problems for conic algorithm with MISOCP
 function run_expsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
     @testset "Supported cones check" begin
-        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        solver = PajaritoSolver(timeout=120., mip_solver=mip_solver, cont_solver=cont_solver)
         cones = MathProgBase.supportedcones(solver)
         @test :SOC in cones
         @test :SOCRotated in cones
@@ -769,8 +724,7 @@ function run_expsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "SOC in MIP, suboptimal MIP"
     probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            soc_in_mip=true, mip_subopt_count=3, mip_subopt_solver=mip_solver)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true, mip_subopt_count=3, mip_subopt_solver=mip_solver)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -783,8 +737,7 @@ function run_expsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "SOC in MIP, primal only"
     probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            soc_in_mip=true, prim_cuts_only=true, init_exp=false, init_soc_one=false, init_soc_inf=false)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true, prim_cuts_only=true, init_exp=false, init_soc_one=false, init_soc_inf=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -797,8 +750,7 @@ function run_expsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "SOC in MIP, no conic solver"
     probname = "expsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
-            soc_in_mip=true, prim_cuts_only=true, solve_relax=false, solve_subp=false)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level, soc_in_mip=true, prim_cuts_only=true, solve_relax=false, solve_subp=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -812,7 +764,7 @@ end
 # SDP+SOC problems for conic algorithm with MISOCP
 function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
     @testset "Supported cones check" begin
-        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        solver = PajaritoSolver(timeout=120., mip_solver=mip_solver, cont_solver=cont_solver)
         cones = MathProgBase.supportedcones(solver)
         @test :SOC in cones
         @test :SOCRotated in cones
@@ -822,8 +774,7 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "SDPSOC SOC in MIP optimal"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            soc_in_mip=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -836,8 +787,7 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "SOC in MIP infeasible"
     probname = "sdpsoc_infeasible"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            soc_in_mip=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -847,8 +797,7 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "SOC in MIP, no eig cuts"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            soc_in_mip=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -861,8 +810,7 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "SOC in MIP, dualize"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            soc_in_mip=true, dualize_subp=true, dualize_relax=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, soc_in_mip=true, dualize_subp=true, dualize_relax=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -875,8 +823,7 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "SOC in MIP, no conic solver"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level,
-            soc_in_mip=true, prim_cuts_only=true, solve_relax=false, solve_subp=false)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, log_level=log_level, soc_in_mip=true, prim_cuts_only=true, solve_relax=false, solve_subp=false)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -889,8 +836,7 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "SDP init SOC cuts (cardls)"
     probname = "sdp_cardls"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            sdp_eig=true, init_sdp_soc=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=true, init_sdp_soc=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -903,8 +849,7 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "Init SOC cuts infeasible"
     probname = "sdpsoc_infeasible"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            sdp_eig=true, init_sdp_soc=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=true, init_sdp_soc=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -913,25 +858,10 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
 
     # Only run SOC cut tests if iterative algorithm, because cannot add SOC cuts during MSD
     if !mip_solver_drives
-        testname = "SOC eig cuts (cardls)"
-        probname = "sdp_cardls"
-        @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-                sdp_eig=true, sdp_soc=true)
-
-            (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-
-            @test status == :Optimal
-            @test isapprox(objval, 16.045564, atol=TOL)
-            @test isapprox(objbound, 16.045564, atol=TOL)
-            @test isapprox(sol[1:6], [0, 1, 1, 1, 0, 0], atol=TOL)
-        end
-
         testname = "SOC eig cuts infeasible"
         probname = "sdpsoc_infeasible"
         @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-                sdp_eig=true, sdp_soc=true)
+            solver = PajaritoSolver(timeout=120., mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=true, sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -941,8 +871,7 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
         testname = "SOC full cuts infeasible"
         probname = "sdpsoc_infeasible"
         @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-                sdp_eig=false, sdp_soc=true)
+            solver = PajaritoSolver(timeout=120., mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=false, sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -952,8 +881,7 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
         testname = "SOC eig cuts (Aopt)"
         probname = "sdp_optimalA"
         @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-                sdp_eig=true, sdp_soc=true)
+            solver = PajaritoSolver(timeout=120., mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=true, sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -966,8 +894,7 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
         testname = "SOC eig cuts (Eopt)"
         probname = "sdp_optimalE"
         @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-                sdp_eig=true, sdp_soc=true)
+            solver = PajaritoSolver(timeout=120., mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=true, sdp_soc=true)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -982,7 +909,7 @@ end
 # SDP+Exp problems for conic algorithm with MISOCP
 function run_sdpexp_misocp(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)
     @testset "Supported cones check" begin
-        solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver)
+        solver = PajaritoSolver(timeout=120., mip_solver=mip_solver, cont_solver=cont_solver)
         cones = MathProgBase.supportedcones(solver)
         @test :SOC in cones
         @test :SOCRotated in cones
@@ -993,8 +920,7 @@ function run_sdpexp_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
     testname = "ExpSDP init SOC cuts (Dopt)"
     probname = "expsdp_optimalD"
     @testset "$testname" begin
-        solver = PajaritoSolver(mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-            sdp_eig=true, sdp_soc=false, init_sdp_soc=true)
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=true, sdp_soc=false, init_sdp_soc=true)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
@@ -1009,9 +935,7 @@ function run_sdpexp_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
         testname = "SOC eig cuts (Dopt)"
         probname = "expsdp_optimalD"
         @testset "$testname" begin
-            solver = PajaritoSolver(mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level,
-                sdp_eig=true, sdp_soc=true,
-                prim_cut_feas_tol=1e-7, cut_zero_tol=1e-8)
+            solver = PajaritoSolver(timeout=120., mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, sdp_eig=true, sdp_soc=true, prim_cut_feas_tol=1e-7, cut_zero_tol=1e-8)
 
             (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
