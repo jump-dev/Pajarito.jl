@@ -27,7 +27,7 @@ solvers["MILP"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 solvers["MISOCP"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 
 tol_int = 1e-9
-tol_feas = 1e-8
+tol_feas = 1e-7
 tol_gap = 0.0
 
 if glp
@@ -101,6 +101,11 @@ println()
     alg = (msd ? "MSD" : "Iter")
 
     @testset "MILP solver - $mipname" for (mipname, mip) in solvers["MILP"]
+        if msd && !applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip), x -> x)
+            # Only test MSD on lazy callback solvers
+            continue
+        end
+
         @testset "NLP models, NLP solver - $conname" for (conname, con) in solvers["NLP"]
             println("\nNLP models, NLP solver: $alg, $mipname, $conname")
             run_qp(msd, mip, con, ll, redirect)
@@ -168,5 +173,6 @@ println()
         flush(STDOUT)
         flush(STDERR)
     end
+
     println()
 end
