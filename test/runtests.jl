@@ -73,7 +73,7 @@ solvers["Exp+SOC"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 solvers["PSD+SOC"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 solvers["PSD+Exp"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 if eco
-    solvers["SOC"]["ECOS"] = solvers["Exp+SOC"]["ECOS"] = ECOS.ECOSSolver(verbose=false, reltol=1e-9, reltol_inacc=1e-3)
+    solvers["SOC"]["ECOS"] = solvers["Exp+SOC"]["ECOS"] = ECOS.ECOSSolver(verbose=false, reltol=1e-9, feastol=1e-9, reltol_inacc=1e-3, feastol_inacc=1e-8)
 end
 if scs
     solvers["PSD+Exp"]["SCS"] = SCS.SCSSolver(eps=1e-5, max_iters=1e7, verbose=0)
