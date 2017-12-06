@@ -36,18 +36,18 @@ if glp
         solvers["MISOCP"]["Paj(GLPK+ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas/10, mip_gap=tol_gap), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-7)
     end
 end
-# if cpx
-#     solvers["MILP"]["CPLEX"] = solvers["MISOCP"]["CPLEX"] = CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=tol_int, CPX_PARAM_EPRHS=tol_feas, CPX_PARAM_EPGAP=tol_gap)
-#     if mos
-#         solvers["MISOCP"]["Paj(CPLEX+Mosek)"] = PajaritoSolver(mip_solver=CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=tol_int, CPX_PARAM_EPRHS=tol_feas/10, CPX_PARAM_EPGAP=tol_gap), cont_solver=Mosek.MosekSolver(LOG=0), log_level=0, rel_gap=1e-7)
-#     end
-# end
-# if grb
-#     solvers["MILP"]["Gurobi"] = solvers["MISOCP"]["Gurobi"] = Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=tol_int, FeasibilityTol=tol_feas, MIPGap=tol_gap)
-#     if mos
-#         solvers["MISOCP"]["Paj(Gurobi+Mosek)"] = PajaritoSolver(mip_solver=Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=tol_int, FeasibilityTol=tol_feas/10., MIPGap=tol_gap), cont_solver=Mosek.MosekSolver(LOG=0), log_level=0, rel_gap=1e-7)
-#     end
-# end
+if cpx
+    solvers["MILP"]["CPLEX"] = solvers["MISOCP"]["CPLEX"] = CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=tol_int, CPX_PARAM_EPRHS=tol_feas, CPX_PARAM_EPGAP=tol_gap)
+    if mos
+        solvers["MISOCP"]["Paj(CPLEX+Mosek)"] = PajaritoSolver(mip_solver=CPLEX.CplexSolver(CPX_PARAM_SCRIND=0, CPX_PARAM_EPINT=tol_int, CPX_PARAM_EPRHS=tol_feas/10, CPX_PARAM_EPGAP=tol_gap), cont_solver=Mosek.MosekSolver(LOG=0), log_level=0, rel_gap=1e-7)
+    end
+end
+if grb
+    solvers["MILP"]["Gurobi"] = solvers["MISOCP"]["Gurobi"] = Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=tol_int, FeasibilityTol=tol_feas, MIPGap=tol_gap)
+    if mos
+        solvers["MISOCP"]["Paj(Gurobi+Mosek)"] = PajaritoSolver(mip_solver=Gurobi.GurobiSolver(OutputFlag=0, IntFeasTol=tol_int, FeasibilityTol=tol_feas/10., MIPGap=tol_gap), cont_solver=Mosek.MosekSolver(LOG=0), log_level=0, rel_gap=1e-7)
+    end
+end
 #if cbc
 #    solvers["MILP"]["CBC"] = Cbc.CbcSolver(logLevel=0, integerTolerance=tol_int, primalTolerance=tol_feas, ratioGap=tol_gap, check_warmstart=false)
 #    if eco
@@ -73,18 +73,18 @@ solvers["Exp+SOC"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 solvers["PSD+SOC"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 solvers["PSD+Exp"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 if eco
-    solvers["SOC"]["ECOS"] = solvers["Exp+SOC"]["ECOS"] = ECOS.ECOSSolver(verbose=false, reltol=1e-9, feastol=1e-9, reltol_inacc=1e-3, feastol_inacc=1e-8)
+    solvers["SOC"]["ECOS"] = solvers["Exp+SOC"]["ECOS"] = ECOS.ECOSSolver(verbose=false, reltol=1e-9, feastol=1e-9, reltol_inacc=1e-5, feastol_inacc=1e-8)
 end
 if scs
     solvers["PSD+Exp"]["SCS"] = SCS.SCSSolver(eps=1e-5, max_iters=1e7, verbose=0)
     solvers["Exp+SOC"]["SCS"] = SCS.SCSSolver(eps=1e-5, max_iters=1e7, verbose=0)
     solvers["SOC"]["SCS"] = solvers["PSD+SOC"]["SCS"] =  SCS.SCSSolver(eps=1e-6, max_iters=1e7, verbose=0)
 end
-# if mos
-#     solvers["SOC"]["Mosek"] = solvers["PSD+SOC"]["Mosek"] = Mosek.MosekSolver(LOG=0, MSK_DPAR_INTPNT_CO_TOL_REL_GAP=1e-10, MSK_DPAR_INTPNT_CO_TOL_NEAR_REL=1e7)
-#     # Mosek 9+ recognizes the exponential cone:
-#     solvers["Exp+SOC"]["Mosek"] = solvers["PSD+Exp"]["Mosek"] = Mosek.MosekSolver(LOG=0, MSK_DPAR_INTPNT_CO_TOL_REL_GAP=1e-10, MSK_DPAR_INTPNT_CO_TOL_NEAR_REL=1e7)
-# end
+if mos
+    solvers["SOC"]["Mosek"] = solvers["PSD+SOC"]["Mosek"] = Mosek.MosekSolver(LOG=0, MSK_DPAR_INTPNT_CO_TOL_REL_GAP=1e-9, MSK_DPAR_INTPNT_CO_TOL_PFEAS=1e-10, MSK_DPAR_INTPNT_CO_TOL_DFEAS=1e-10, MSK_DPAR_INTPNT_CO_TOL_NEAR_REL=1e3)
+    # Mosek 9+ recognizes the exponential cone:
+    # solvers["Exp+SOC"]["Mosek"] = solvers["PSD+Exp"]["Mosek"] = Mosek.MosekSolver(LOG=0, MSK_DPAR_INTPNT_CO_TOL_REL_GAP=1e-9, MSK_DPAR_INTPNT_CO_TOL_PFEAS=1e-10, MSK_DPAR_INTPNT_CO_TOL_DFEAS=1e-10, MSK_DPAR_INTPNT_CO_TOL_NEAR_REL=1e3)
+end
 
 
 println("\nSolvers:")
