@@ -31,7 +31,7 @@ tol_feas = 1e-7
 tol_gap = 0.0
 
 if glp
-    solvers["MILP"]["GLPK"] = GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, mip_gap=tol_gap)
+    solvers["MILP"]["GLPK"] = GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, mip_gap=tol_gap)
     if eco
         solvers["MISOCP"]["Paj(GLPK+ECOS)"] = PajaritoSolver(mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas/10, mip_gap=tol_gap), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-7)
     end
