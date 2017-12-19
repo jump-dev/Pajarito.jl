@@ -1376,9 +1376,12 @@ function solve_iterative!(m)
 
         # Try to solve new conic subproblem and add subproblem cuts, update incumbent solution if feasible conic solution
         is_viol_subp = solve_subp_add_subp_cuts!(m, true)
+        is_viol_any = is_viol_subp
 
-        # Try to add primal cuts on MIP solution, update incumbent if feasible
-        (is_feas, is_viol_any) = check_feas_add_sep_cuts!(m, ((m.sep_cuts_assist && !is_viol_subp) || m.sep_cuts_always))
+        if m.sep_cuts_assist
+            # Try to add primal cuts on MIP solution, update incumbent if feasible
+            (is_feas, is_viol_any) = check_feas_add_sep_cuts!(m, ((m.sep_cuts_assist && !is_viol_subp) || m.sep_cuts_always))
+        end
 
         # Update gap if best bound and best objective are finite
         if isfinite(m.best_obj) && isfinite(m.best_bound)
@@ -1429,7 +1432,14 @@ function solve_mip_driven!(m)
         is_viol_subp = solve_subp_add_subp_cuts!(m, true)
 
         # Try to add primal cuts on MIP solution, update incumbent if feasible
-        (is_feas, is_viol_any) = check_feas_add_sep_cuts!(m, ((m.sep_cuts_assist && !is_viol_subp) || m.sep_cuts_always))
+        if m.sep_cuts_assist
+            (is_feas, is_viol_any) = check_feas_add_sep_cuts!(m, ((m.sep_cuts_assist && !is_viol_subp) || m.sep_cuts_always))
+
+            # If solution is infeasible but we added no cuts, warn because MIP solver could accept a bad solution
+            if !is_feas && !is_viol_subp && !is_viol_any
+                warn("Lazy callback solution is infeasible but no cuts could be added\n")
+            end
+        end
 
         # Update gap if best bound and best objective are finite
         if isfinite(m.best_obj) && isfinite(m.best_bound)
@@ -1438,11 +1448,6 @@ function solve_mip_driven!(m)
                 # Gap condition satisfied, stop MIP solve
                 return JuMP.StopTheSolver
             end
-        end
-
-        # If solution is infeasible but we added no cuts, have to finish or the MIP solver could accept a bad solution
-        if !is_feas && !is_viol_subp && !is_viol_any
-            warn("Lazy callback solution is infeasible but no cuts could be added\n")
         end
     end
     addlazycallback(m.model_mip, callback_lazy)
@@ -1480,9 +1485,11 @@ function solve_mip_driven!(m)
     end
 
     if isfinite(getobjectivevalue(m.model_mip))
-        # Check final mip solver solution, accept if feasible and new
+        # Check final mip solver solution - if using sep cuts assist, accept if feasible and new
         solve_subp_add_subp_cuts!(m, false)
-        check_feas_add_sep_cuts!(m, false)
+        if m.sep_cuts_assist
+            check_feas_add_sep_cuts!(m, false)
+        end
     end
 
     # Update gap if best bound and best objective are finite
@@ -1532,7 +1539,7 @@ function set_best_soln!(m, soln_int, soln_cont)
 
         if m.soc_disagg
             # Set disaggregated SOC variable pi values
-            if r_val < 1e-10
+            if r_val < m.cut_zero_tol
                 # r value is small so set pi to 0
                 pi_val = zeros(dim)
             else
@@ -1828,7 +1835,7 @@ function add_subp_cut_soc!(m, r, t, pi, rho, u_val, w_val)
     is_viol_cut = false
 
     # K* projected subproblem cut is (norm2(w), w)
-    if (u_val > 1e-10) && clean_array!(m, w_val)
+    if clean_array!(m, w_val)
         u_val = vecnorm(w_val)
         is_viol_cut = add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
         m.logs[:SOC][:n_subp] += 1
@@ -1843,7 +1850,7 @@ function add_subp_cut_exp!(m, r, s, t, u_val, v_val, w_val)
 
     if w_val > -1e-8
         # w is (near) zero: K* projected subproblem cut on (r,s,t) is (max(u, 0), max(v, 0), 0)
-        if (u_val > m.mip_feas_tol) && (v_val > m.mip_feas_tol)
+        if (u_val > m.cut_zero_tol) && (v_val > m.cut_zero_tol)
             is_viol_cut = add_cut_exp!(m, r, s, t, u_val, v_val, 0.)
             m.logs[:ExpPrimal][:n_subp] += 1
         end
@@ -1861,7 +1868,7 @@ end
 function add_subp_cut_sdp!(m, T, W_val)
     is_viol_cut = false
 
-    W_eig_obj = eigfact!(W_val, 1e-10, Inf)
+    W_eig_obj = eigfact!(W_val, m.cut_zero_tol, Inf)
 
     # K* projected (scaled) subproblem cut is sum_{j: lambda_j > 0} lambda_j W_eig_j W_eig_j'
     if !isempty(W_eig_obj[:values])
@@ -1964,7 +1971,7 @@ function add_sep_cut_exp!(m, add_cuts::Bool, r, s, t)
 
         if add_cuts && (viol > m.mip_feas_tol)
             # TODO: for now, error if r is too small
-            if r_val <= 1e-10
+            if r_val <= 1e-12
                 error("Cannot add exp cone separation cut on point ($r_val, $s_val, $t_val)\n")
             end
 
@@ -2037,15 +2044,12 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
 
             if m.soc_abslift
                 # Disaggregated K* cut on (r, pi_j, rho_j) is ((w_j/u)^2/2, 1, -|w_j/u|)
-                @expression(m.model_mip, cut_expr, (w_val[j]/u_val)^2/2*r + pi[j] - abs(w_val[j]/u_val)*rho[j])
+                # Scale by dim*u_val
+                cut_expr = dim*w_val[j]^2/u_val/2*r + dim*u_val*pi[j] - dim*abs(w_val[j])*rho[j]
             else
                 # Disaggregated K* cut on (r, pi_j, t_j) is ((w_j/u)^2/2, 1, w_j/u)
-                @expression(m.model_mip, cut_expr, (w_val[j]/u_val)^2/2*r + pi[j] + w_val[j]/u_val*t[j])
-            end
-
-            if m.scale_subp_cuts
                 # Scale by dim*u_val
-                cut_expr = dim*u_val*cut_expr
+                cut_expr = dim*w_val[j]^2/u_val/2*r + dim*u_val*pi[j] + dim*w_val[j]*t[j]
             end
 
             is_viol_cut |= add_cut!(m, cut_expr, m.logs[:SOC])
@@ -2055,10 +2059,10 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
     if add_full || !m.soc_disagg
         if m.soc_abslift
             # Non-disaggregated K* cut on (r, rho_1, ..., rho_j, ..., rho_dim) is (u, -|w_j|)
-            @expression(m.model_mip, cut_expr, u_val*r - sum(abs(w_val[j])*rho[j] for j in 1:dim))
+            cut_expr = u_val*r - sum(abs(w_val[j])*rho[j] for j in 1:dim)
         else
             # Non-disaggregated K* cut on (r, t) is (u, w)
-            @expression(m.model_mip, cut_expr, u_val*r + vecdot(w_val, t))
+            cut_expr = u_val*r + vecdot(w_val, t)
         end
 
         is_viol_cut |= add_cut!(m, cut_expr, m.logs[:SOC])
@@ -2069,7 +2073,7 @@ end
 
 # Add K* cut for Exp: (w,v,u) in ExpDual <-> (w < 0 && u >= -w*exp(v/w - 1) > 0) || (w = 0 && u >= 0 && v >= 0)
 function add_cut_exp!(m, r, s, t, u_val, v_val, w_val)
-    @expression(m.model_mip, cut_expr, u_val*r + v_val*s + w_val*t)
+    cut_expr = u_val*r + v_val*s + w_val*t
 
     return add_cut!(m, cut_expr, m.logs[:ExpPrimal])
 end
@@ -2094,17 +2098,12 @@ function add_cut_sdp!(m, T, W_eig)
                 # Use norm to add SOC constraint
                 # (p1, p2, q) in RSOC <-> (p1+p2, p1-p2, sqrt2*q) in SOC
                 p2 = sum(T[k,l]*W_eig_j[k]*W_eig_j[l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
-                @expression(m.model_mip, cut_expr, T[i,i] + p2 - norm([(T[i,i] - p2), 2.*sum(T[k,i]*W_eig_j[k] for k in 1:dim if k!=i)]))
+                cut_expr = T[i,i] + p2 - norm([(T[i,i] - p2), 2.*sum(T[k,i]*W_eig_j[k] for k in 1:dim if k!=i)])
             else
                 # Using SDP linear eig cuts
                 # K* cut on T is W_eig_j*W_eig_j'
                 # Scale by num_eig
-                @expression(m.model_mip, cut_expr, vecdot(Symmetric(W_eig_j*W_eig_j'), T))
-            end
-
-            if m.scale_subp_cuts
-                # Scale by dim
-                cut_expr = dim*cut_expr
+                cut_expr = num_eig*vecdot(Symmetric(W_eig_j*W_eig_j'), T)
             end
 
             is_viol_cut |= add_cut!(m, cut_expr, m.logs[:SDP])
@@ -2122,11 +2121,11 @@ function add_cut_sdp!(m, T, W_eig)
             # Use norm to add SOC constraint
             # (p1, p2, q) in RSOC <-> (p1+p2, p1-p2, sqrt2*q) in SOC
             p2 = sum(T[k,l]*W[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
-            @expression(m.model_mip, cut_expr, T[i,i] + p2 - norm([(T[i,i] - p2), 2.*[sum((T[k,i]*W_eig[k,j]) for k in 1:dim if k!=i) for j in 1:num_eig]...]))
+            cut_expr = T[i,i] + p2 - norm([(T[i,i] - p2), 2.*[sum((T[k,i]*W_eig[k,j]) for k in 1:dim if k!=i) for j in 1:num_eig]...])
         else
             # Using SDP linear full cut
             # K* cut on T is W
-            @expression(m.model_mip, cut_expr, vecdot(W, T))
+            cut_expr = vecdot(W, T)
         end
 
         is_viol_cut |= add_cut!(m, cut_expr, m.logs[:SDP])
