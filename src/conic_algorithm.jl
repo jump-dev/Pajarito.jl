@@ -2045,11 +2045,11 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
             if m.soc_abslift
                 # Disaggregated K* cut on (r, pi_j, rho_j) is ((w_j/u)^2/2, 1, -|w_j/u|)
                 # Scale by dim*u_val
-                cut_expr = dim*w_val[j]^2/u_val/2*r + dim*u_val*pi[j] - dim*abs(w_val[j])*rho[j]
+                cut_expr = dim*w_val[j]^2/(2.*u_val)*r + dim*u_val*pi[j] - dim*abs(w_val[j])*rho[j]
             else
                 # Disaggregated K* cut on (r, pi_j, t_j) is ((w_j/u)^2/2, 1, w_j/u)
                 # Scale by dim*u_val
-                cut_expr = dim*w_val[j]^2/u_val/2*r + dim*u_val*pi[j] + dim*w_val[j]*t[j]
+                cut_expr = dim*w_val[j]^2/(2.*u_val)*r + dim*u_val*pi[j] + dim*w_val[j]*t[j]
             end
 
             is_viol_cut |= add_cut!(m, cut_expr, m.logs[:SOC])
