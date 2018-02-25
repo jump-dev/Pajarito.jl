@@ -421,6 +421,19 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 
+    testname = "Scaling up"
+    probname = "expsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, scale_subp_up=true)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, -7.609438, atol=TOL)
+        @test isapprox(objbound, -7.609438, atol=TOL)
+        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
+    end
+
     testname = "No primal cuts assist"
     probname = "expsoc_optimal"
     @testset "$testname" begin
@@ -622,6 +635,19 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
+    testname = "Scaling up"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, init_soc_inf=false, init_sdp_lin=false, scale_subp_up=true)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
+    end
+
     testname = "No primal cuts assist"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
@@ -788,6 +814,31 @@ function run_sdpexp_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
     end
 
+    testname = "No scaling"
+    probname = "expsdp_optimalD"
+    @testset "$testname" begin
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, scale_subp_cuts=false)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, 1.868872, atol=TOL)
+        @test isapprox(objbound, 1.868872, atol=TOL)
+        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+    end
+
+    testname = "Scaling up"
+    probname = "expsdp_optimalD"
+    @testset "$testname" begin
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, scale_subp_up=true)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, 1.868872, atol=TOL)
+        @test isapprox(objbound, 1.868872, atol=TOL)
+        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+    end
 end
 
 # Exp+SOC problems for conic algorithm with MISOCP
