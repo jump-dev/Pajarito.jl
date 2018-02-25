@@ -35,6 +35,7 @@ type PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     dualize_relax::Bool         # (Conic only) Solve the conic dual of the continuous conic relaxation
     dualize_subp::Bool          # (Conic only) Solve the conic duals of the continuous conic subproblems
 
+    all_disagg::Bool            # (Conic only) Disaggregate cuts on the nonpolyhedral cones
     soc_disagg::Bool            # (Conic only) Disaggregate SOC cones
     soc_abslift::Bool           # (Conic only) Use SOC absolute value lifting
     soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP model (if `mip_solver` supports MISOCP)
@@ -79,6 +80,7 @@ function PajaritoSolver(;
     dualize_relax = false,
     dualize_subp = false,
 
+    all_disagg = true,
     soc_disagg = true,
     soc_abslift = false,
     soc_in_mip = false,
@@ -123,7 +125,7 @@ function PajaritoSolver(;
     end
 
     # Deepcopy the solvers because we may change option values inside Pajarito
-    PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, deepcopy(mip_solver), deepcopy(mip_subopt_solver), mip_subopt_count, round_mip_sols, use_mip_starts, deepcopy(cont_solver), solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_subp_factor, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, cut_zero_tol, prim_cut_feas_tol, dump_subproblems, dump_basename)
+    PajaritoSolver(log_level, timeout, rel_gap, mip_solver_drives, deepcopy(mip_solver), deepcopy(mip_subopt_solver), mip_subopt_count, round_mip_sols, use_mip_starts, deepcopy(cont_solver), solve_relax, solve_subp, dualize_relax, dualize_subp, all_disagg, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_subp_factor, viol_cuts_only, prim_cuts_only, prim_cuts_always, prim_cuts_assist, cut_zero_tol, prim_cut_feas_tol, dump_subproblems, dump_basename)
 end
 
 
@@ -139,6 +141,10 @@ function MathProgBase.ConicModel(s::PajaritoSolver)
             if !(:SOC in MathProgBase.supportedcones(s.mip_solver))
                 error("Using SOC constraints in the MIP model (soc_in_mip or init_sdp_soc or sdp_soc), but MIP solver (mip_solver) specified does not support MISOCP\n")
             end
+        end
+
+        if !s.all_disagg && (s.soc_disagg || s.sdp_eig || s.sdp_soc)
+            error("Cannot use SOC extended formulation (soc_disagg) or SDP cut disaggregation (sdp_eig) or SOC cuts for SDP cones (sdp_soc) when not also disaggregating all nonpolyhedral cone cuts (all_disagg)\n")
         end
 
         if (s.mip_subopt_count > 0) && (s.mip_subopt_solver == UnsetSolver())
@@ -165,7 +171,11 @@ function MathProgBase.ConicModel(s::PajaritoSolver)
             s.prim_cuts_assist = true
         end
 
-        return PajaritoConicModel(s.log_level, s.timeout, s.rel_gap, s.mip_solver_drives, s.mip_solver, s.mip_subopt_solver, s.mip_subopt_count, s.round_mip_sols, s.use_mip_starts, s.cont_solver, s.solve_relax, s.solve_subp, s.dualize_relax, s.dualize_subp, s.soc_disagg, s.soc_abslift, s.soc_in_mip, s.sdp_eig, s.sdp_soc, s.init_soc_one, s.init_soc_inf, s.init_exp, s.init_sdp_lin, s.init_sdp_soc, s.scale_subp_cuts, s.scale_subp_factor, s.viol_cuts_only, s.prim_cuts_only, s.prim_cuts_always, s.prim_cuts_assist, s.cut_zero_tol, s.prim_cut_feas_tol, s.dump_subproblems, s.dump_basename)
+        if !s.all_disagg && s.prim_cuts_assist
+            error("Cannot use primal cuts when not disaggregating all nonpolyhedral cone cuts (all_disagg)\n")
+        end
+
+        return PajaritoConicModel(s.log_level, s.timeout, s.rel_gap, s.mip_solver_drives, s.mip_solver, s.mip_subopt_solver, s.mip_subopt_count, s.round_mip_sols, s.use_mip_starts, s.cont_solver, s.solve_relax, s.solve_subp, s.dualize_relax, s.dualize_subp, s.all_disagg, s.soc_disagg, s.soc_abslift, s.soc_in_mip, s.sdp_eig, s.sdp_soc, s.init_soc_one, s.init_soc_inf, s.init_exp, s.init_sdp_lin, s.init_sdp_soc, s.scale_subp_cuts, s.scale_subp_factor, s.viol_cuts_only, s.prim_cuts_only, s.prim_cuts_always, s.prim_cuts_assist, s.cut_zero_tol, s.prim_cut_feas_tol, s.dump_subproblems, s.dump_basename)
     elseif applicable(MathProgBase.NonlinearModel, s.cont_solver)
         return MathProgBase.ConicModel(ConicNonlinearBridge.ConicNLPWrapper(nlp_solver=s))
     else

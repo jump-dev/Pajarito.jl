@@ -56,7 +56,8 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     dualize_relax::Bool         # (Conic only) Solve the conic dual of the continuous conic relaxation
     dualize_subp::Bool          # (Conic only) Solve the conic duals of the continuous conic subproblems
 
-    soc_disagg::Bool            # (Conic only) Disaggregate SOC cones
+    all_disagg::Bool            # (Conic only) Disaggregate cuts on the nonpolyhedral cones
+    soc_disagg::Bool            # (Conic only) Disaggregate SOC using extended formulation
     soc_abslift::Bool           # (Conic only) Use SOC absolute value lifting
     soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP model (if `mip_solver` supports MISOCP)
     sdp_eig::Bool               # (Conic only) Use PSD cone eigenvector cuts
@@ -140,6 +141,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     new_incumb::Bool            # Indicates whether a new incumbent solution from the conic solver is waiting to be added as warm-start or heuristic
     cb_heur                     # Heuristic callback reference (MIP-driven only)
     cb_lazy                     # Lazy callback reference (MIP-driven only)
+    aggregate_cut::JuMP.AffExpr # If not disaggregating cuts on nonpolyhedral cones, build up single cut expression here before adding
 
     # Solution and bound information
     is_best_conic::Bool         # Indicates best feasible came from conic solver solution, otherwise MIP solver solution
@@ -155,7 +157,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     status::Symbol              # Current Pajarito status
 
     # Model constructor
-    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, use_mip_starts, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_subp_factor, viol_cuts_only, sep_cuts_only, sep_cuts_always, sep_cuts_assist, cut_zero_tol, mip_feas_tol, dump_subproblems, dump_basename)
+    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, use_mip_starts, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, all_disagg, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_subp_factor, viol_cuts_only, sep_cuts_only, sep_cuts_always, sep_cuts_assist, cut_zero_tol, mip_feas_tol, dump_subproblems, dump_basename)
         m = new()
 
         m.log_level = log_level
@@ -169,6 +171,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.mip_subopt_count = mip_subopt_count
         m.mip_subopt_solver = mip_subopt_solver
         m.soc_in_mip = soc_in_mip
+        m.all_disagg = all_disagg
         m.soc_disagg = soc_disagg
         m.soc_abslift = soc_abslift
         m.init_soc_one = init_soc_one
@@ -528,8 +531,12 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     flush(STDERR)
 
     # Calculate infeasible and optimal subproblem K* cuts scaling factors
-    m.inf_subp_scale = m.mip_feas_tol*m.num_cones*m.scale_subp_factor
-    m.opt_subp_scale = m.mip_feas_tol/m.rel_gap*m.num_cones*m.scale_subp_factor
+    m.inf_subp_scale = m.mip_feas_tol*m.scale_subp_factor
+    m.opt_subp_scale = m.mip_feas_tol/m.rel_gap*m.scale_subp_factor
+    if m.all_disagg
+        m.inf_subp_scale *= m.num_cones
+        m.opt_subp_scale *= m.num_cones
+    end
 
     if m.solve_relax
         # Solve relaxed conic problem, proceed with algorithm if optimal or suboptimal, else finish
@@ -588,8 +595,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                     scale!(dual_conic, m.opt_subp_scale/(abs(dual_obj) + 1e-5))
                 end
 
-                # Add relaxation cuts
+                # Add relaxation cut(s)
                 tic()
+                m.aggregate_cut = JuMP.AffExpr(0)
 
                 for n in 1:m.num_soc
                     u_val = dual_conic[r_idx_soc_relx[n]]
@@ -608,6 +616,10 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                     # Get smat space dual
                     W_val = make_smat!(m.smat_sdp[n], dual_conic[t_idx_sdp_relx[n]])
                     add_subp_cut_sdp!(m, m.T_sdp[n], W_val)
+                end
+
+                if !m.all_disagg
+                    @constraint(m.model_mip, m.aggregate_cut >= 0)
                 end
 
                 m.logs[:relax_cuts] += toq()
@@ -1613,20 +1625,25 @@ end
 function add_cut!(m, cut_expr, cone_logs)
     is_viol_cut = false
 
-    if !m.oa_started
+    if !m.all_disagg
+        # Not disaggregating the nonpolyhedral cone cuts, so build up single cut and add it after iterate over the cones
+        m.aggregate_cut += cut_expr
+    elseif !m.oa_started
+        # Add non-lazy cut to OA model
         @constraint(m.model_mip, cut_expr >= 0)
-
         cone_logs[:n_relax] += 1
     else
         cut_val = getvalue(cut_expr)
-
         if !m.viol_cuts_only || (cut_val <= -m.mip_feas_tol)
             if m.mip_solver_drives
+                # Add lazy cut
                 @lazyconstraint(m.cb_lazy, cut_expr >= 0)
             else
+                # Add non-lazy cut
                 @constraint(m.model_mip, cut_expr >= 0)
             end
 
+            # Check if cut is violated by current solution
             if cut_val <= -m.mip_feas_tol
                 is_viol_cut = true
                 cone_logs[:n_viol_total] += 1
@@ -1730,9 +1747,12 @@ function solve_subp_add_subp_cuts!(m, add_cuts::Bool)
         end
     end
 
-    # Add K* cuts from subproblem dual solution dual_conic
+    # Add K* cut(s) from subproblem dual solution/ray
     tic()
     is_viol_any = false
+    if !m.all_disagg
+        m.aggregate_cut = JuMP.AffExpr(0)
+    end
 
     for n in 1:m.num_soc
         u_val = dual_conic[m.r_idx_soc_subp[n]]
@@ -1751,6 +1771,26 @@ function solve_subp_add_subp_cuts!(m, add_cuts::Bool)
         # Get smat space dual
         W_val = make_smat!(m.smat_sdp[n], dual_conic[m.t_idx_sdp_subp[n]])
         is_viol_any |= add_subp_cut_sdp!(m, m.T_sdp[n], W_val)
+    end
+
+    if !m.all_disagg
+        @assert !is_viol_any
+        cut_val = getvalue(m.aggregate_cut)
+        
+        if !m.viol_cuts_only || (cut_val <= -m.mip_feas_tol)
+            if m.mip_solver_drives
+                # Add lazy cut
+                @lazyconstraint(m.cb_lazy, m.aggregate_cut >= 0)
+            else
+                # Add non-lazy cut
+                @constraint(m.model_mip, m.aggregate_cut >= 0)
+            end
+
+            # Check if cut is violated by current solution
+            if cut_val <= -m.mip_feas_tol
+                is_viol_any = true
+            end
+        end
     end
 
     m.logs[:subp_cuts] += toq()
@@ -2287,17 +2327,19 @@ function print_finish(m::PajaritoConicModel)
     end
 
     if ll >= 2
-        @printf "\nRounds of full separation/subproblem cuts, and count of cuts added:"
-        @printf "\n%-16s | %-6s | %-6s | %-6s | %-6s | %-6s\n" "Cone" "Subp." "Sep." "Total" "Relax." "Viol."
-        for (cone, name) in zip((:SOC, :ExpPrimal, :SDP), ("Second order", "Primal expon.", "Pos. semidef."))
-            log = m.logs[cone]
-            if (log[:n_relax] + log[:n_viol_total] + log[:n_nonviol_total]) > 0
-                @printf "%16s | %6d | %6d | %6d | %6d | %6d\n" name log[:n_subp] log[:n_sep] (log[:n_viol_total] + log[:n_nonviol_total]) log[:n_relax] log[:n_viol_total]
+        if m.all_disagg
+            @printf "\nRounds of full separation/subproblem cuts, and count of cuts added:"
+            @printf "\n%-16s | %-6s | %-6s | %-6s | %-6s | %-6s\n" "Cone" "Subp." "Sep." "Total" "Relax." "Viol."
+            for (cone, name) in zip((:SOC, :ExpPrimal, :SDP), ("Second order", "Primal expon.", "Pos. semidef."))
+                log = m.logs[cone]
+                if (log[:n_relax] + log[:n_viol_total] + log[:n_nonviol_total]) > 0
+                    @printf "%16s | %6d | %6d | %6d | %6d | %6d\n" name log[:n_subp] log[:n_sep] (log[:n_viol_total] + log[:n_nonviol_total]) log[:n_relax] log[:n_viol_total]
+                end
             end
-        end
 
-        if m.num_soc > 0
-            @printf "\n%d numerically unstable disaggregated SOC cuts\n" m.logs[:n_unst_soc]
+            if m.num_soc > 0
+                @printf "\n%d numerically unstable disaggregated SOC cuts\n" m.logs[:n_unst_soc]
+            end
         end
 
         if isfinite(m.best_obj) && !any(isnan, m.final_soln)
