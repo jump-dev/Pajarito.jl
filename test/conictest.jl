@@ -306,20 +306,7 @@ function run_expsoc(mip_solver_drives, mip_solver, cont_solver, log_level, redir
         @test isapprox(sol[1:2], [1, 2], atol=TOL)
     end
 
-    testname = "No disagg, no L1"
-    probname = "expsoc_optimal"
-    @testset "$testname" begin
-        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, init_soc_one=false, soc_disagg=false)
-
-        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
-
-        @test status == :Optimal
-        @test isapprox(objval, -7.609438, atol=TOL)
-        @test isapprox(objbound, -7.609438, atol=TOL)
-        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
-    end
-
-    testname = "Exp large (gate sizing)"
+    testname = "Exp large (gatesizing)"
     probname = "exp_gatesizing"
     @testset "$testname" begin
         solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
@@ -354,6 +341,45 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test :SOC in cones
         @test :SOCRotated in cones
         @test :ExpPrimal in cones
+    end
+
+    testname = "No all disagg"
+    probname = "expsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, all_disagg=false, prim_cuts_assist=false, soc_disagg=false, init_soc_one=false, sdp_eig=false)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, -7.609438, atol=TOL)
+        @test isapprox(objbound, -7.609438, atol=TOL)
+        @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
+    end
+
+    testname = "No primal cuts (gatesizing)"
+    probname = "exp_gatesizing"
+    @testset "$testname" begin
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, 8.33333, atol=TOL)
+        @test isapprox(objbound, 8.33333, atol=TOL)
+        @test isapprox(exp.(sol[1:7]), [2, 3, 3, 3, 2, 3, 3], atol=TOL)
+    end
+
+    testname = "No all disagg (gatesizing)"
+    probname = "exp_gatesizing"
+    @testset "$testname" begin
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, all_disagg=false, prim_cuts_assist=false, soc_disagg=false, init_soc_one=false, sdp_eig=false)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, 8.33333, atol=TOL)
+        @test isapprox(objbound, 8.33333, atol=TOL)
+        @test isapprox(exp.(sol[1:7]), [2, 3, 3, 3, 2, 3, 3], atol=TOL)
     end
 
     testname = "ExpSOC no init cuts"
@@ -518,6 +544,19 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test status == :Infeasible
     end
 
+    testname = "No all disagg"
+    probname = "sdpsoc_optimal"
+    @testset "$testname" begin
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, all_disagg=false, prim_cuts_assist=false, soc_disagg=false, init_soc_one=false, sdp_eig=false)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, -7.5, atol=TOL)
+        @test isapprox(objbound, -7.5, atol=TOL)
+        @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
+    end
+
     testname = "No init cuts"
     probname = "sdpsoc_optimal"
     @testset "$testname" begin
@@ -673,6 +712,19 @@ function run_sdpsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test isapprox(objbound, -0.2342348, atol=TOL)
         @test isapprox(sol[1:8], [0, 3, 2, 3, 0, 3, 0, 1], atol=TOL)
     end
+
+    testname = "No all disagg (Eopt)"
+    probname = "sdp_optimalE"
+    @testset "$testname" begin
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, all_disagg=false, prim_cuts_assist=false, soc_disagg=false, init_soc_one=false, sdp_eig=false)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, -0.2342348, atol=TOL)
+        @test isapprox(objbound, -0.2342348, atol=TOL)
+        @test isapprox(sol[1:8], [0, 3, 2, 3, 0, 3, 0, 1], atol=TOL)
+    end
 end
 
 # SDP+Exp problems for conic algorithm
@@ -709,6 +761,33 @@ function run_sdpexp_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test isapprox(objbound, 1.868872, atol=TOL)
         @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
     end
+
+    testname = "No primal cuts (Dopt)"
+    probname = "expsdp_optimalD"
+    @testset "$testname" begin
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, prim_cuts_assist=false)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, 1.868872, atol=TOL)
+        @test isapprox(objbound, 1.868872, atol=TOL)
+        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+    end
+
+    testname = "No all disagg (Dopt)"
+    probname = "expsdp_optimalD"
+    @testset "$testname" begin
+        solver = PajaritoSolver(timeout=120., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level, all_disagg=false, prim_cuts_assist=false, soc_disagg=false, init_soc_one=false, sdp_eig=false)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+        @test isapprox(objval, 1.868872, atol=TOL)
+        @test isapprox(objbound, 1.868872, atol=TOL)
+        @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
+    end
+
 end
 
 # Exp+SOC problems for conic algorithm with MISOCP
