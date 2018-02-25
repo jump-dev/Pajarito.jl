@@ -70,6 +70,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
 
     scale_subp_cuts::Bool       # (Conic only) Use scaling for subproblem cuts
     scale_subp_factor::Float64  # (Conic only) Fixed multiplicative factor for scaled subproblem cuts
+    scale_subp_up::Bool         # (Conic only) Scale up any scaled subproblem cuts that are smaller than the equivalent separation cut
     viol_cuts_only::Bool        # (Conic only) Only add cuts violated by current MIP solution
     sep_cuts_only::Bool         # (Conic only) Add primal cuts, do not add subproblem cuts
     sep_cuts_always::Bool       # (Conic only) Add primal cuts and subproblem cuts
@@ -157,7 +158,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     status::Symbol              # Current Pajarito status
 
     # Model constructor
-    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, use_mip_starts, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, all_disagg, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_subp_factor, viol_cuts_only, sep_cuts_only, sep_cuts_always, sep_cuts_assist, cut_zero_tol, mip_feas_tol, dump_subproblems, dump_basename)
+    function PajaritoConicModel(log_level, timeout, rel_gap, mip_solver_drives, mip_solver, mip_subopt_solver, mip_subopt_count, round_mip_sols, use_mip_starts, cont_solver, solve_relax, solve_subp, dualize_relax, dualize_subp, all_disagg, soc_disagg, soc_abslift, soc_in_mip, sdp_eig, sdp_soc, init_soc_one, init_soc_inf, init_exp, init_sdp_lin, init_sdp_soc, scale_subp_cuts, scale_subp_factor, scale_subp_up, viol_cuts_only, sep_cuts_only, sep_cuts_always, sep_cuts_assist, cut_zero_tol, mip_feas_tol, dump_subproblems, dump_basename)
         m = new()
 
         m.log_level = log_level
@@ -179,6 +180,7 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
         m.init_exp = init_exp
         m.scale_subp_cuts = scale_subp_cuts
         m.scale_subp_factor = scale_subp_factor
+        m.scale_subp_up = scale_subp_up
         m.viol_cuts_only = viol_cuts_only
         m.mip_solver = mip_solver
         m.cont_solver = cont_solver
@@ -1776,7 +1778,7 @@ function solve_subp_add_subp_cuts!(m, add_cuts::Bool)
     if !m.all_disagg
         @assert !is_viol_any
         cut_val = getvalue(m.aggregate_cut)
-        
+
         if !m.viol_cuts_only || (cut_val <= -m.mip_feas_tol)
             if m.mip_solver_drives
                 # Add lazy cut
@@ -1874,9 +1876,16 @@ end
 function add_subp_cut_soc!(m, r, t, pi, rho, u_val, w_val)
     is_viol_cut = false
 
-    # K* projected subproblem cut is (norm2(w), w)
     if clean_array!(m, w_val)
+        # K* projected subproblem cut is (norm2(w), w)
         u_val = vecnorm(w_val)
+
+        if m.scale_subp_up && (u_val < 1.)
+            # Scale up to equivalent separation cut, with u = 1
+            w_val /= u_val
+            u_val = 1.
+        end
+
         is_viol_cut = add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
         m.logs[:SOC][:n_subp] += 1
     end
@@ -1891,12 +1900,28 @@ function add_subp_cut_exp!(m, r, s, t, u_val, v_val, w_val)
     if w_val > -1e-8
         # w is (near) zero: K* projected subproblem cut on (r,s,t) is (max(u, 0), max(v, 0), 0)
         if (u_val > m.cut_zero_tol) && (v_val > m.cut_zero_tol)
+
+            if m.scale_subp_up && (u_val < 1.) && (v_val < 1.)
+                # Scale up so largest is 1
+                uvmax = max(u_val, v_val)
+                u_val /= uvmax
+                v_val /= uvmax
+            end
+
             is_viol_cut = add_cut_exp!(m, r, s, t, u_val, v_val, 0.)
             m.logs[:ExpPrimal][:n_subp] += 1
         end
     else
         # w is significantly negative: K* projected subproblem cut on (r,s,t) is (-w*exp(v/w - 1), v, w)
         u_val = -w_val*exp(v_val/w_val - 1)
+
+        if m.scale_subp_up && (u_val < 1.)
+            # Scale up to equivalent separation cut, with u = 1
+            v_val /= u_val
+            w_val /= u_val
+            u_val = 1.
+        end
+
         is_viol_cut = add_cut_exp!(m, r, s, t, u_val, v_val, w_val)
         m.logs[:ExpPrimal][:n_subp] += 1
     end
@@ -1912,7 +1937,18 @@ function add_subp_cut_sdp!(m, T, W_val)
 
     # K* projected (scaled) subproblem cut is sum_{j: lambda_j > 0} lambda_j W_eig_j W_eig_j'
     if !isempty(W_eig_obj[:values])
-        W_eig = W_eig_obj[:vectors]*Diagonal(sqrt.(W_eig_obj[:values]))
+        sqrteig = sqrt.(W_eig_obj[:values])
+
+        if m.scale_subp_up
+            # Scale up to equivalent separation cuts, with lambdas >= 1
+            for j in 1:length(sqrteig)
+                if sqrteig[j] < 1.
+                    sqrteig[j] = 1.
+                end
+            end
+        end
+
+        W_eig = W_eig_obj[:vectors]*Diagonal(sqrteig)
         if clean_array!(m, W_eig)
             is_viol_cut = add_cut_sdp!(m, T, W_eig)
             m.logs[:SDP][:n_subp] += 1
