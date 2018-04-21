@@ -98,7 +98,7 @@ The following options can be passed to `PajaritoSolver()` to modify its behavior
   * `cut_zero_tol::Float64` **C** Zero tolerance for cut coefficients
   * `prim_cut_feas_tol::Float64` **C** Absolute feasibility tolerance used for primal cuts (set equal to feasibility tolerance of `mip_solver`) 
 
-**Pajarito is not yet numerically robust and may require tuning of parameters to improve convergence.** If the default parameters don't work for you, please let us know.
+**Pajarito may require tuning of parameters to improve convergence.**
 
 Note:
   * For the conic algorithm, Pajarito usually returns a solution constructed from one of the conic solver's feasible solutions. Since the conic solver is not subject to the same feasibility tolerances as the MIP solver (which should match the absolute feasibility tolerance `prim_cut_feas_tol`), Pajarito's solution will not necessarily satisfy `prim_cut_feas_tol`.
