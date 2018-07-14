@@ -4,7 +4,6 @@
 #  License, v. 2.0. If a copy of the MPL was not distributed with this
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-
 # Take a CBF file and conic solver and solve, redirecting output
 function solve_cbf(testname, probname, solver, redirect)
     flush(STDOUT)
@@ -61,7 +60,6 @@ function solve_cbf(testname, probname, solver, redirect)
 
     return (status, time, objval, objbound, sol)
 end
-
 
 # SOC problems for NLP and conic algorithms
 function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect)

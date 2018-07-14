@@ -9,7 +9,6 @@ import ConicBenchmarkUtilities
 using Pajarito
 using Base.Test
 
-
 # Tests absolute tolerance and Pajarito printing level
 TOL = 1e-3
 ll = 3
@@ -17,7 +16,7 @@ redirect = true
 
 # Define dictionary of solvers, using JuMP list of available solvers
 include(Pkg.dir("JuMP", "test", "solvers.jl"))
-include("nlptest.jl")
+include("qptest.jl")
 include("conictest.jl")
 
 solvers = Dict{String,Dict{String,MathProgBase.AbstractMathProgSolver}}()
@@ -58,15 +57,6 @@ end
 #     solvers["MILP"]["SCIP"] = solvers["MISOCP"]["SCIP"] = SCIP.SCIPSolver("display/verblevel", 0, "limits/gap", tol_gap, "numerics/feastol", tol_feas)
 # end
 
-# NLP solvers
-solvers["NLP"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
-if ipt
-    solvers["NLP"]["Ipopt"] = Ipopt.IpoptSolver(print_level=0)
-end
-# if kni
-#     solvers["NLP"]["Knitro"] = KNITRO.KnitroSolver(objrange=1e16, outlev=0, maxit=100000)
-# end
-
 # Conic solvers
 solvers["SOC"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
 solvers["Exp+SOC"] = Dict{String,MathProgBase.AbstractMathProgSolver}()
@@ -86,7 +76,6 @@ if mos
     solvers["Exp+SOC"]["Mosek"] = solvers["PSD+Exp"]["Mosek"] = Mosek.MosekSolver(LOG=0, MSK_DPAR_INTPNT_CO_TOL_REL_GAP=1e-9, MSK_DPAR_INTPNT_CO_TOL_PFEAS=1e-10, MSK_DPAR_INTPNT_CO_TOL_DFEAS=1e-10, MSK_DPAR_INTPNT_CO_TOL_NEAR_REL=1e3)
 end
 
-
 println("\nSolvers:")
 for (stype, snames) in solvers
     println("\n$stype")
@@ -94,8 +83,6 @@ for (stype, snames) in solvers
         @printf "%2d  %s\n" i sname
     end
 end
-println()
-
 
 @testset "Algorithm - $(msd ? "MSD" : "Iter")" for msd in [false, true]
     alg = (msd ? "MSD" : "Iter")
@@ -106,21 +93,9 @@ println()
             continue
         end
 
-        @testset "NLP models, NLP solver - $conname" for (conname, con) in solvers["NLP"]
-            println("\nNLP models, NLP solver: $alg, $mipname, $conname")
-            run_qp(msd, mip, con, ll, redirect)
-            run_nlp(msd, mip, con, ll, redirect)
-        end
-
         @testset "LPQP models, SOC solver - $conname" for (conname, con) in solvers["SOC"]
             println("\nLPQP models, SOC solver: $alg, $mipname, $conname")
             run_qp(msd, mip, con, ll, redirect)
-        end
-
-        @testset "Exp+SOC models, NLP solver - $conname" for (conname, con) in solvers["NLP"]
-            println("\nExp+SOC models, NLP solver: $alg, $mipname, $conname")
-            run_soc(msd, mip, con, ll, redirect)
-            run_expsoc(msd, mip, con, ll, redirect)
         end
 
         @testset "SOC models/solver - $conname" for (conname, con) in solvers["SOC"]
