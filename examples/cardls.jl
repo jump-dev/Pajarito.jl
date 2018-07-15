@@ -53,7 +53,7 @@ end
 Choose solvers and options
 =========================================================#
 
-mip_solver_drives = false
+mip_solver_drives = true
 rel_gap = 1e-5
 
 
