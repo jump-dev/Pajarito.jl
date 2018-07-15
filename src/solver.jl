@@ -68,7 +68,7 @@ function PajaritoSolver(;
     timeout = Inf,
     rel_gap = 1e-5,
 
-    mip_solver_drives = false,
+    mip_solver_drives = nothing,
     mip_solver = UnsetSolver(),
     mip_subopt_solver = UnsetSolver(),
     mip_subopt_count = 0,
@@ -111,6 +111,12 @@ function PajaritoSolver(;
 
     if mip_solver == UnsetSolver()
         error("No MIP solver specified (set mip_solver)\n")
+    end
+
+    if mip_solver_drives == nothing
+        mip_solver_drives = applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip_solver), x -> x)
+    elseif mip_solver_drives && !applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip_solver), x -> x)
+        error("MIP solver does not support callbacks (cannot set mip_solver_drives = true)")
     end
 
     if viol_cuts_only == nothing
