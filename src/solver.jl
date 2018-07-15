@@ -112,7 +112,6 @@ function PajaritoSolver(;
     if mip_solver == UnsetSolver()
         error("No MIP solver specified (set mip_solver)\n")
     end
-
     if mip_solver_drives == nothing
         mip_solver_drives = applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip_solver), x -> x)
     elseif mip_solver_drives && !applicable(MathProgBase.setlazycallback!, MathProgBase.ConicModel(mip_solver), x -> x)
