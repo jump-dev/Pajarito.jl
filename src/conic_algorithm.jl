@@ -645,7 +645,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         m.new_incumb = false
         m.cache_dual = Dict{Vector{Float64},Vector{Float64}}()
 
-        if m.log_level > 1
+        if m.log_level >= 1
             @printf "\nStarting %s algorithm\n" (m.mip_solver_drives ? "MIP-solver-driven" : "iterative")
         end
         status_oa = m.mip_solver_drives ? solve_mip_driven!(m) : solve_iterative!(m)
