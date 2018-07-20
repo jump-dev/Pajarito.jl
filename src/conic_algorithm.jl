@@ -11,8 +11,6 @@ This mixed-integer conic programming algorithm is described in:
   (available online at http://arxiv.org/abs/1511.06710)
 Model MICP with JuMP.jl conic format or Convex.jl DCP format
 http://mathprogbasejl.readthedocs.org/en/latest/conic.html
-TODO features
-- implement warm-starting: use set_best_soln!
 =========================================================#
 
 using JuMP
@@ -46,38 +44,38 @@ type PajaritoConicModel <: MathProgBase.AbstractConicModel
     mip_solver_drives::Bool     # Let MIP solver manage convergence ("branch and cut")
     mip_solver::MathProgBase.AbstractMathProgSolver # MIP solver (MILP or MISOCP)
     mip_subopt_solver::MathProgBase.AbstractMathProgSolver # MIP solver for suboptimal solves (with appropriate options already passed)
-    mip_subopt_count::Int       # (Conic only) Number of times to use `mip_subopt_solver` between `mip_solver` solves
-    round_mip_sols::Bool        # (Conic only) Round integer variable values before solving subproblems
-    use_mip_starts::Bool        # (Conic only) Use conic subproblem feasible solutions as MIP warm-starts or heuristic solutions
+    mip_subopt_count::Int       # Number of times to use `mip_subopt_solver` between `mip_solver` solves
+    round_mip_sols::Bool        # Round integer variable values before solving subproblems
+    use_mip_starts::Bool        # Use conic subproblem feasible solutions as MIP warm-starts or heuristic solutions
 
-    cont_solver::MathProgBase.AbstractMathProgSolver # Continuous solver (conic or nonlinear)
-    solve_relax::Bool           # (Conic only) Solve the continuous conic relaxation to add initial subproblem cuts
-    solve_subp::Bool            # (Conic only) Solve the continuous conic subproblems to add subproblem cuts
-    dualize_relax::Bool         # (Conic only) Solve the conic dual of the continuous conic relaxation
-    dualize_subp::Bool          # (Conic only) Solve the conic duals of the continuous conic subproblems
+    cont_solver::MathProgBase.AbstractMathProgSolver # Continuous conic solver
+    solve_relax::Bool           # Solve the continuous conic relaxation to add initial subproblem cuts
+    solve_subp::Bool            # Solve the continuous conic subproblems to add subproblem cuts
+    dualize_relax::Bool         # Solve the conic dual of the continuous conic relaxation
+    dualize_subp::Bool          # Solve the conic duals of the continuous conic subproblems
 
-    all_disagg::Bool            # (Conic only) Disaggregate cuts on the nonpolyhedral cones
-    soc_disagg::Bool            # (Conic only) Disaggregate SOC using extended formulation
-    soc_abslift::Bool           # (Conic only) Use SOC absolute value lifting
-    soc_in_mip::Bool            # (Conic only) Use SOC cones in the MIP model (if `mip_solver` supports MISOCP)
-    sdp_eig::Bool               # (Conic only) Use PSD cone eigenvector cuts
-    sdp_soc::Bool               # (Conic only) Use PSD cone eigenvector SOC cuts (if `mip_solver` supports MISOCP)
-    init_soc_one::Bool          # (Conic only) Use SOC initial L_1 cuts
-    init_soc_inf::Bool          # (Conic only) Use SOC initial L_inf cuts
-    init_exp::Bool              # (Conic only) Use Exp initial cuts
-    init_sdp_lin::Bool          # (Conic only) Use PSD cone initial linear cuts
-    init_sdp_soc::Bool          # (Conic only) Use PSD cone initial SOC cuts (if `mip_solver` supports MISOCP)
+    all_disagg::Bool            # Disaggregate cuts on the nonpolyhedral cones
+    soc_disagg::Bool            # Disaggregate SOC using extended formulation
+    soc_abslift::Bool           # Use SOC absolute value lifting
+    soc_in_mip::Bool            # Use SOC cones in the MIP model (if `mip_solver` supports MISOCP)
+    sdp_eig::Bool               # Use PSD cone eigenvector cuts
+    sdp_soc::Bool               # Use PSD cone eigenvector SOC cuts (if `mip_solver` supports MISOCP)
+    init_soc_one::Bool          # Use SOC initial L_1 cuts
+    init_soc_inf::Bool          # Use SOC initial L_inf cuts
+    init_exp::Bool              # Use Exp initial cuts
+    init_sdp_lin::Bool          # Use PSD cone initial linear cuts
+    init_sdp_soc::Bool          # Use PSD cone initial SOC cuts (if `mip_solver` supports MISOCP)
 
-    scale_subp_cuts::Bool       # (Conic only) Use scaling for subproblem cuts
-    scale_subp_factor::Float64  # (Conic only) Fixed multiplicative factor for scaled subproblem cuts
-    scale_subp_up::Bool         # (Conic only) Scale up any scaled subproblem cuts that are smaller than the equivalent separation cut
-    viol_cuts_only::Bool        # (Conic only) Only add cuts violated by current MIP solution
-    sep_cuts_only::Bool         # (Conic only) Add primal cuts, do not add subproblem cuts
-    sep_cuts_always::Bool       # (Conic only) Add primal cuts and subproblem cuts
-    sep_cuts_assist::Bool       # (Conic only) Add subproblem cuts, and add primal cuts only subproblem cuts cannot be added
+    scale_subp_cuts::Bool       # Use scaling for subproblem cuts
+    scale_subp_factor::Float64  # Fixed multiplicative factor for scaled subproblem cuts
+    scale_subp_up::Bool         # Scale up any scaled subproblem cuts that are smaller than the equivalent separation cut
+    viol_cuts_only::Bool        # Only add cuts violated by current MIP solution
+    sep_cuts_only::Bool         # Add primal cuts, do not add subproblem cuts
+    sep_cuts_always::Bool       # Add primal cuts and subproblem cuts
+    sep_cuts_assist::Bool       # Add subproblem cuts, and add primal cuts only subproblem cuts cannot be added
 
-    cut_zero_tol::Float64       # (Conic only) Zero tolerance for cut coefficients
-    mip_feas_tol::Float64       # (Conic only) Absolute feasibility tolerance used for primal cuts (set equal to feasibility tolerance of `mip_solver`)
+    cut_zero_tol::Float64       # Zero tolerance for cut coefficients
+    mip_feas_tol::Float64       # Absolute feasibility tolerance used for primal cuts (set equal to feasibility tolerance of `mip_solver`)
 
     dump_subproblems::Bool      # Save each conic subproblem in conic benchmark format (CBF) at a specified location
     dump_basename::String       # Basename of conic subproblem CBF files: "/path/to/foo" creates files "/path/to/foo_NN.cbf" where "NN" is a counter

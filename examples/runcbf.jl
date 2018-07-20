@@ -26,7 +26,7 @@ solver = PajaritoSolver(
     mip_solver=mip_solver,
     cont_solver=cont_solver,
     log_level=3,
-    )
+)
 
 dat = readcbfdata(ARGS[1])
 (c, A, b, con_cones, var_cones, vartypes, sense, objoffset) = cbftompb(dat)
