@@ -106,7 +106,7 @@ function PajaritoSolver(;
     )
 
     if (cont_solver != UnsetSolver()) && !applicable(MathProgBase.ConicModel, cont_solver)
-        error("Continuous solver (cont_solver) specified is not a conic solver recognized by MathProgBase (try Pavito solver if your continuous solver is a derivative-based NLP solver)\n")
+        error("Continuous solver (cont_solver) specified is not a conic solver; if your continuous solver is a derivative-based NLP solver, try Pavito solver (Pajarito's MINLP functionality was moved to the Pavito solver package)\n")
     end
 
     if mip_solver == UnsetSolver()
@@ -131,7 +131,7 @@ function PajaritoSolver(;
 end
 
 # Cannot use Pajarito on an NLP model
-MathProgBase.NonlinearModel(s::PajaritoSolver) = error("Pajarito solver is for conic models; try Pavito solver for NLP models")
+MathProgBase.NonlinearModel(s::PajaritoSolver) = error("Pajarito solver cannot be used for NLP models (Pajarito's MINLP functionality was moved to the Pavito solver package)\n")
 
 # Create Pajarito conic model
 function MathProgBase.ConicModel(s::PajaritoSolver)
