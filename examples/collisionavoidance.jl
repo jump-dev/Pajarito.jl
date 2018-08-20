@@ -46,7 +46,7 @@ micp_solver = PajaritoSolver(
 
 # Create model
 
-type Box
+struct Box
     xl::Float64
     xu::Float64
     yl::Float64

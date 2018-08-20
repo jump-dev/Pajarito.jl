@@ -17,7 +17,7 @@
 
 export ConicDualWrapper
 
-struct ConicDualWrapper <: MathProgBase.AbstractMathProgSolver
+mutable struct ConicDualWrapper <: MathProgBase.AbstractMathProgSolver
     conicsolver::MathProgBase.AbstractMathProgSolver
 end
 
