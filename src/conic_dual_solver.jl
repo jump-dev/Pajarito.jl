@@ -17,14 +17,14 @@
 
 export ConicDualWrapper
 
-immutable ConicDualWrapper <: MathProgBase.AbstractMathProgSolver
+struct ConicDualWrapper <: MathProgBase.AbstractMathProgSolver
     conicsolver::MathProgBase.AbstractMathProgSolver
 end
 
 ConicDualWrapper(;conicsolver=nothing) = ConicDualWrapper(conicsolver)
 
 
-type ConicDualModel <: MathProgBase.AbstractConicModel
+mutable struct ConicDualModel <: MathProgBase.AbstractConicModel
     conicsolver::MathProgBase.AbstractMathProgSolver
     dualmodel::MathProgBase.AbstractConicModel
     dualstatus::Symbol
