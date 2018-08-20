@@ -11,10 +11,10 @@
 export PajaritoSolver
 
 # Dummy solver
-type UnsetSolver <: MathProgBase.AbstractMathProgSolver end
+struct UnsetSolver <: MathProgBase.AbstractMathProgSolver end
 
 # Pajarito solver
-type PajaritoSolver <: MathProgBase.AbstractMathProgSolver
+mutable struct PajaritoSolver <: MathProgBase.AbstractMathProgSolver
     log_level::Int              # Verbosity flag: 0 for quiet, 1 for basic solve info, 2 for iteration info, 3 for detailed timing and cuts and solution feasibility info
     timeout::Float64            # Time limit for algorithm (in seconds)
     rel_gap::Float64            # Relative optimality gap termination condition

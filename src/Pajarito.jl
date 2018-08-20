@@ -15,9 +15,11 @@ __precompile__()
 
 
 module Pajarito
-    import MathProgBase
 
-    include("conic_dual_solver.jl")
-    include("solver.jl")
-    include("conic_algorithm.jl")
+import MathProgBase
+
+include("conic_dual_solver.jl")
+include("solver.jl")
+include("conic_algorithm.jl")
+
 end

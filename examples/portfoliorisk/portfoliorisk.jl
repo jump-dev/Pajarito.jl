@@ -1,7 +1,7 @@
 # Management of a set of portfolios with overlapping stocks and constraints on different risk measures
 # Choose how much to invest in each of a limited number of stocks, to maximize payoff
 
-type Portfolio
+mutable struct Portfolio
     id::Int
     size::Int
     stocks::Vector{String}

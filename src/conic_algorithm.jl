@@ -35,7 +35,7 @@ const unstable_soc_disagg_tol = 1e-5 # For checking if a disaggregated SOC cut i
  Conic model object
 =========================================================#
 
-type PajaritoConicModel <: MathProgBase.AbstractConicModel
+mutable struct PajaritoConicModel <: MathProgBase.AbstractConicModel
     # Solver parameters
     log_level::Int              # Verbosity flag: 0 for quiet, 1 for basic solve info, 2 for iteration info, 3 for detailed timing and cuts and solution feasibility info
     timeout::Float64            # Time limit for algorithm (in seconds)
