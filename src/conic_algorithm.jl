@@ -764,13 +764,13 @@ function transform_data(c_orig, A_orig, b_orig, cone_con_orig, cone_var_orig, va
             end
 
             if !isempty(vars_nonneg)
-                push!(cone_var_new, (:NonNeg, vars_nonneg))
+                push!(cone_var_new, (:NonNeg, old_new_col[vars_nonneg]))
             end
             if !isempty(vars_nonpos)
-                push!(cone_var_new, (:NonPos, vars_nonpos))
+                push!(cone_var_new, (:NonPos, old_new_col[vars_nonpos]))
             end
             if !isempty(vars_free)
-                push!(cone_var_new, (:Free, vars_free))
+                push!(cone_var_new, (:Free, old_new_col[vars_free]))
             end
 
             if (spec != :Free) && (spec != :NonNeg) && (spec != :NonPos)
