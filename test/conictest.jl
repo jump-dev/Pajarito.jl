@@ -143,6 +143,16 @@ function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
 
         @test status == :Infeasible
     end
+
+    testname = "SOC index bug (#418)"
+    probname = "sssd-strong-15-4"
+    @testset "$testname" begin
+        solver = PajaritoSolver(timeout=300., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+
+        (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
+
+        @test status == :Optimal
+    end
 end
 
 # SOC problems for conic algorithm
