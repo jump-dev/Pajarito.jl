@@ -147,11 +147,11 @@ function run_soc(mip_solver_drives, mip_solver, cont_solver, log_level, redirect
     testname = "SOC index bug (#418)"
     probname = "sssd-strong-15-4"
     @testset "$testname" begin
-        solver = PajaritoSolver(timeout=300., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
+        solver = PajaritoSolver(timeout=30., mip_solver_drives=mip_solver_drives, mip_solver=mip_solver, cont_solver=cont_solver, log_level=log_level)
 
         (status, time, objval, objbound, sol) = solve_cbf(testname, probname, solver, redirect)
 
-        @test status == :Optimal
+        @test status in (:Optimal, :UserLimit)
     end
 end
 
