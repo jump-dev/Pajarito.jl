@@ -4,8 +4,8 @@ os:
   - osx
 julia:
   - 0.6
-  - 0.7
-  - 1.0
+#  - 0.7
+#  - 1.0
 notifications:
   email: false
 addons:
