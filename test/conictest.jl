@@ -314,6 +314,8 @@ function run_expsoc(mip_solver_drives, mip_solver, cont_solver, log_level, redir
         @test isapprox(sol[1:2], [1, 2], atol=TOL)
     end
 
+    #=
+    # remove for SCS v0.4, runtime
     testname = "Exp large (gatesizing)"
     probname = "exp_gatesizing"
     @testset "$testname" begin
@@ -326,6 +328,7 @@ function run_expsoc(mip_solver_drives, mip_solver, cont_solver, log_level, redir
         @test isapprox(objbound, 8.33333, atol=TOL)
         @test isapprox(exp.(sol[1:7]), [2, 3, 3, 3, 2, 3, 3], atol=TOL)
     end
+    =#
 
     testname = "Exp large 2 (Ising)"
     probname = "exp_ising"
@@ -364,6 +367,8 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test isapprox(sol[1:2], [2, 1.609438], atol=TOL)
     end
 
+    #=
+    # remove for SCS v0.4, runtime
     testname = "No primal cuts (gatesizing)"
     probname = "exp_gatesizing"
     @testset "$testname" begin
@@ -376,6 +381,7 @@ function run_expsoc_conic(mip_solver_drives, mip_solver, cont_solver, log_level,
         @test isapprox(objbound, 8.33333, atol=TOL)
         @test isapprox(exp.(sol[1:7]), [2, 3, 3, 3, 2, 3, 3], atol=TOL)
     end
+    =#
 
     testname = "No all disagg (gatesizing)"
     probname = "exp_gatesizing"
@@ -971,6 +977,8 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
         @test isapprox(sol[1:6], [2, 0.5, 1, 1, 2, 2], atol=TOL)
     end
 
+    #=
+    # remove for SCS v0.4, runtime
     testname = "SDP init SOC cuts (cardls)"
     probname = "sdp_cardls"
     @testset "$testname" begin
@@ -983,6 +991,7 @@ function run_sdpsoc_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
         @test isapprox(objbound, 16.045564, atol=TOL)
         @test isapprox(sol[1:6], [0, 1, 1, 1, 0, 0], atol=TOL)
     end
+    =#
 
     testname = "Init SOC cuts infeasible"
     probname = "sdpsoc_infeasible"
@@ -1068,6 +1077,8 @@ function run_sdpexp_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
         @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
     end
 
+    #=
+    # remove for SCS v0.4, correctness
     # Only run SOC cut tests if iterative algorithm, because cannot add SOC cuts during MSD
     if !mip_solver_drives
         testname = "SOC eig cuts (Dopt)"
@@ -1083,4 +1094,5 @@ function run_sdpexp_misocp(mip_solver_drives, mip_solver, cont_solver, log_level
             @test isapprox(sol[end-7:end], [0, 3, 3, 2, 0, 3, 0, 1], atol=TOL)
         end
     end
+    =#
 end
