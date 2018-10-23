@@ -251,8 +251,11 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
             error("Some indices in a constraint cone do not correspond to indices of vector b\n")
         end
 
-        inds_con[inds] += 1
+        for i in inds
+            inds_con[i] += 1
+        end
     end
+
     if any(inds_con .== 0)
         error("Some indices in vector b do not correspond to indices of a constraint cone\n")
     end
@@ -267,7 +270,9 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
             error("Some indices in a variable cone do not correspond to indices of vector c\n")
         end
 
-        inds_var[inds] += 1
+        for i in inds
+            inds_var[i] += 1
+        end
     end
     if any(inds_var .== 0)
         error("Some indices in vector c do not correspond to indices of a variable cone\n")
@@ -346,6 +351,7 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
             num_exp += 1
         end
     end
+
 
     m.num_soc = num_soc + num_rot
     m.num_exp = num_exp
