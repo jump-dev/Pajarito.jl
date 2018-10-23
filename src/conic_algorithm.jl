@@ -599,7 +599,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 # Optionally scale dual
                 if m.scale_subp_cuts
                     # Rescale by number of cones / absval of full conic objective
-                    scale!(dual_conic, m.opt_subp_scale/(abs(dual_obj) + 1e-5))
+                    rmul!(dual_conic, m.opt_subp_scale/(abs(dual_obj) + 1e-5))
                 end
 
                 # Add relaxation cut(s)
@@ -1376,7 +1376,7 @@ function solve_iterative!(m)
         end
 
         # Update best bound from MIP bound
-        mip_obj_bound = MathProgBase.getobjbound(m.model_mip)
+        mip_obj_bound = getobjbound(m.model_mip)
         if isfinite(mip_obj_bound) && (mip_obj_bound > m.best_bound)
             m.best_bound = mip_obj_bound
         end
@@ -1498,7 +1498,7 @@ function solve_mip_driven!(m)
     end
 
     # Update best bound from MIP bound
-    mip_obj_bound = MathProgBase.getobjbound(m.model_mip)
+    mip_obj_bound = getobjbound(m.model_mip)
     if isfinite(mip_obj_bound) && (mip_obj_bound > m.best_bound)
         m.best_bound = mip_obj_bound
     end
@@ -1734,14 +1734,14 @@ function solve_subp_add_subp_cuts!(m, add_cuts::Bool)
                     @warn "For infeasible subproblem, dual ray objective value $dual_value is not significantly positive (please submit an issue)\n"
                 elseif m.scale_subp_cuts
                     # Rescale using dual value for dual infeasibility case
-                    scale!(dual_conic, m.inf_subp_scale/dual_value)
+                    rmul!(dual_conic, m.inf_subp_scale/dual_value)
                 end
             else
                 # Calculate obj value of full dual solution
                 dual_value = -dot(b_sub_int, dual_conic) + dot(m.c_sub_int, soln_int)
                 if m.scale_subp_cuts
                     # Rescale using dual value for strong duality case
-                    scale!(dual_conic, m.opt_subp_scale/(abs(dual_value) + 1e-5))
+                    rmul!(dual_conic, m.opt_subp_scale/(abs(dual_value) + 1e-5))
                 end
             end
 
@@ -2026,11 +2026,11 @@ function add_sep_cut_soc!(m, add_cuts::Bool, r, t, pi, rho)
     t_val = getvalue(t)
 
     # Violation is norm(t) - r
-    viol = vecnorm(t_val) - r_val
+    viol = norm(t_val) - r_val
 
     # K* separation cut is (1, -t/norm(t))
     if add_cuts && (viol > m.mip_feas_tol) && clean_array!(m, t_val)
-        w_val = -t_val/vecnorm(t_val)
+        w_val = -t_val/norm(t_val)
         is_viol_cut = add_cut_soc!(m, r, t, pi, rho, 1., w_val)
         m.logs[:SOC][:n_sep] += 1
     end
@@ -2085,14 +2085,14 @@ function add_sep_cut_sdp!(m, add_cuts::Bool, T)
     viol = 0.
 
     # Get eigendecomposition object, with eigenvalues smaller than separation cut feasibility tolerance
-    T_eig_obj = eigfact!(Symmetric(getvalue(T)), -Inf, -m.mip_feas_tol)
+    T_eig_obj = eigen!(Symmetric(getvalue(T)), -Inf, -m.mip_feas_tol)
 
     # Violation is negative min eigenvalue (empty if all eigenvalues larger than separation cut feasibility tolerance)
-    if !isempty(T_eig_obj[:values])
-        viol = -minimum(T_eig_obj[:values])
+    if !isempty(T_eig_obj.values)
+        viol = -minimum(T_eig_obj.values)
 
         # K* separation cut is sum_{j: lambda_j < 0} T_eig_j T_eig_j'
-        T_eig = T_eig_obj[:vectors]
+        T_eig = T_eig_obj.vectors
         if add_cuts && clean_array!(m, T_eig)
             is_viol_cut = add_cut_sdp!(m, T, T_eig)
             m.logs[:SDP][:n_sep] += 1
@@ -2445,7 +2445,7 @@ function calc_infeas(cones, vals)
         elseif cone == :NonPos
             viol_lin = max(viol_lin, maximum(vals[idx]))
         elseif cone == :SOC
-            viol_soc = max(viol_soc, vecnorm(vals[idx[j]] for j in 2:length(idx)) - vals[idx[1]])
+            viol_soc = max(viol_soc, norm(vals[idx[j]] for j in 2:length(idx)) - vals[idx[1]])
         elseif cone == :SOCRotated
             # Convert to SOC and calculate using SOC violation function, maintain original scaling
             # (p1, p2, q) in RSOC <-> (sqrt2inv*(p1+p2), sqrt2inv*(-p1+p2), q) in SOC
