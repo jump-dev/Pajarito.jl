@@ -18,6 +18,23 @@ module Pajarito
 
 import MathProgBase
 
+using Compat.Printf
+using Compat.SparseArrays
+using Compat.LinearAlgebra
+
+import Compat: undef
+import Compat: @warn
+import Compat: stdout
+import Compat: stderr
+
+if VERSION > v"0.7.0-"
+    # this is required because findall return type changed in v0.7
+    function SparseArrays.findnz(A::AbstractMatrix)
+        I = findall(!iszero, A)
+        return (getindex.(I, 1), getindex.(I, 2), A[I])
+    end
+end
+
 include("conic_dual_solver.jl")
 include("solver.jl")
 include("conic_algorithm.jl")
