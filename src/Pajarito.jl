@@ -26,6 +26,9 @@ import Compat: undef
 import Compat: @warn
 import Compat: stdout
 import Compat: stderr
+import Compat: findall
+import Compat: hasmethod
+
 
 if VERSION > v"0.7.0-"
     # this is required because findall return type changed in v0.7

@@ -372,8 +372,6 @@ function MathProgBase.loadproblem!(m::PajaritoConicModel, c, A, b, cone_con, con
         if num_sdp > 0
             min_side = round(Int, sqrt(1/4+2*min_sdp)-1/2)
             max_side = round(Int, sqrt(1/4+2*max_sdp)-1/2)
-            display(min_side)
-            display(max_side)
             @printf "%16s | %7d | %7s^2 | %7s^2\n" "Pos. semidef." num_sdp min_side max_side
         end
     end
