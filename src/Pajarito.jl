@@ -28,6 +28,12 @@ import Compat: stdout
 import Compat: stderr
 import Compat: findall
 import Compat: hasmethod
+import Compat: rmul!
+import Compat: norm
+
+# Needed for Julia v0.6 compatability
+eigen! = eigfact!
+
 
 
 if VERSION > v"0.7.0-"
