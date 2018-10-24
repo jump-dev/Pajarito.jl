@@ -164,7 +164,7 @@ function MathProgBase.ConicModel(s::PajaritoSolver)
     end
 
     if s.sdp_soc && s.mip_solver_drives
-        warn("In the MIP-solver-driven algorithm, SOC cuts for SDP cones (sdp_soc) cannot be added from subproblems or primal solutions, but they will be added from the conic relaxation\n")
+        @warn "In the MIP-solver-driven algorithm, SOC cuts for SDP cones (sdp_soc) cannot be added from subproblems or primal solutions, but they will be added from the conic relaxation\n"
     end
 
     if !s.solve_subp

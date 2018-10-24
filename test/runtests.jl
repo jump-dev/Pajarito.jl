@@ -5,9 +5,26 @@
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 using JuMP
+using MathProgBase
 import ConicBenchmarkUtilities
 using Pajarito
-using Base.Test
+
+import GLPK
+
+using Compat.Test
+using Compat.Printf
+
+import Compat: stdout
+import Compat: stderr
+
+
+if VERSION < v"0.7.0-"
+    jump_path = Pkg.dir("JuMP")
+end
+
+if VERSION > v"0.7.0-"
+    jump_path = joinpath(dirname(pathof(JuMP)), "..")
+end
 
 # Tests absolute tolerance and Pajarito printing level
 TOL = 1e-3
@@ -15,7 +32,7 @@ ll = 3
 redirect = true
 
 # Define dictionary of solvers, using JuMP list of available solvers
-include(Pkg.dir("JuMP", "test", "solvers.jl"))
+include(joinpath(jump_path, "test", "solvers.jl"))
 include("qptest.jl")
 include("conictest.jl")
 
@@ -120,8 +137,8 @@ end
             run_sdpexp_conic(msd, mip, con, ll, redirect)
         end
 
-        flush(STDOUT)
-        flush(STDERR)
+        flush(stdout)
+        flush(stderr)
     end
 
     @testset "MISOCP solver - $mipname" for (mipname, mip) in solvers["MISOCP"]
@@ -145,8 +162,8 @@ end
             run_sdpexp_misocp(msd, mip, con, ll, redirect)
         end
 
-        flush(STDOUT)
-        flush(STDERR)
+        flush(stdout)
+        flush(stderr)
     end
 
     println()
