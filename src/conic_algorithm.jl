@@ -1943,7 +1943,7 @@ function add_subp_cut_sdp!(m, T, W_val)
 
     # K* projected (scaled) subproblem cut is sum_{j: lambda_j > 0} lambda_j W_eig_j W_eig_j'
     if !isempty(W_eig_obj.values)
-        sqrteig = sqrt.(W_eig_ob.values)
+        sqrteig = sqrt.(W_eig_obj.values)
 
         if m.scale_subp_up
             # Scale up to equivalent separation cuts, with lambdas >= 1
