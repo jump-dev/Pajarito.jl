@@ -31,8 +31,10 @@ import Compat: hasmethod
 import Compat: rmul!
 import Compat: norm
 
-# Needed for Julia v0.6 compatability
-eigen! = eigfact!
+# Needed for only for Julia v0.6 compatability
+if VERSION < v"0.7.0-"
+    eigen! = eigfact!
+end
 
 
 

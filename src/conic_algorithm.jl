@@ -483,9 +483,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     if m.log_level > 1
         @printf "\n%-33s" "Transforming data..."
     end
-    tic()
+    start_time_trans = time_ns()
     (c_new, A_new, b_new, cone_con_new, cone_var_new, keep_cols, var_types_new, cols_cont, cols_int) = transform_data(copy(m.c_orig), copy(m.A_orig), copy(m.b_orig), deepcopy(m.cone_con_orig), deepcopy(m.cone_var_orig), copy(m.var_types), m.solve_relax)
-    m.logs[:data_trans] += toq()
+    m.logs[:data_trans] += (time_ns() - start_time_trans)*1e-9
     if m.log_level > 1
         @printf "%6.2fs\n" m.logs[:data_trans]
     end
@@ -495,7 +495,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         if m.log_level > 1
             @printf "\n%-33s" "Creating conic subproblem..."
         end
-        tic()
+        start_time_subp = time_ns()
 
         map_rows_subp = create_conicsub_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new, cols_cont, cols_int)
 
@@ -513,7 +513,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
             m.update_conicsub = false
         end
 
-        m.logs[:data_conic] += toq()
+        m.logs[:data_conic] += (time_ns() - start_time_subp)*1e-9
         if m.log_level > 1
             @printf "%6.2fs\n" m.logs[:data_conic]
         end
@@ -527,9 +527,9 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
     if m.log_level > 1
         @printf "\n%-33s" "Building MIP model..."
     end
-    tic()
+    start_time_mip = time_ns()
     (r_idx_soc_relx, t_idx_soc_relx, r_idx_exp_relx, s_idx_exp_relx, t_idx_exp_relx, t_idx_sdp_relx) = create_mip_data!(m, c_new, A_new, b_new, cone_con_new, cone_var_new, var_types_new, map_rows_subp, cols_cont, cols_int)
-    m.logs[:data_mip] += toq()
+    m.logs[:data_mip] += (time_ns() - start_time_mip)*1e-9
     if m.log_level > 1
         @printf "%6.2fs\n" m.logs[:data_mip]
     end
@@ -549,7 +549,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         if m.log_level > 1
             @printf "\n%-33s" "Solving conic relaxation..."
         end
-        tic()
+        start_time_relax = time_ns()
         if m.dualize_relax
             solver_relax = ConicDualWrapper(conicsolver=m.cont_solver)
         else
@@ -558,7 +558,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
         model_relax = MathProgBase.ConicModel(solver_relax)
         MathProgBase.loadproblem!(model_relax, c_new, A_new, b_new, cone_con_new, cone_var_new)
         MathProgBase.optimize!(model_relax)
-        m.logs[:relax_solve] += toq()
+        m.logs[:relax_solve] += (time_ns() - start_time_relax)*1e-9
         if m.log_level > 1
             @printf "%6.2fs\n" m.logs[:relax_solve]
         end
@@ -603,7 +603,8 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                 end
 
                 # Add relaxation cut(s)
-                tic()
+                start_time_relax_cuts = time_ns()
+
                 m.aggregate_cut = JuMP.AffExpr(0)
 
                 for n in 1:m.num_soc
@@ -629,7 +630,7 @@ function MathProgBase.optimize!(m::PajaritoConicModel)
                     @constraint(m.model_mip, m.aggregate_cut >= 0)
                 end
 
-                m.logs[:relax_cuts] += toq()
+                m.logs[:relax_cuts] += (time_ns() - start_time_relax_cuts)*1e-9
             else
                 m.status = :FailedRelax
             end
@@ -1365,9 +1366,9 @@ function solve_iterative!(m)
         end
 
         # Solve MIP
-        tic()
+        start_time_mip = time_ns()
         status_mip = solve(m.model_mip, suppress_warnings=true)
-        m.logs[:mip_solve] += toq()
+        m.logs[:mip_solve] += (time_ns() - start_time_mip)*1e-9
         m.logs[:n_iter] += 1
 
         # End if MIP didn't stop because of (sub)optimal or user limit
@@ -1755,7 +1756,7 @@ function solve_subp_add_subp_cuts!(m, add_cuts::Bool)
     end
 
     # Add K* cut(s) from subproblem dual solution/ray
-    tic()
+    start_time_subp_cuts = time_ns()
     is_viol_any = false
     if !m.all_disagg
         m.aggregate_cut = JuMP.AffExpr(0)
@@ -1800,7 +1801,7 @@ function solve_subp_add_subp_cuts!(m, add_cuts::Bool)
         end
     end
 
-    m.logs[:subp_cuts] += toq()
+    m.logs[:subp_cuts] += (time_ns() - start_time_subp_cuts)*1e-9
 
     return is_viol_any
 end
@@ -1808,7 +1809,7 @@ end
 # Solve conic subproblem given some solution to the integer variables, update incumbent
 function solve_subp!(m, b_sub_int::Vector{Float64})
     # Load/solve conic model
-    tic()
+    start_time_subp_solve = time_ns()
     if m.update_conicsub
         # Reuse model already created by changing b vector
         MathProgBase.setbvec!(m.model_conic, b_sub_int)
@@ -1826,7 +1827,7 @@ function solve_subp!(m, b_sub_int::Vector{Float64})
     end
 
     MathProgBase.optimize!(m.model_conic)
-    m.logs[:subp_solve] += toq()
+    m.logs[:subp_solve] += (time_ns() - start_time_subp_solve)*1e-9
 
     status_conic = MathProgBase.status(m.model_conic)
     if status_conic == :Optimal
@@ -1971,7 +1972,7 @@ end
 
 # Check cone infeasibilities of current solution, add K* cuts from current solution for infeasible cones, if feasible check new incumbent
 function check_feas_add_sep_cuts!(m, add_cuts::Bool)
-    tic()
+    start_time_sep_cuts = time_ns()
     is_viol_any = false
     max_viol = 0.
 
@@ -1993,7 +1994,7 @@ function check_feas_add_sep_cuts!(m, add_cuts::Bool)
         max_viol = max(viol, max_viol)
     end
 
-    m.logs[:sep_cuts] += toq()
+    m.logs[:sep_cuts] += (time_ns() - start_time_sep_cuts)*1e-9
 
     # Check feasibility of solution (via worst cone violation) and return whether feasible and whether added violated cut
     if max_viol < feas_factor*m.mip_feas_tol
