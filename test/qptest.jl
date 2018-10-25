@@ -9,7 +9,7 @@ function solve_jump(testname, m, redirect)
     flush(stdout)
     flush(stderr)
     @printf "%-30s... " testname
-    start_time = time_ns()
+    start_time = time()
 
     if redirect
         mktemp() do path,io
@@ -38,7 +38,7 @@ function solve_jump(testname, m, redirect)
     flush(stdout)
     flush(stderr)
 
-    rt_time = ((time_ns() - start_time)*1e-9)
+    rt_time = time() - start_time
     if isa(status, ErrorException)
         @printf ":%-16s %5.2f s\n" "ErrorException" rt_time
     else

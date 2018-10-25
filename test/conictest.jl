@@ -9,7 +9,7 @@ function solve_cbf(testname, probname, solver, redirect)
     flush(stdout)
     flush(stderr)
     @printf "%-30s... " testname
-    start_time = time_ns()
+    start_time = time()
 
     dat = ConicBenchmarkUtilities.readcbfdata("cbf/$(probname).cbf")
     (c, A, b, con_cones, var_cones, vartypes, sense, objoffset) = ConicBenchmarkUtilities.cbftompb(dat)
@@ -45,7 +45,7 @@ function solve_cbf(testname, probname, solver, redirect)
     flush(stderr)
 
     status = MathProgBase.status(m)
-    time = MathProgBase.getsolvetime(m)
+    solve_time = MathProgBase.getsolvetime(m)
     if sense == :Max
         objval = -MathProgBase.getobjval(m)
         objbound = -MathProgBase.getobjbound(m)
@@ -54,12 +54,12 @@ function solve_cbf(testname, probname, solver, redirect)
         objbound = MathProgBase.getobjbound(m)
     end
     sol = MathProgBase.getsolution(m)
-    rt_time = ((time_ns() - start_time)*1e-9)
+    rt_time = time() - start_time
     @printf ":%-16s %5.2f s\n" status rt_time
     flush(stdout)
     flush(stderr)
 
-    return (status, time, objval, objbound, sol)
+    return (status, solve_time, objval, objbound, sol)
 end
 
 # SOC problems for NLP and conic algorithms
