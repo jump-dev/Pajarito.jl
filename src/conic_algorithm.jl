@@ -2060,7 +2060,7 @@ function add_sep_cut_exp!(m, add_cuts::Bool, r, s, t)
 
             # K* separation cut on (r,s,t) is (t/r, -2*log(exp(1)*t/2r), -2)
             u_val = t_val/r_val
-            v_val = -2 .* (1. + log(u_val/2.))
+            v_val = -2.0 * (1.0 + log(u_val/2.0))
             is_viol_cut = add_cut_exp!(m, r, s, t, u_val, v_val, -2.)
             m.logs[:ExpPrimal][:n_sep] += 1
         end
@@ -2128,11 +2128,11 @@ function add_cut_soc!(m, r, t, pi, rho, u_val, w_val)
             if m.soc_abslift
                 # Disaggregated K* cut on (r, pi_j, rho_j) is ((w_j/u)^2/2, 1, -|w_j/u|)
                 # Scale by dim*u_val
-                cut_expr = dim*w_val[j]^2/(2 .* u_val)*r + dim*u_val*pi[j] - dim*abs(w_val[j])*rho[j]
+                cut_expr = dim*w_val[j]^2/(2.0 * u_val)*r + dim*u_val*pi[j] - dim*abs(w_val[j])*rho[j]
             else
                 # Disaggregated K* cut on (r, pi_j, t_j) is ((w_j/u)^2/2, 1, w_j/u)
                 # Scale by dim*u_val
-                cut_expr = dim*w_val[j]^2/(2 .* u_val)*r + dim*u_val*pi[j] + dim*w_val[j]*t[j]
+                cut_expr = dim*w_val[j]^2/(2.0 * u_val)*r + dim*u_val*pi[j] + dim*w_val[j]*t[j]
             end
 
             is_viol_cut |= add_cut!(m, cut_expr, m.logs[:SOC])
@@ -2181,7 +2181,7 @@ function add_cut_sdp!(m, T, W_eig)
                 # Use norm to add SOC constraint
                 # (p1, p2, q) in RSOC <-> (p1+p2, p1-p2, sqrt2*q) in SOC
                 p2 = sum(T[k,l]*W_eig_j[k]*W_eig_j[l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
-                cut_expr = T[i,i] + p2 - norm([(T[i,i] - p2), 2 .* sum(T[k,i]*W_eig_j[k] for k in 1:dim if k!=i)])
+                cut_expr = T[i,i] + p2 - norm([(T[i,i] - p2), 2.0 * sum(T[k,i]*W_eig_j[k] for k in 1:dim if k!=i)])
             else
                 # Using SDP linear eig cuts
                 # K* cut on T is W_eig_j*W_eig_j'
@@ -2204,7 +2204,7 @@ function add_cut_sdp!(m, T, W_eig)
             # Use norm to add SOC constraint
             # (p1, p2, q) in RSOC <-> (p1+p2, p1-p2, sqrt2*q) in SOC
             p2 = sum(T[k,l]*W[k,l] for k in 1:dim, l in 1:dim if (k!=i && l!=i))
-            cut_expr = T[i,i] + p2 - norm([(T[i,i] - p2), 2 .* [sum((T[k,i]*W_eig[k,j]) for k in 1:dim if k!=i) for j in 1:num_eig]...])
+            cut_expr = T[i,i] + p2 - norm([(T[i,i] - p2), 2.0 * [sum((T[k,i]*W_eig[k,j]) for k in 1:dim if k!=i) for j in 1:num_eig]...])
         else
             # Using SDP linear full cut
             # K* cut on T is W
