@@ -38,7 +38,6 @@ end
 
 if VERSION > v"0.7.0-"
     # this is required because findall return type changed in v0.7
-    # TODO replace the "findnz" function with this code once support for v0.6 is dropped
     function SparseArrays.findnz(A::AbstractMatrix)
         I = findall(!iszero, A)
         return (getindex.(I, 1), getindex.(I, 2), A[I])
