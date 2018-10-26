@@ -2,9 +2,9 @@
 
 # Pajarito
 
-Pavito is a **mixed-integer convex programming** (MICP) solver package written in [Julia](http://julialang.org/). MICP problems are convex except for restrictions that some variables take binary or integer values.
+Pajarito is a **mixed-integer convex programming** (MICP) solver package written in [Julia](http://julialang.org/). MICP problems are convex except for restrictions that some variables take binary or integer values.
 
-Pavito solves MICP problems by constructing sequential polyhedral outer-approximations of the convex feasible set, similar to [Bonmin](https://projects.coin-or.org/Bonmin). The underlying algorithm has theoretical finite-time convergence under reasonable assumptions. Pavito accesses state-of-the-art MILP solvers and continuous convex conic solvers through the MathProgBase interface. It currently accepts mixed-integer conic problems with second-order, rotated second-order, (primal) exponential, and positive semidefinite cones. MISOCP and MISDP are two established sub-classes of MICPs that Pajarito can solve.
+Pajarito solves MICP problems by constructing sequential polyhedral outer-approximations of the convex feasible set, similar to [Bonmin](https://projects.coin-or.org/Bonmin). The underlying algorithm has theoretical finite-time convergence under reasonable assumptions. Pajarito accesses state-of-the-art MILP solvers and continuous convex conic solvers through the MathProgBase interface. It currently accepts mixed-integer conic problems with second-order, rotated second-order, (primal) exponential, and positive semidefinite cones. MISOCP and MISDP are two established sub-classes of MICPs that Pajarito can solve.
 
 For algorithms that use a derivative-based nonlinear programming (NLP) solver (e.g. Ipopt) instead of a conic solver, use [Pavito](https://github.com/JuliaOpt/Pavito.jl). Pavito is a convex mixed-integer nonlinear programming (convex MINLP) solver. As Pavito relies on gradient cuts, it can fail near points of nondifferentiability. Pajarito may be more robust than Pavito on nonsmooth problems (such as MISOCPs).
 
