@@ -6,15 +6,15 @@
 
 # Take a JuMP model and solver and solve, redirecting output
 function solve_jump(testname, m, redirect)
-    flush(STDOUT)
-    flush(STDERR)
+    flush(stdout)
+    flush(stderr)
     @printf "%-30s... " testname
-    tic()
+    start_time = time()
 
     if redirect
         mktemp() do path,io
-            out = STDOUT
-            err = STDERR
+            out = stdout
+            err = stderr
             redirect_stdout(io)
             redirect_stderr(io)
 
@@ -35,17 +35,18 @@ function solve_jump(testname, m, redirect)
             e
         end
     end
-    flush(STDOUT)
-    flush(STDERR)
+    flush(stdout)
+    flush(stderr)
 
+    rt_time = time() - start_time
     if isa(status, ErrorException)
-        @printf ":%-16s %5.2f s\n" "ErrorException" toq()
+        @printf ":%-16s %5.2f s\n" "ErrorException" rt_time
     else
-        @printf ":%-16s %5.2f s\n" status toq()
+        @printf ":%-16s %5.2f s\n" status rt_time
     end
 
-    flush(STDOUT)
-    flush(STDERR)
+    flush(stdout)
+    flush(stderr)
 
     return status
 end

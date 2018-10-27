@@ -5,9 +5,24 @@
 #  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 using JuMP
+using MathProgBase
 import ConicBenchmarkUtilities
 using Pajarito
-using Base.Test
+
+using Compat.Test
+using Compat.Printf
+
+import Compat: stdout
+import Compat: stderr
+
+
+if VERSION < v"0.7.0-"
+    jump_path = Pkg.dir("JuMP")
+end
+
+if VERSION > v"0.7.0-"
+    jump_path = joinpath(dirname(pathof(JuMP)), "..")
+end
 
 # Tests absolute tolerance and Pajarito printing level
 TOL = 1e-3
@@ -15,7 +30,7 @@ ll = 3
 redirect = true
 
 # Define dictionary of solvers, using JuMP list of available solvers
-include(Pkg.dir("JuMP", "test", "solvers.jl"))
+include(joinpath(jump_path, "test", "solvers.jl"))
 include("qptest.jl")
 include("conictest.jl")
 
@@ -30,9 +45,9 @@ tol_feas = 1e-7
 tol_gap = 0.0
 
 if glp
-    solvers["MILP"]["GLPK"] = GLPKMathProgInterface.GLPKSolverMIP(msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas, mip_gap=tol_gap)
+    solvers["MILP"]["GLPK"] = GLPKMathProgInterface.GLPKSolverMIP(msg_lev=0, tol_int=tol_int, tol_bnd=tol_feas, mip_gap=tol_gap)
     if eco
-        solvers["MISOCP"]["Paj(GLPK+ECOS)"] = PajaritoSolver(mip_solver_drives=false, mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=GLPK.MSG_OFF, tol_int=tol_int, tol_bnd=tol_feas/10, mip_gap=tol_gap), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-7)
+        solvers["MISOCP"]["Paj(GLPK+ECOS)"] = PajaritoSolver(mip_solver_drives=false, mip_solver=GLPKMathProgInterface.GLPKSolverMIP(presolve=true, msg_lev=0, tol_int=tol_int, tol_bnd=tol_feas/10, mip_gap=tol_gap), cont_solver=ECOS.ECOSSolver(verbose=false), log_level=0, rel_gap=1e-7)
     end
 end
 if cpx
@@ -120,8 +135,8 @@ end
             run_sdpexp_conic(msd, mip, con, ll, redirect)
         end
 
-        flush(STDOUT)
-        flush(STDERR)
+        flush(stdout)
+        flush(stderr)
     end
 
     @testset "MISOCP solver - $mipname" for (mipname, mip) in solvers["MISOCP"]
@@ -145,8 +160,8 @@ end
             run_sdpexp_misocp(msd, mip, con, ll, redirect)
         end
 
-        flush(STDOUT)
-        flush(STDERR)
+        flush(stdout)
+        flush(stderr)
     end
 
     println()
