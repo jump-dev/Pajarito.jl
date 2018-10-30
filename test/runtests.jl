@@ -21,6 +21,9 @@ if VERSION < v"0.7.0-"
 end
 
 if VERSION > v"0.7.0-"
+    using Logging
+    disable_logging(Logging.Error)
+
     jump_path = joinpath(dirname(pathof(JuMP)), "..")
 end
 
