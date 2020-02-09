@@ -1,6 +1,5 @@
 name = "Pajarito"
 uuid = "2f354839-79df-5901-9f0a-cdb2aac6fe30"
-authors = ["Chris Coey, Miles Lubin, Juan Pablo Vielma"]
 repo = "https://github.com/JuliaOpt/Pajarito.jl.git"
 version = "0.6.2"
 
