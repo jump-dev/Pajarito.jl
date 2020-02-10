@@ -84,9 +84,8 @@ if eco
     solvers["SOC"]["ECOS"] = solvers["Exp+SOC"]["ECOS"] = ECOS.ECOSSolver(verbose=false, reltol=1e-9, feastol=1e-9, reltol_inacc=1e-5, feastol_inacc=1e-8)
 end
 if scs
-    solvers["PSD+Exp"]["SCS"] = SCS.SCSSolver(acceleration_lookback=1, eps=1e-5, max_iters=1e7, verbose=0)
-    solvers["Exp+SOC"]["SCS"] = SCS.SCSSolver(acceleration_lookback=1, eps=1e-5, max_iters=1e7, verbose=0)
-    solvers["SOC"]["SCS"] = solvers["PSD+SOC"]["SCS"] =  SCS.SCSSolver(acceleration_lookback=1, eps=1e-6, max_iters=1e7, verbose=0)
+    # solvers["SOC"]["SCS"] = solvers["Exp+SOC"]["SCS"] = SCS.SCSSolver(eps=1e-5, max_iters=1e7, verbose=0)
+    solvers["PSD+SOC"]["SCS"] = solvers["PSD+Exp"]["SCS"] = SCS.SCSSolver(eps=1e-5, max_iters=1e7, verbose=0)
 end
 if mos
     solvers["SOC"]["Mosek"] = solvers["PSD+SOC"]["Mosek"] = Mosek.MosekSolver(LOG=0, MSK_DPAR_INTPNT_CO_TOL_REL_GAP=1e-9, MSK_DPAR_INTPNT_CO_TOL_PFEAS=1e-10, MSK_DPAR_INTPNT_CO_TOL_DFEAS=1e-10, MSK_DPAR_INTPNT_CO_TOL_NEAR_REL=1e3)
