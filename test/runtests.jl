@@ -9,23 +9,13 @@ using MathProgBase
 import ConicBenchmarkUtilities
 using Pajarito
 
-using Compat.Test
-using Compat.Printf
+using Test
+using Printf
 
-import Compat: stdout
-import Compat: stderr
+using Logging
+disable_logging(Logging.Error)
 
-
-if VERSION < v"0.7.0-"
-    jump_path = Pkg.dir("JuMP")
-end
-
-if VERSION > v"0.7.0-"
-    using Logging
-    disable_logging(Logging.Error)
-
-    jump_path = joinpath(dirname(pathof(JuMP)), "..")
-end
+jump_path = joinpath(dirname(pathof(JuMP)), "..")
 
 # Tests absolute tolerance and Pajarito printing level
 TOL = 1e-3
