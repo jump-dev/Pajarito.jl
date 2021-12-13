@@ -1,5 +1,8 @@
 [![Build Status](https://travis-ci.org/JuliaOpt/Pajarito.jl.svg?branch=master)](https://travis-ci.org/JuliaOpt/Pajarito.jl) [![codecov.io](https://codecov.io/github/JuliaOpt/Pajarito.jl/coverage.svg?branch=master)](https://codecov.io/github/JuliaOpt/Pajarito.jl?branch=master)
 
+**NOTE** Pajarito is currently being rewritten for MathOptInterface at [MOIPajarito.jl](https://github.com/chriscoey/MOIPajarito.jl). This future version also makes it easy to add support for more MathOptInterface cones.
+
+
 # Pajarito
 
 Pajarito is a **mixed-integer convex programming** (MICP) solver package written in [Julia](http://julialang.org/). MICP problems are convex except for restrictions that some variables take binary or integer values.
