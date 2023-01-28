@@ -88,7 +88,7 @@ function _get_cuts(
     p = LinearAlgebra.norm(r)
     u = cache.oa_s[1]
     @views w = cache.oa_s[2:end]
-    cut = JuMP.@expression(opt.oa_model, p * u + JuMP.dot(r, w))
+    cut = JuMP.@expression(opt.oa_model, p * u + LinearAlgebra.dot(r, w))
     return [cut]
 end
 

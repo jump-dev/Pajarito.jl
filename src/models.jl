@@ -12,7 +12,7 @@ function setup_models(opt::Optimizer)
     # mixed-integer OA model, add discrete constraints later
     oa_model = opt.oa_model = JuMP.Model(() -> opt.oa_opt)
     oa_x = opt.oa_x = JuMP.@variable(oa_model, [1:length(opt.c)])
-    JuMP.@objective(oa_model, Min, JuMP.dot(opt.c, oa_x))
+    JuMP.@objective(oa_model, Min, LinearAlgebra.dot(opt.c, oa_x))
     JuMP.@constraint(oa_model, opt.A * oa_x .== opt.b)
     oa_aff = JuMP.@expression(oa_model, opt.h - opt.G * oa_x)
 
@@ -20,7 +20,7 @@ function setup_models(opt::Optimizer)
         # continuous relaxation model
         relax_model = opt.relax_model = JuMP.Model(() -> opt.conic_opt)
         relax_x = opt.relax_x = JuMP.@variable(relax_model, [1:length(opt.c)])
-        JuMP.@objective(relax_model, Min, JuMP.dot(opt.c, relax_x))
+        JuMP.@objective(relax_model, Min, LinearAlgebra.dot(opt.c, relax_x))
         JuMP.@constraint(
             relax_model,
             opt.b - opt.A * relax_x in MOI.Zeros(length(opt.b))
@@ -48,7 +48,7 @@ function setup_models(opt::Optimizer)
         # continuous subproblem model
         subp_model = opt.subp_model = JuMP.Model(() -> opt.conic_opt)
         subp_x = opt.subp_x = JuMP.@variable(subp_model, [1:num_cont_vars])
-        JuMP.@objective(subp_model, Min, JuMP.dot(c_cont, subp_x))
+        JuMP.@objective(subp_model, Min, LinearAlgebra.dot(c_cont, subp_x))
         K0 = MOI.Zeros(length(opt.b_cont))
         opt.subp_eq = JuMP.@constraint(subp_model, -A_cont * subp_x in K0)
         subp_aff = JuMP.@expression(subp_model, -G_cont * subp_x)

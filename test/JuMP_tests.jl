@@ -343,8 +343,8 @@ function _psd2(opt)
     m = JuMP.Model(opt)
 
     X = JuMP.@variable(m, [1:d, 1:d], PSD)
-    JuMP.@objective(m, Max, JuMP.dot(mat, X))
-    JuMP.@constraint(m, JuMP.tr(X) == 1)
+    JuMP.@objective(m, Max, LinearAlgebra.dot(mat, X))
+    JuMP.@constraint(m, LinearAlgebra.tr(X) == 1)
     JuMP.optimize!(m)
     @test JuMP.termination_status(m) == MOI.OPTIMAL
     @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
