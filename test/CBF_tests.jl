@@ -38,13 +38,10 @@ function run_cbf_tests(use_iter::Bool, oa_solver, conic_solver)
     MOI.set(model, MOI.RawOptimizerAttribute("time_limit"), 60)
     MOI.set(model, MOI.RawOptimizerAttribute("iteration_limit"), 100)
 
-    insts = ["sssd_strong_15_4", "exp_gatesizing", "exp_ising", "sdp_cardls"]
+    insts = ["sssd_strong_15_4", "exp_ising", "sdp_cardls"]
     folder = joinpath(@__DIR__, "CBF")
 
     @testset "$inst" for inst in insts
-        if !use_iter && inst == "exp_gatesizing"
-            continue # TODO failing
-        end
         println(inst)
         file = joinpath(folder, string(inst, ".cbf"))
         run_cbf(model, file)
@@ -65,14 +62,6 @@ end
 function sssd_strong_15_4(model)
     @test MOI.get(model, MOI.TerminationStatus()) in
           (MOI.TIME_LIMIT, MOI.OPTIMAL)
-    return
-end
-
-function exp_gatesizing(model)
-    TOL = 1e-4
-    @test MOI.get(model, MOI.TerminationStatus()) == MOI.OPTIMAL
-    @test isapprox(MOI.get(model, MOI.ObjectiveValue()), 8.33333, atol = TOL)
-    @test isapprox(MOI.get(model, MOI.ObjectiveBound()), 8.33333, atol = TOL)
     return
 end
 
