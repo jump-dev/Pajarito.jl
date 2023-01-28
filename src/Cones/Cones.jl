@@ -46,7 +46,7 @@ function dot_expr(
     vars::AbstractVecOrMat{<:Union{VR,AE}},
     opt::Optimizer,
 )
-    return JuMP.@expression(opt.oa_model, JuMP.dot(z, vars))
+    return JuMP.@expression(opt.oa_model, LinearAlgebra.dot(z, vars))
 end
 
 function clean_array!(z::AbstractArray)
