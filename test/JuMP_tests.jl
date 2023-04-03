@@ -69,7 +69,16 @@ function run_jump_tests(
         println(inst)
         inst(opt)
     end
+    run_cut_test(_soc1, opt)
+    run_cut_test(_expdesign, opt)
     return
+end
+
+function run_cut_test(test_function, opt)
+    MOI.empty!(opt)
+    @test MOI.get(opt, Pajarito.NumberOfCuts()) == 0   
+    test_function(opt)
+    @test MOI.get(opt, Pajarito.NumberOfCuts()) > 0
 end
 
 function _soc1(opt)
