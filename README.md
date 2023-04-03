@@ -1,18 +1,35 @@
-# Pajarito
+# Pajarito.jl
 
-Pajarito is a **mixed-integer convex programming** (MICP) solver package written in [Julia](http://julialang.org/). 
-MICP problems are convex except for restrictions that some variables take binary or integer values.
+Pajarito is a **mixed-integer convex programming** (MICP) solver package written
+in [Julia](http://julialang.org/).
 
-Pajarito solves MICP problems in conic form, by constructing sequential polyhedral outer approximations of the conic feasible set. 
-The underlying algorithm has theoretical finite-time convergence under reasonable assumptions. 
-Pajarito accesses state-of-the-art MILP solvers and continuous conic solvers through MathOptInterface. 
+MICP problems are convex except for restrictions that some variables take binary
+or integer values.
 
-For algorithms that use a derivative-based nonlinear programming (NLP) solver (e.g. Ipopt) instead of a conic solver, use [Pavito](https://github.com/jump-dev/Pavito.jl). 
-Pavito is a convex mixed-integer nonlinear programming (convex MINLP) solver. 
-As Pavito relies on gradient cuts, it can fail near points of nondifferentiability. 
-Pajarito may be more robust than Pavito on nonsmooth problems.
+Pajarito solves MICP problems in conic form, by constructing sequential
+polyhedral outer approximations of the conic feasible set.
 
-## Installation and usage
+The underlying algorithm has theoretical finite-time convergence under
+reasonable assumptions.
+
+Pajarito accesses state-of-the-art MILP solvers and continuous conic solvers
+through [MathOptInterface](https://github.com/jump-dev/MathOptInterface.jl).
+
+## Pavito
+
+For algorithms that use a derivative-based nonlinear programming (NLP) solver
+(for example, Ipopt) instead of a conic solver, use [Pavito](https://github.com/jump-dev/Pavito.jl).
+
+Pavito is a convex mixed-integer nonlinear programming (convex MINLP) solver.
+Because Pavito relies on gradient cuts, it can fail near points of
+nondifferentiability. Pajarito may be more robust than Pavito on nonsmooth
+problems.
+
+## License
+
+`Pajarito.jl` is licensed under the [MPL 2.0 license](https://github.com/jump-dev/Pajarito.jl/blob/master/LICENSE.md).
+
+## Installation
 
 Pajarito can be installed through the Julia package manager:
 ```julia
@@ -25,12 +42,12 @@ There are several convenient ways to model MICPs in Julia and access Pajarito.
 
 ## MIP and continuous solvers
 
-The algorithm implemented by Pajarito itself is relatively simple, and most of the hard work is performed by the MIP outer approximation (OA) solver and the continuous conic solver. 
-**The performance of Pajarito depends on these two types of solvers.** 
+The algorithm implemented by Pajarito itself is relatively simple, and most of the hard work is performed by the MIP outer approximation (OA) solver and the continuous conic solver.
+**The performance of Pajarito depends on these two types of solvers.**
 
-The OA solver (typically a mixed-integer linear solver) is specified by the `oa_solver` option. 
-You must first load the Julia package that provides this solver, e.g. `using Gurobi`. 
-The continuous conic solver is specified by the `conic_solver` option. 
+The OA solver (typically a mixed-integer linear solver) is specified by the `oa_solver` option.
+You must first load the Julia package that provides this solver, e.g. `using Gurobi`.
+The continuous conic solver is specified by the `conic_solver` option.
 See JuMP's [list of supported solvers](https://jump.dev/JuMP.jl/stable/installation/#Supported-solvers).
 
 ## Solver options
@@ -68,12 +85,12 @@ oa_solver = optimizer_with_attributes(HiGHS.Optimizer,
     "mip_feasibility_tolerance" => 1e-8,
     "mip_rel_gap" => 1e-6,
 )
-conic_solver = optimizer_with_attributes(Hypatia.Optimizer, 
+conic_solver = optimizer_with_attributes(Hypatia.Optimizer,
     MOI.Silent() => true,
 )
 opt = optimizer_with_attributes(Pajarito.Optimizer,
-    "time_limit" => 60, 
-    "oa_solver" => oa_solver, 
+    "time_limit" => 60,
+    "oa_solver" => oa_solver,
     "conic_solver" => conic_solver,
 )
 
@@ -104,8 +121,8 @@ The examples folder of PajaritoExtras also contains many applied mixed-integer c
 
 ## Bug reports and support
 
-Please report any issues via the Github [issue tracker](https://github.com/jump-dev/Pajarito.jl/issues). 
-All types of issues are welcome and encouraged; this includes bug reports, documentation typos, feature requests, etc. 
+Please report any issues via the Github [issue tracker](https://github.com/jump-dev/Pajarito.jl/issues).
+All types of issues are welcome and encouraged; this includes bug reports, documentation typos, feature requests, etc.
 The [Optimization (Mathematical)](https://discourse.julialang.org/c/domain/opt) category on Discourse is appropriate for general discussion.
 
 ## References
