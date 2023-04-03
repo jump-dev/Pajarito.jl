@@ -510,7 +510,7 @@ function _soc1_ncuts(opt)
     JuMP.set_integer(x)
     JuMP.optimize!(m)
     @test JuMP.termination_status(m) == MOI.INFEASIBLE
-    
+
     JuMP.delete(m, xlb2)
     JuMP.@constraint(m, x >= 0.5)
     JuMP.optimize!(m)
