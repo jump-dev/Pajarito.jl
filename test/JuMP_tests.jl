@@ -64,21 +64,13 @@ function run_jump_tests(
         _psd2,
         _expdesign,
         _specialorderedset,
+        _soc1_ncuts,
     ]
     @testset "$inst" for inst in insts
         println(inst)
         inst(opt)
     end
-    run_cut_test(_soc1, opt)
-    run_cut_test(_expdesign, opt)
     return
-end
-
-function run_cut_test(test_function, opt)
-    MOI.empty!(opt)
-    @test MOI.get(opt, Pajarito.NumberOfCuts()) == 0
-    test_function(opt)
-    @test MOI.get(opt, Pajarito.NumberOfCuts()) > 0
 end
 
 function _soc1(opt)
@@ -489,6 +481,60 @@ function _specialorderedset(opt)
         @test isapprox(JuMP.value(u), opt_obj, atol = TOL)
         @test isapprox(JuMP.value.(w), sol, atol = TOL)
     end
+    return
+end
+
+function _soc1_ncuts(opt)
+    TOL = 1e-4
+    m = JuMP.Model(opt)
+
+    JuMP.@variable(m, x)
+    JuMP.@objective(m, Min, -x)
+    xlb1 = JuMP.@constraint(m, x >= 4)
+    soc1 = JuMP.@constraint(m, [3.5, x] in JuMP.SecondOrderCone())
+    @test MOI.get(m, Pajarito.NumberOfCuts()) == 0
+    JuMP.optimize!(m)
+    @test JuMP.termination_status(m) == MOI.INFEASIBLE
+    @test JuMP.primal_status(m) == MOI.NO_SOLUTION
+
+    JuMP.delete(m, xlb1)
+    JuMP.optimize!(m)
+    @test MOI.get(m, Pajarito.NumberOfCuts()) > 0
+    @test JuMP.termination_status(m) == MOI.OPTIMAL
+    @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
+    @test isapprox(JuMP.objective_value(m), -3.5, atol = TOL)
+    @test isapprox(JuMP.objective_bound(m), -3.5, atol = TOL)
+    @test isapprox(JuMP.value(x), 3.5, atol = TOL)
+
+    xlb2 = JuMP.@constraint(m, x >= 3.1)
+    JuMP.set_integer(x)
+    JuMP.optimize!(m)
+    @test JuMP.termination_status(m) == MOI.INFEASIBLE
+    
+    JuMP.delete(m, xlb2)
+    JuMP.@constraint(m, x >= 0.5)
+    JuMP.optimize!(m)
+    @test JuMP.termination_status(m) == MOI.OPTIMAL
+    @test MOI.get(m, Pajarito.NumberOfCuts()) > 0
+    @test isapprox(JuMP.objective_value(m), -3, atol = TOL)
+    @test isapprox(JuMP.objective_bound(m), -3, atol = TOL)
+    @test isapprox(JuMP.value(x), 3, atol = TOL)
+
+    JuMP.@objective(m, Max, -3x)
+    JuMP.optimize!(m)
+    @test MOI.get(m, Pajarito.NumberOfCuts()) > 0
+    @test JuMP.termination_status(m) == MOI.OPTIMAL
+    @test isapprox(JuMP.objective_value(m), -3, atol = TOL)
+    @test isapprox(JuMP.objective_bound(m), -3, atol = TOL)
+    @test isapprox(JuMP.value(x), 1, atol = TOL)
+
+    JuMP.set_start_value(x, 1)
+    JuMP.optimize!(m)
+    @test JuMP.termination_status(m) == MOI.OPTIMAL
+    @test MOI.get(m, Pajarito.NumberOfCuts()) > 0
+    @test isapprox(JuMP.objective_value(m), -3, atol = TOL)
+    @test isapprox(JuMP.objective_bound(m), -3, atol = TOL)
+    @test isapprox(JuMP.value(x), 1, atol = TOL)
     return
 end
 
