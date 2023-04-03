@@ -64,7 +64,7 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     # used/modified during optimize
     lazy_cb::Any
     new_incumbent::Bool
-    int_sols_cuts::Dict{UInt,Vector{JuMP.AffineExpr}}
+    int_sols_cuts::Dict{UInt,Vector{JuMP.AffExpr}}
     use_oa_starts::Bool
 
     # used by MOI wrapper
@@ -131,7 +131,7 @@ function empty_optimize(opt::Optimizer)
     opt.num_heuristic_cbs = 0
     opt.lazy_cb = nothing
     opt.new_incumbent = false
-    opt.int_sols_cuts = Dict{UInt,Vector{JuMP.AffineExpr}}()
+    opt.int_sols_cuts = Dict{UInt,Vector{JuMP.AffExpr}}()
 
     if !isnothing(opt.oa_opt)
         MOI.empty!(opt.oa_opt)

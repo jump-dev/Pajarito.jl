@@ -41,7 +41,7 @@ num_ext_variables(::Cache) = 0
 
 function dot_expr(
     z::AbstractVecOrMat{Float64},
-    vars::AbstractVecOrMat{<:Union{JuMP.VariableRef,JuMP.AffineExpr}},
+    vars::AbstractVecOrMat{<:Union{JuMP.VariableRef,JuMP.AffExpr}},
     opt::Optimizer,
 )
     return JuMP.@expression(opt.oa_model, LinearAlgebra.dot(z, vars))

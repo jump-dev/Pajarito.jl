@@ -148,7 +148,7 @@ end
 
 # to balance variable dimension and sparsity of the constraint matrix with K* cuts, only add
 # slacks if number of variables involved in this constraint exceeds the constraint dimension
-function create_slacks(model::JuMP.Model, expr_vec::Vector{JuMP.AffineExpr})
+function create_slacks(model::JuMP.Model, expr_vec::Vector{JuMP.AffExpr})
     slacks = JuMP.VariableRef[]
     slack_idxs = Int[]
     vars = Set(k.index.value for f in expr_vec for k in keys(f.terms))

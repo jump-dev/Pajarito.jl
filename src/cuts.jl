@@ -35,7 +35,7 @@ end
 function add_subp_cuts(
     opt::Optimizer,
     viol_only::Bool,
-    cuts_cache::Union{Nothing,Vector{JuMP.AffineExpr}},
+    cuts_cache::Union{Nothing,Vector{JuMP.AffExpr}},
 )
     JuMP.has_duals(opt.subp_model) || return false
 

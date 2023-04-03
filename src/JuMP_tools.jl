@@ -5,11 +5,7 @@
 
 # tools for JuMP functions
 
-function add_cuts(
-    cuts::Vector{JuMP.AffineExpr},
-    opt::Optimizer,
-    viol_only::Bool,
-)
+function add_cuts(cuts::Vector{JuMP.AffExpr}, opt::Optimizer, viol_only::Bool)
     if viol_only
         # filter out unviolated cuts
         cuts = filter(cut -> get_value(cut, opt.lazy_cb) < -opt.tol_feas, cuts)
@@ -20,26 +16,26 @@ function add_cuts(
     return !isempty(cuts)
 end
 
-function _add_cuts(cuts::Vector{JuMP.AffineExpr}, model::JuMP.Model, ::Nothing)
+function _add_cuts(cuts::Vector{JuMP.AffExpr}, model::JuMP.Model, ::Nothing)
     JuMP.@constraint(model, cuts .>= 0)
     return
 end
 
-function _add_cuts(cuts::Vector{JuMP.AffineExpr}, model::JuMP.Model, cb)
+function _add_cuts(cuts::Vector{JuMP.AffExpr}, model::JuMP.Model, cb)
     cons = JuMP.@build_constraint(cuts .>= 0)
     MOI.submit.(model, MOI.LazyConstraint(cb), cons)
     return
 end
 
-function get_value(expr::Union{JuMP.VariableRef,JuMP.AffineExpr}, ::Nothing)
+function get_value(expr::Union{JuMP.VariableRef,JuMP.AffExpr}, ::Nothing)
     return JuMP.value(expr)
 end
 
-function get_value(expr::Union{JuMP.VariableRef,JuMP.AffineExpr}, cb)
+function get_value(expr::Union{JuMP.VariableRef,JuMP.AffExpr}, cb)
     return JuMP.callback_value(cb, expr)
 end
 
-function get_value(exprs::Vector{<:Union{JuMP.VariableRef,JuMP.AffineExpr}}, cb)
+function get_value(exprs::Vector{<:Union{JuMP.VariableRef,JuMP.AffExpr}}, cb)
     return [get_value(e, cb) for e in exprs]
 end
 

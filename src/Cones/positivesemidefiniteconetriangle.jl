@@ -9,14 +9,14 @@ w ⪰ 0
 =#
 
 mutable struct PositiveSemidefiniteConeTriangle <: Cache
-    oa_s::Vector{JuMP.AffineExpr}
+    oa_s::Vector{JuMP.AffExpr}
     d::Int
-    W::Matrix{<:Union{JuMP.VariableRef,JuMP.AffineExpr}}
+    W::Matrix{<:Union{JuMP.VariableRef,JuMP.AffExpr}}
     PositiveSemidefiniteConeTriangle() = new()
 end
 
 function create_cache(
-    oa_s::Vector{JuMP.AffineExpr},
+    oa_s::Vector{JuMP.AffExpr},
     moi_cone::MOI.PositiveSemidefiniteConeTriangle,
     ::Optimizer,
 )
@@ -57,7 +57,7 @@ function get_subp_cuts(
     # strengthened cuts from eigendecomposition are λᵢ * rᵢ * rᵢ'
     R = vec_to_symm(cache.d, z)
     F = LinearAlgebra.eigen!(LinearAlgebra.Symmetric(R, :U), 1e-9, Inf)
-    isempty(F.values) && return JuMP.AffineExpr[]
+    isempty(F.values) && return JuMP.AffExpr[]
     R_eig = F.vectors * LinearAlgebra.Diagonal(sqrt.(F.values))
     return _get_cuts(R_eig, cache, opt)
 end
@@ -74,7 +74,7 @@ function get_sep_cuts(
         -Inf,
         -opt.tol_feas,
     )
-    isempty(F.values) && return JuMP.AffineExpr[]
+    isempty(F.values) && return JuMP.AffExpr[]
     return _get_cuts(F.vectors, cache, opt)
 end
 
@@ -85,7 +85,7 @@ function _get_cuts(
 )
     # cuts from eigendecomposition are rᵢ * rᵢ'
     W = cache.W
-    cuts = JuMP.AffineExpr[]
+    cuts = JuMP.AffExpr[]
     for i in 1:size(R_eig, 2)
         @views r_i = R_eig[:, i]
         R_i = r_i * r_i'
