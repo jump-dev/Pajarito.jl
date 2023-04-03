@@ -35,7 +35,7 @@ end
 function add_subp_cuts(
     opt::Optimizer,
     viol_only::Bool,
-    cuts_cache::Union{Nothing,Vector{AE}},
+    cuts_cache::Union{Nothing,Vector{JuMP.AffineExpr}},
 )
     JuMP.has_duals(opt.subp_model) || return false
 
@@ -75,7 +75,12 @@ function add_sep_cuts(opt::Optimizer)
 end
 
 # get and rescale relaxation/subproblem dual
-function get_dual_cuts(ci::CR, cache::Cache, opt::Optimizer, is_subp::Bool)
+function get_dual_cuts(
+    ci::JuMP.ConstraintRef,
+    cache::Cache,
+    opt::Optimizer,
+    is_subp::Bool,
+)
     z = JuMP.dual(ci)
 
     z_norm = LinearAlgebra.norm(z, Inf)

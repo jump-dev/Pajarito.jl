@@ -13,11 +13,15 @@ equivalently (p < 0, q ≥ p * (log(r / -p) + 1))
 =#
 
 mutable struct ExponentialCone <: Cache
-    oa_s::Vector{AE}
+    oa_s::Vector{JuMP.AffineExpr}
     ExponentialCone() = new()
 end
 
-function create_cache(oa_s::Vector{AE}, ::MOI.ExponentialCone, ::Optimizer)
+function create_cache(
+    oa_s::Vector{JuMP.AffineExpr},
+    ::MOI.ExponentialCone,
+    ::Optimizer,
+)
     @assert length(oa_s) == 3
     cache = ExponentialCone()
     cache.oa_s = oa_s
@@ -51,13 +55,13 @@ function get_subp_cuts(
     if p > 0 || r < 0
         # z ∉ K
         @warn("exponential cone dual vector violates variable bounds")
-        return AE[]
+        return JuMP.AffineExpr[]
     end
     q = z[2]
     (u, v, w) = cache.oa_s
 
     if p > -1e-12
-        return AE[]
+        return JuMP.AffineExpr[]
     elseif r / -p > 1e-8
         # strengthened cut is (p, p * (log(r / -p) + 1), r)
         q = p * (log(r / -p) + 1)
@@ -67,7 +71,7 @@ function get_subp_cuts(
         r = -p * exp(q / p - 1)
         cut = JuMP.@expression(opt.oa_model, p * u + q * v + r * w)
     else
-        return AE[]
+        return JuMP.AffineExpr[]
     end
     return [cut]
 end
@@ -95,7 +99,7 @@ function get_sep_cuts(
             q = -log(ℯ / 2 * r)
             cut = JuMP.@expression(opt.oa_model, -u + q * v + r * w)
         else
-            return AE[]
+            return JuMP.AffineExpr[]
         end
     elseif ws / vs > 1e-8 && us - vs * log(ws / vs) > opt.tol_feas
         # vs and ws not near zero
@@ -108,7 +112,7 @@ function get_sep_cuts(
         q = (us - vs) / vs * -p
         cut = JuMP.@expression(opt.oa_model, p * u + q * v + w)
     else
-        return AE[]
+        return JuMP.AffineExpr[]
     end
     return [cut]
 end

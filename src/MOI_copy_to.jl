@@ -3,8 +3,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# MathOptInterface copy_to implementation
-
 function MOI.copy_to(opt::Optimizer, src::MOI.ModelLike)
     idx_map = MOI.Utilities.IndexMap()
     get_src_cons(F, S) = MOI.get(src, MOI.ListOfConstraintIndices{F,S}())
@@ -21,7 +19,10 @@ function MOI.copy_to(opt::Optimizer, src::MOI.ModelLike)
         throw(MOI.UnsupportedAttribute(attr))
     end
     function get_start(j::Int)
-        return something(MOI.get(src, MOI.VariablePrimalStart(), VI(j)), NaN)
+        return something(
+            MOI.get(src, MOI.VariablePrimalStart(), MOI.VariableIndex(j)),
+            NaN,
+        )
     end
 
     # variables
@@ -29,12 +30,12 @@ function MOI.copy_to(opt::Optimizer, src::MOI.ModelLike)
     opt.warm_start = has_warm_start ? fill(NaN, n) : Float64[]
     j = 0
     # integer variables
-    cis = get_src_cons(VI, MOI.Integer)
+    cis = get_src_cons(MOI.VariableIndex, MOI.Integer)
     opt.num_int_vars = length(cis)
     for ci in cis
         j += 1
         idx_map[ci] = ci
-        idx_map[VI(ci.value)] = VI(j)
+        idx_map[MOI.VariableIndex(ci.value)] = MOI.VariableIndex(j)
         if has_warm_start
             opt.warm_start[j] = get_start(j)
         end
@@ -43,7 +44,7 @@ function MOI.copy_to(opt::Optimizer, src::MOI.ModelLike)
     for vj in MOI.get(src, MOI.ListOfVariableIndices())
         haskey(idx_map, vj) && continue
         j += 1
-        idx_map[vj] = VI(j)
+        idx_map[vj] = MOI.VariableIndex(j)
         if has_warm_start
             opt.warm_start[j] = get_start(j)
         end
@@ -61,10 +62,15 @@ function MOI.copy_to(opt::Optimizer, src::MOI.ModelLike)
             opt.obj_sense = MOI.get(src, MOI.ObjectiveSense())
         elseif attr isa MOI.ObjectiveFunction
             F = MOI.get(src, MOI.ObjectiveFunctionType())
-            if !(F <: Union{VI,SAF})
+            if !(
+                F <: Union{MOI.VariableIndex,MOI.ScalarAffineFunction{Float64}}
+            )
                 error("objective function type $F not supported")
             end
-            obj = convert(SAF, MOI.get(src, MOI.ObjectiveFunction{F}()))
+            obj = convert(
+                MOI.ScalarAffineFunction{Float64},
+                MOI.get(src, MOI.ObjectiveFunction{F}()),
+            )
             for t in obj.terms
                 model_c[idx_map[t.variable].value] += t.coefficient
             end
@@ -85,8 +91,11 @@ function MOI.copy_to(opt::Optimizer, src::MOI.ModelLike)
     get_con_set(con_idx) = MOI.get(src, MOI.ConstraintSet(), con_idx)
 
     # SOS1/2 constraints
-    opt.SOS12_cons = Pair{Vector{Int},<:SOS12}[]
-    for S in (MOI.SOS1{Float64}, MOI.SOS2{Float64}), ci in get_src_cons(VV, S)
+    opt.SOS12_cons =
+        Pair{Vector{Int},<:Union{MOI.SOS1{Float64},MOI.SOS2{Float64}}}[]
+    for S in (MOI.SOS1{Float64}, MOI.SOS2{Float64}),
+        ci in get_src_cons(MOI.VectorOfVariables, S)
+
         fi = get_con_fun(ci)
         si = get_con_set(ci)
         idxs = [idx_map[vi].value for vi in fi.variables]
@@ -97,7 +106,9 @@ function MOI.copy_to(opt::Optimizer, src::MOI.ModelLike)
     # equality constraints
     (IA, JA, VA) = (Int[], Int[], Float64[])
     model_b = Float64[]
-    for F in (VV, VAF), ci in get_src_cons(F, MOI.Zeros)
+    for F in (MOI.VectorOfVariables, MOI.VectorAffineFunction{Float64}),
+        ci in get_src_cons(F, MOI.Zeros)
+
         fi = get_con_fun(ci)
         _constraint_IJV(IA, JA, VA, model_b, fi, idx_map)
         idx_map[ci] = ci
@@ -114,7 +125,9 @@ function MOI.copy_to(opt::Optimizer, src::MOI.ModelLike)
     cone_idxs = Vector{UnitRange{Int}}()
 
     # build up one nonnegative cone
-    for F in (VV, VAF), ci in get_src_cons(F, MOI.Nonnegatives)
+    for F in (MOI.VectorOfVariables, MOI.VectorAffineFunction{Float64}),
+        ci in get_src_cons(F, MOI.Nonnegatives)
+
         fi = get_con_fun(ci)
         _constraint_IJV(IG, JG, VG, model_h, fi, idx_map)
         idx_map[ci] = ci
@@ -138,7 +151,8 @@ function MOI.copy_to(opt::Optimizer, src::MOI.ModelLike)
             end
             throw(MOI.UnsupportedAttribute(attr))
         end
-        if S in (MOI.Zeros, MOI.Nonnegatives, MOI.Integer) || S <: SOS12
+        if S in (MOI.Zeros, MOI.Nonnegatives, MOI.Integer) ||
+           S <: Union{MOI.SOS1{Float64},MOI.SOS2{Float64}}
             continue # already copied these constraints
         end
 
@@ -167,7 +181,7 @@ function _constraint_IJV(
     JM::Vector{Int},
     VM::Vector,
     vect::Vector,
-    func::VV,
+    func::MOI.VectorOfVariables,
     idx_map::MOI.IndexMap,
 )
     dim = MOI.output_dimension(func)
@@ -184,7 +198,7 @@ function _constraint_IJV(
     JM::Vector{Int},
     VM::Vector,
     vect::Vector,
-    func::VAF,
+    func::MOI.VectorAffineFunction{Float64},
     idx_map::MOI.IndexMap,
 )
     dim = MOI.output_dimension(func)

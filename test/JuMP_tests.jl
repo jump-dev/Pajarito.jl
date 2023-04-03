@@ -3,15 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# JuMP instance tests
-
 module TestJuMP
 
 using Test
-import LinearAlgebra
-import MathOptInterface
-const MOI = MathOptInterface
+
 import JuMP
+import LinearAlgebra
+import MathOptInterface as MOI
 import Pajarito
 
 function runtests(oa_solver, conic_solver)

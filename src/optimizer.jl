@@ -36,25 +36,27 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     cones::Vector{MOI.AbstractVectorSet}
     cone_idxs::Vector{UnitRange{Int}}
     num_int_vars::Int
-    SOS12_cons::Vector{Pair{Vector{Int},<:SOS12}}
+    SOS12_cons::Vector{
+        Pair{Vector{Int},<:Union{MOI.SOS1{Float64},MOI.SOS2{Float64}}},
+    }
 
     # models, variables, etc
     oa_model::JuMP.Model
     relax_model::JuMP.Model
     subp_model::JuMP.Model
-    oa_x::Vector{VR}
-    relax_x::Vector{VR}
-    subp_x::Vector{VR}
-    subp_eq::CR
-    subp_cones::Vector{CR}
+    oa_x::Vector{JuMP.VariableRef}
+    relax_x::Vector{JuMP.VariableRef}
+    subp_x::Vector{JuMP.VariableRef}
+    subp_eq::JuMP.ConstraintRef
+    subp_cones::Vector{JuMP.ConstraintRef}
     subp_cone_idxs::Vector{UnitRange{Int}}
     c_int::Vector{Float64}
     A_int::SparseArrays.SparseMatrixCSC{Float64,Int}
     G_int::SparseArrays.SparseMatrixCSC{Float64,Int}
     b_cont::Vector{Float64}
-    oa_vars::Vector{VR}
-    relax_oa_cones::Vector{CR}
-    subp_oa_cones::Vector{CR}
+    oa_vars::Vector{JuMP.VariableRef}
+    relax_oa_cones::Vector{JuMP.ConstraintRef}
+    subp_oa_cones::Vector{JuMP.ConstraintRef}
     cone_caches::Vector{Cache}
     oa_cone_idxs::Vector{UnitRange{Int}}
     oa_slack_idxs::Vector{Vector{Int}}
@@ -62,7 +64,7 @@ mutable struct Optimizer <: MOI.AbstractOptimizer
     # used/modified during optimize
     lazy_cb::Any
     new_incumbent::Bool
-    int_sols_cuts::Dict{UInt,Vector{AE}}
+    int_sols_cuts::Dict{UInt,Vector{JuMP.AffineExpr}}
     use_oa_starts::Bool
 
     # used by MOI wrapper
@@ -129,7 +131,7 @@ function empty_optimize(opt::Optimizer)
     opt.num_heuristic_cbs = 0
     opt.lazy_cb = nothing
     opt.new_incumbent = false
-    opt.int_sols_cuts = Dict{UInt,Vector{AE}}()
+    opt.int_sols_cuts = Dict{UInt,Vector{JuMP.AffineExpr}}()
 
     if !isnothing(opt.oa_opt)
         MOI.empty!(opt.oa_opt)

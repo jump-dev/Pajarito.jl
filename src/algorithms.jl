@@ -103,7 +103,7 @@ function run_iterative_method(opt::Optimizer)
             @warn("integral solution repeated")
         else
             # new integral solution: solve subproblem and add cuts
-            opt.int_sols_cuts[hash_int_sol] = AE[]
+            opt.int_sols_cuts[hash_int_sol] = JuMP.AffineExpr[]
             subp_failed = solve_subproblem(int_sol, opt)
             if !subp_failed
                 subp_cuts_added = add_subp_cuts(opt, false, nothing)
@@ -206,7 +206,7 @@ function run_one_tree_method(opt::Optimizer)
                 end
             else
                 # new integral solution: solve subproblem, cache cuts, and add cuts
-                cuts_cache = opt.int_sols_cuts[hash_int_sol] = AE[]
+                cuts_cache = opt.int_sols_cuts[hash_int_sol] = JuMP.AffineExpr[]
                 subp_failed = solve_subproblem(int_sol, opt)
                 if !subp_failed
                     subp_cuts_added = add_subp_cuts(opt, true, cuts_cache)
@@ -443,7 +443,7 @@ function get_integral_solution(opt::Optimizer)
     return round_int_sol
 end
 
-function is_discrete_feas(opt::Optimizer, vars::Vector{VR})
+function is_discrete_feas(opt::Optimizer, vars::Vector{JuMP.VariableRef})
     # check whether solution is integral
     int_sol = JuMP.value.(vars[1:(opt.num_int_vars)])
     round_int_sol = round.(Int, int_sol)

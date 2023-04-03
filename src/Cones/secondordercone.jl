@@ -13,14 +13,14 @@ linear and 3-dim rotated second order cone constraints
 =#
 
 mutable struct SecondOrderCone{E<:NatExt} <: Cache
-    oa_s::Vector{AE}
+    oa_s::Vector{JuMP.AffineExpr}
     d::Int
-    ϕ::Vector{VR}
+    ϕ::Vector{JuMP.VariableRef}
     SecondOrderCone{E}() where {E<:NatExt} = new{E}()
 end
 
 function create_cache(
-    oa_s::Vector{AE},
+    oa_s::Vector{JuMP.AffineExpr},
     moi_cone::MOI.SecondOrderCone,
     opt::Optimizer,
 )
@@ -52,7 +52,7 @@ function get_sep_cuts(
     ws_norm = LinearAlgebra.norm(ws)
     # check s ∉ K
     if us - ws_norm > -opt.tol_feas
-        return AE[]
+        return JuMP.AffineExpr[]
     end
 
     # cut is (1, -ws / ‖ws‖)
@@ -84,7 +84,7 @@ function _get_cuts(
     opt::Optimizer,
 )
     # strengthened cut is (‖r‖, r)
-    clean_array!(r) && return AE[]
+    clean_array!(r) && return JuMP.AffineExpr[]
     p = LinearAlgebra.norm(r)
     u = cache.oa_s[1]
     @views w = cache.oa_s[2:end]
@@ -142,12 +142,12 @@ function _get_cuts(
     cache::SecondOrderCone{Ext},
     opt::Optimizer,
 )
-    clean_array!(r) && return AE[]
+    clean_array!(r) && return JuMP.AffineExpr[]
     p = LinearAlgebra.norm(r)
     u = cache.oa_s[1]
     @views w = cache.oa_s[2:end]
     ϕ = cache.ϕ
-    cuts = AE[]
+    cuts = JuMP.AffineExpr[]
     for i in 1:(cache.d)
         r_i = r[i]
         iszero(r_i) && continue
