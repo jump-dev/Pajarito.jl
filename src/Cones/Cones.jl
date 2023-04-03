@@ -9,9 +9,7 @@ module Cones
 
 import LinearAlgebra
 import JuMP
-const MOI = JuMP.MOI
-const VR = JuMP.VariableRef
-const AE = JuMP.AffExpr
+import MathOptInterface as MOI
 
 import Pajarito: Cache, Optimizer
 
@@ -35,7 +33,7 @@ const OACone = Union{
     MOI.PositiveSemidefiniteConeTriangle,
 }
 
-setup_auxiliary(::Cache, ::Optimizer) = VR[]
+setup_auxiliary(::Cache, ::Optimizer) = JuMP.VariableRef[]
 
 extend_start(::Cache, ::Vector{Float64}, ::Optimizer) = Float64[]
 
@@ -43,7 +41,7 @@ num_ext_variables(::Cache) = 0
 
 function dot_expr(
     z::AbstractVecOrMat{Float64},
-    vars::AbstractVecOrMat{<:Union{VR,AE}},
+    vars::AbstractVecOrMat{<:Union{JuMP.VariableRef,JuMP.AffExpr}},
     opt::Optimizer,
 )
     return JuMP.@expression(opt.oa_model, LinearAlgebra.dot(z, vars))

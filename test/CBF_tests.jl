@@ -8,9 +8,8 @@
 module TestCBF
 
 using Test
-import MathOptInterface
-const MOI = MathOptInterface
-const MOIFF = MOI.FileFormats
+
+import MathOptInterface as MOI
 import Pajarito
 
 function runtests(oa_solver, conic_solver)
@@ -52,7 +51,7 @@ end
 
 function run_cbf(model, file::String)
     MOI.empty!(model)
-    src = MOIFF.Model(format = MOIFF.FORMAT_CBF)
+    src = MOI.FileFormats.Model(format = MOI.FileFormats.FORMAT_CBF)
     MOI.read_from_file(src, file)
     MOI.copy_to(model, src)
     MOI.optimize!(model)

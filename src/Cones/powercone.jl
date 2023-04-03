@@ -14,11 +14,15 @@ equivalently (q > 0, p ≥ t / (1-t) * q * |(1-t) * r / q|^(1/t))
 
 mutable struct PowerCone <: Cache
     t::Real
-    oa_s::Vector{AE}
+    oa_s::Vector{JuMP.AffExpr}
     PowerCone() = new()
 end
 
-function create_cache(oa_s::Vector{AE}, moi_cone::MOI.PowerCone, ::Optimizer)
+function create_cache(
+    oa_s::Vector{JuMP.AffExpr},
+    moi_cone::MOI.PowerCone,
+    ::Optimizer,
+)
     @assert length(oa_s) == 3
     cache = PowerCone()
     cache.t = moi_cone.exponent
@@ -48,7 +52,7 @@ function get_subp_cuts(z::Vector{Float64}, cache::PowerCone, opt::Optimizer)
     if min(p, q) < 0
         # z ∉ K
         @warn("dual vector is not in the dual cone")
-        return AE[]
+        return JuMP.AffExpr[]
     end
 
     # strengthened cut is (p, q, sign(r) * (p/t)^t * (q/(1-t))^(1-t))
@@ -67,7 +71,7 @@ function get_sep_cuts(s::Vector{Float64}, cache::PowerCone, opt::Optimizer)
     # check s ∉ K
     t = cache.t
     if us >= 0 && vs >= 0 && (us^t * vs^(1 - t) - abs(ws)) > -opt.tol_feas
-        return AE[]
+        return JuMP.AffExpr[]
     end
 
     # gradient cut is (t * (us/vs)^(t-1), (1-t) * (us/vs)^t, -sign(ws))

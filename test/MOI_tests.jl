@@ -3,13 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# MOI tests
-
 module TestMOI
 
 using Test
-import MathOptInterface
-const MOI = MathOptInterface
+
+import MathOptInterface as MOI
 import Pajarito
 
 function runtests(oa_solver, conic_solver)
@@ -50,9 +48,7 @@ function run_moi_tests(
     MOI.set(model, MOI.RawOptimizerAttribute("solve_subproblems"), solve_subp)
     MOI.set(model, MOI.RawOptimizerAttribute("oa_solver"), oa_solver)
     MOI.set(model, MOI.RawOptimizerAttribute("conic_solver"), conic_solver)
-    # MOI.set(model, MOI.RawOptimizerAttribute("time_limit"), 60)
     MOI.set(model, MOI.RawOptimizerAttribute("iteration_limit"), 100)
-
     MOI.Test.runtests(
         model,
         MOI.Test.Config(
@@ -67,7 +63,6 @@ function run_moi_tests(
                 MOI.SolverVersion,
             ],
         ),
-        # include = String[],
         exclude = String[
             # TODO: unexpected failures, probably in the bridge layer
             "test_model_UpperBoundAlreadySet",

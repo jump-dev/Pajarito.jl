@@ -55,17 +55,21 @@ function setup_models(opt::Optimizer)
     end
 
     oa_vars = opt.oa_vars = copy(oa_x)
-    opt.subp_cones = CR[]
+    opt.subp_cones = JuMP.ConstraintRef[]
     opt.subp_cone_idxs = UnitRange{Int}[]
-    opt.relax_oa_cones = CR[]
-    opt.subp_oa_cones = CR[]
+    opt.relax_oa_cones = JuMP.ConstraintRef[]
+    opt.subp_oa_cones = JuMP.ConstraintRef[]
     opt.cone_caches = Cache[]
     opt.oa_cone_idxs = UnitRange{Int}[]
     opt.oa_slack_idxs = UnitRange{Int}[]
     opt.unique_cones = Dict{UInt,Any}()
 
     for (cone, idxs) in zip(opt.cones, opt.cone_idxs)
-        oa_supports = MOI.supports_constraint(opt.oa_opt, VAF, typeof(cone))
+        oa_supports = MOI.supports_constraint(
+            opt.oa_opt,
+            MOI.VectorAffineFunction{Float64},
+            typeof(cone),
+        )
 
         if opt.solve_relaxation
             relax_cone_i =
@@ -107,8 +111,11 @@ function setup_models(opt::Optimizer)
     end
     @assert JuMP.num_variables(oa_model) == length(oa_vars)
 
-    opt.use_oa_starts =
-        MOI.supports(JuMP.backend(oa_model), MOI.VariablePrimalStart(), VI)
+    opt.use_oa_starts = MOI.supports(
+        JuMP.backend(oa_model),
+        MOI.VariablePrimalStart(),
+        MOI.VariableIndex,
+    )
     if opt.use_oa_starts && !isempty(opt.warm_start)
         if any(isnan, opt.warm_start)
             @warn("warm start is only partial so will be ignored")
@@ -141,8 +148,8 @@ end
 
 # to balance variable dimension and sparsity of the constraint matrix with K* cuts, only add
 # slacks if number of variables involved in this constraint exceeds the constraint dimension
-function create_slacks(model::JuMP.Model, expr_vec::Vector{AE})
-    slacks = VR[]
+function create_slacks(model::JuMP.Model, expr_vec::Vector{JuMP.AffExpr})
+    slacks = JuMP.VariableRef[]
     slack_idxs = Int[]
     vars = Set(k.index.value for f in expr_vec for k in keys(f.terms))
     if length(vars) > length(expr_vec)

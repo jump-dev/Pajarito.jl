@@ -3,13 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# MathOptInterface wrapper of Pajarito solver
-
 _is_empty(::Nothing) = true
 _is_empty(opt::MOI.AbstractOptimizer) = MOI.is_empty(opt)
 
 function MOI.is_empty(opt::Optimizer)
-    return (_is_empty(opt.oa_opt) && _is_empty(opt.conic_opt))
+    return _is_empty(opt.oa_opt) && _is_empty(opt.conic_opt)
 end
 
 MOI.empty!(opt::Optimizer) = empty_optimize(opt)
@@ -60,21 +58,30 @@ end
 
 function MOI.supports(
     ::Optimizer,
-    ::Union{MOI.ObjectiveSense,MOI.ObjectiveFunction{<:Union{VI,SAF}}},
+    ::Union{
+        MOI.ObjectiveSense,
+        MOI.ObjectiveFunction{
+            <:Union{MOI.VariableIndex,MOI.ScalarAffineFunction{Float64}},
+        },
+    },
 )
     return true
 end
 
 function MOI.supports_constraint(
     opt::Optimizer,
-    F::Type{VI},
+    F::Type{MOI.VariableIndex},
     S::Type{MOI.Integer},
 )
     return MOI.supports_constraint(get_oa_opt(opt), F, S)
 end
 
 # if not solving conic subproblems, allow SOS1/2 constraints if supported by OA solver
-function MOI.supports_constraint(opt::Optimizer, F::Type{VV}, S::Type{<:SOS12})
+function MOI.supports_constraint(
+    opt::Optimizer,
+    F::Type{MOI.VectorOfVariables},
+    S::Type{<:Union{MOI.SOS1{Float64},MOI.SOS2{Float64}}},
+)
     return !opt.solve_subproblems &&
            MOI.supports_constraint(get_oa_opt(opt), F, S)
 end
@@ -82,7 +89,7 @@ end
 # if using conic solver, cone must be supported by both Pajarito and the conic solver
 function MOI.supports_constraint(
     opt::Optimizer,
-    F::Type{<:Union{VV,VAF}},
+    F::Type{<:Union{MOI.VectorOfVariables,MOI.VectorAffineFunction{Float64}}},
     S::Type{<:Union{MOI.Zeros,MOI.Nonnegatives,Cones.OACone}},
 )
     if !(opt.solve_relaxation || opt.solve_subproblems)
@@ -91,7 +98,13 @@ function MOI.supports_constraint(
     return MOI.supports_constraint(get_conic_opt(opt), F, S)
 end
 
-MOI.supports(::Optimizer, ::MOI.VariablePrimalStart, ::Type{VI}) = true
+function MOI.supports(
+    ::Optimizer,
+    ::MOI.VariablePrimalStart,
+    ::Type{MOI.VariableIndex},
+)
+    return true
+end
 
 MOI.optimize!(opt::Optimizer) = optimize(opt)
 
@@ -128,7 +141,11 @@ MOI.get(opt::Optimizer, ::MOI.RelativeGap) = get_obj_rel_gap(opt)
 
 MOI.get(opt::Optimizer, ::MOI.ResultCount) = 1
 
-function MOI.get(opt::Optimizer, attr::MOI.VariablePrimal, vi::VI)
+function MOI.get(
+    opt::Optimizer,
+    attr::MOI.VariablePrimal,
+    vi::MOI.VariableIndex,
+)
     MOI.check_result_index_bounds(opt, attr)
     return opt.incumbent[vi.value]
 end

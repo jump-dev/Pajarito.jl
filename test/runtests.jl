@@ -3,13 +3,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# all tests
-
 import Test
-import MathOptInterface
-const MOI = MathOptInterface
-
 import GLPK
+import Hypatia
+import MathOptInterface as MOI
+
 glpk = MOI.OptimizerWithAttributes(
     GLPK.Optimizer,
     MOI.Silent() => true,
@@ -18,7 +16,6 @@ glpk = MOI.OptimizerWithAttributes(
     "mip_gap" => 1e-10,
 )
 
-import Hypatia
 hypatia = MOI.OptimizerWithAttributes(
     Hypatia.Optimizer,
     MOI.Silent() => true,
