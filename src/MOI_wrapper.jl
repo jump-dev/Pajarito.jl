@@ -142,8 +142,7 @@ end
 
 Number of cuts added to the outer approximation model.
 """
-struct NumberOfCuts <: MOI.AbstractOptimizerAttribute
-end
+struct NumberOfCuts <: MOI.AbstractOptimizerAttribute end
 
 function MOI.get(opt::Optimizer, ::NumberOfCuts)
     return opt.num_cuts

@@ -76,7 +76,7 @@ end
 
 function run_cut_test(test_function, opt)
     MOI.empty!(opt)
-    @test MOI.get(opt, Pajarito.NumberOfCuts()) == 0   
+    @test MOI.get(opt, Pajarito.NumberOfCuts()) == 0
     test_function(opt)
     @test MOI.get(opt, Pajarito.NumberOfCuts()) > 0
 end
