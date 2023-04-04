@@ -43,7 +43,7 @@ The algorithm implemented by Pajarito itself is relatively simple, and most of
 the hard work is performed by the MIP outer approximation (OA) solver and the
 continuous conic solver.
 
-Therefore, in addition to intalling Pajarito, you must also install a
+Therefore, in addition to installing Pajarito, you must also install a
 mixed-integer linear programming solver and a continuous conic solver.
 
 **The performance of Pajarito depends on these two types of solvers.**
@@ -122,7 +122,8 @@ convex problems that are solved using Pajarito.
 
 ## Bug reports and support
 
-Please report any issues via the Github [issue tracker](https://github.com/jump-dev/Pajarito.jl/issues).
+Please report any issues via the GitHub
+[issue tracker](https://github.com/jump-dev/Pajarito.jl/issues).
 
 All types of issues are welcome and encouraged; this includes bug reports,
 documentation typos, and feature requests. The [Optimization (Mathematical)](https://discourse.julialang.org/c/domain/opt)
