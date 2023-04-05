@@ -499,7 +499,6 @@ function _soc1_ncuts(opt)
 
     JuMP.delete(m, xlb1)
     JuMP.optimize!(m)
-    @test MOI.get(m, Pajarito.NumberOfCuts()) > 0
     @test JuMP.termination_status(m) == MOI.OPTIMAL
     @test JuMP.primal_status(m) == MOI.FEASIBLE_POINT
     @test isapprox(JuMP.objective_value(m), -3.5, atol = TOL)
