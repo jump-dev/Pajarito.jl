@@ -114,7 +114,7 @@ allows the user to add support for new convex cones.
 
 To illustrate, in the experimental package [PajaritoExtras](https://github.com/chriscoey/PajaritoExtras.jl)
 we have extended Pajarito by adding support for several cones recognized by
-Hypatia.jl](https://github.com/chriscoey/Hypatia.jl) (a continuous conic solver
+[Hypatia.jl](https://github.com/chriscoey/Hypatia.jl) (a continuous conic solver
 with its own generic cone interface).
 
 The examples folder of PajaritoExtras also contains many applied mixed-integer
