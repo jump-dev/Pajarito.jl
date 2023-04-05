@@ -2,7 +2,7 @@ name = "Pajarito"
 uuid = "2f354839-79df-5901-9f0a-cdb2aac6fe30"
 authors = ["Chris Coey <coey.chris@gmail.com>"]
 repo = "https://github.com/jump-dev/Pajarito.jl.git"
-version = "0.8.1"
+version = "0.8.2"
 
 [deps]
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
