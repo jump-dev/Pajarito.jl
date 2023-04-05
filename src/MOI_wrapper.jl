@@ -153,3 +153,17 @@ end
 function MOI.get(opt::Optimizer, ::MOI.NodeCount)
     return MOI.get(opt.oa_model, MOI.NodeCount())
 end
+
+"""
+    NumberOfCuts
+
+Number of cuts added to the outer approximation model.
+"""
+struct NumberOfCuts <: MOI.AbstractModelAttribute end
+
+MOI.attribute_value_type(::NumberOfCuts) = Int64
+MOI.is_set_by_optimize(::NumberOfCuts) = true
+
+function MOI.get(opt::Optimizer, ::NumberOfCuts)
+    return opt.num_cuts
+end
