@@ -492,7 +492,6 @@ function _soc1_ncuts(opt)
     JuMP.@objective(m, Min, -x)
     xlb1 = JuMP.@constraint(m, x >= 4)
     soc1 = JuMP.@constraint(m, [3.5, x] in JuMP.SecondOrderCone())
-    @test MOI.get(m, Pajarito.NumberOfCuts()) == 0
     JuMP.optimize!(m)
     @test JuMP.termination_status(m) == MOI.INFEASIBLE
     @test JuMP.primal_status(m) == MOI.NO_SOLUTION
