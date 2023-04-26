@@ -1,5 +1,9 @@
 # Pajarito.jl
 
+[![Build Status](https://github.com/jump-dev/Pajarito.jl/workflows/CI/badge.svg?branch=main)](https://github.com/jump-dev/Pajarito.jl/actions?query=workflow%3ACI)
+[![codecov](https://codecov.io/gh/jump-dev/Pajarito.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/jump-dev/Pajarito.jl)
+
+
 Pajarito is a **mixed-integer convex programming** (MICP) solver package written
 in [Julia](http://julialang.org/).
 
@@ -109,8 +113,8 @@ Pajarito's solution will not necessarily satisfy `tol_feas`.
 
 ## Cone interface
 
-Pajarito has a generic cone interface (see the [cones folder](src/Cones/)) that
-allows the user to add support for new convex cones.
+Pajarito has a generic cone interface (see the [cones folder](https://github.com/jump-dev/Pajarito.jl/tree/main/src/Cones)
+that allows the user to add support for new convex cones.
 
 To illustrate, in the experimental package [PajaritoExtras](https://github.com/chriscoey/PajaritoExtras.jl)
 we have extended Pajarito by adding support for several cones recognized by
