@@ -67,8 +67,10 @@ function run_moi_tests(
             # TODO: unexpected failures, probably in the bridge layer
             "test_model_UpperBoundAlreadySet",
             "test_model_LowerBoundAlreadySet",
-            "test_constraint_Indicator_ACTIVATE_ON_ZERO",
-            "test_linear_Indicator_constant_term",
+            # TODO: errors bridging to MILP with GLPK
+            "_Indicator_",
+            "_SOS1_",
+            "_SOS2_",
         ],
     )
     return

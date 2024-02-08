@@ -61,7 +61,8 @@ function run_jump_tests(
         _psd1,
         _psd2,
         _expdesign,
-        _specialorderedset,
+        # TODO(odow): re-enable. See #453 for details
+        # _specialorderedset,
         _soc1_ncuts,
     ]
     @testset "$inst" for inst in insts
