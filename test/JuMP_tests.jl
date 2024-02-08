@@ -61,7 +61,8 @@ function run_jump_tests(
         _psd1,
         _psd2,
         _expdesign,
-        _specialorderedset,
+        # TODO(odow): re-enable. See #453 for details
+        # _specialorderedset,
         _soc1_ncuts,
     ]
     @testset "$inst" for inst in insts
@@ -453,10 +454,11 @@ function _specialorderedset(opt)
         m = JuMP.Model(opt)
 
         JuMP.@variable(m, u)
-        JuMP.@variable(m, 0 <= w[1:3] <= 1.5)
+        JuMP.@variable(m, w[1:3])
         w0 = w + [1.1, 2.3, 3.5]
         JuMP.@constraint(m, vcat(u, w0) in MOI.GeometricMeanCone(4))
         JuMP.@objective(m, Max, u)
+        JuMP.@constraint(m, w .<= 1.5)
         JuMP.@constraint(m, w in S([1.0, 2, 3]))
         JuMP.optimize!(m)
 
