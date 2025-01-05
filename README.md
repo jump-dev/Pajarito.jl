@@ -1,6 +1,6 @@
 # Pajarito.jl
 
-[![Build Status](https://github.com/jump-dev/Pajarito.jl/workflows/CI/badge.svg?branch=main)](https://github.com/jump-dev/Pajarito.jl/actions?query=workflow%3ACI)
+[![Build Status](https://github.com/jump-dev/Pajarito.jl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jump-dev/Pajarito.jl/actions?query=workflow%3ACI)
 [![codecov](https://codecov.io/gh/jump-dev/Pajarito.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/jump-dev/Pajarito.jl)
 
 Pajarito is a **mixed-integer convex programming** (MICP) solver package written
