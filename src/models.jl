@@ -206,20 +206,23 @@ function modify_subproblem(int_sol::Vector{Int}, opt::Optimizer)
     # TODO maybe also modify the objective constant using dot(opt.c_int, int_sol), could be nonzero
     moi_model = JuMP.backend(opt.subp_model)
 
-    new_b = opt.b_cont - opt.A_int * int_sol
-    MOI.modify(
-        moi_model,
-        JuMP.index(opt.subp_eq),
-        MOI.VectorConstantChange(new_b),
-    )
-
-    new_h = opt.h - opt.G_int * int_sol
-    for (cr, idxs) in zip(opt.subp_cones, opt.subp_cone_idxs)
+    if length(opt.b_cont) > 0
+        new_b = opt.b_cont - opt.A_int * int_sol
         MOI.modify(
             moi_model,
-            JuMP.index(cr),
-            MOI.VectorConstantChange(new_h[idxs]),
+            JuMP.index(opt.subp_eq),
+            MOI.VectorConstantChange(new_b),
         )
+    end
+    new_h = opt.h - opt.G_int * int_sol
+    for (cr, idxs) in zip(opt.subp_cones, opt.subp_cone_idxs)
+        if length(idxs) > 0
+            MOI.modify(
+                moi_model,
+                JuMP.index(cr),
+                MOI.VectorConstantChange(new_h[idxs]),
+            )
+        end
     end
     return
 end
