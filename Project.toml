@@ -12,9 +12,11 @@ Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [compat]
+GLPK = "1"
+Hypatia = "0.10"
 JuMP = "1"
 MathOptInterface = "1"
-julia = "1.6"
+julia = "1.10"
 
 [extras]
 GLPK = "60bf3e95-4087-53dc-ae20-288a0d20c6a6"
