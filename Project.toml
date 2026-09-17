@@ -17,6 +17,7 @@ Hypatia = "0.10"
 JuMP = "1"
 LinearAlgebra = "1.10"
 MathOptInterface = "1"
+Printf = "1.10"
 SparseArrays = "1.10"
 julia = "1.10"
 
