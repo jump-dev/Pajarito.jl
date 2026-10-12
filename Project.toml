@@ -13,7 +13,7 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [compat]
 GLPK = "1"
-Hypatia = "0.10"
+Hypatia = "0.10, 0.11"
 JuMP = "1"
 LinearAlgebra = "1.10"
 MathOptInterface = "1"
